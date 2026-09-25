@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { startSegmentsJob, connectJobWS, type SegmentsResponse } from "./api";
+import { probe, startSegmentsJob, connectJobWS, type SegmentsResponse, type TrackInfo } from "./api";
 import { basename } from "./paths";
 import "./BatchView.css";
 
@@ -47,6 +47,83 @@ interface PairAnalysis {
   error: string | null;
 }
 
+/** Probes one file's tracks, to fill the track-picker dropdown. Only ever
+ * called on the *first* file of each list, not every file: one picked
+ * index applies to every pair (see BatchView's docstring, "a series keeps
+ * the same track layout episode to episode"), so probing every file in a
+ * big batch just to fill a dropdown would be slow and redundant -- the
+ * "Vérifier toutes les pistes" modal below is what covers checking every
+ * file individually when that assumption needs auditing. */
+function useTracksOf(path: string | undefined): { tracks: TrackInfo[] | null; loading: boolean; error: string | null } {
+  const [tracks, setTracks] = useState<TrackInfo[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!path) {
+      setTracks(null);
+      setError(null);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    probe(path)
+      .then((res) => {
+        if (!cancelled) setTracks(res.tracks);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [path]);
+
+  return { tracks, loading, error };
+}
+
+interface TrackPickerProps {
+  label: string;
+  tracks: TrackInfo[] | null;
+  loading: boolean;
+  error: string | null;
+  value: number;
+  onChange: (index: number) => void;
+}
+
+/** A dropdown of the first file's actual tracks (index/language/codec),
+ * not a blind number field -- falls back to a plain number input when
+ * there's nothing to probe yet or probing failed, so picking is never
+ * blocked on that. */
+function TrackPicker({ label, tracks, loading, error, value, onChange }: TrackPickerProps) {
+  return (
+    <label>
+      {label} :
+      {tracks && tracks.length > 0 ? (
+        <select value={value} onChange={(e) => onChange(Number(e.target.value))}>
+          {tracks.map((t) => (
+            <option key={t.index} value={t.index}>
+              @{t.index} — {t.language ?? "?"} ({t.codec ?? "?"})
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input type="number" min={0} value={value} onChange={(e) => onChange(Math.max(0, Number(e.target.value)))} />
+      )}
+      {loading && <span className="batch-track-status">Sondage...</span>}
+      {error && (
+        <span className="batch-track-status batch-track-status-error" title={error}>
+          Pistes indisponibles
+        </span>
+      )}
+    </label>
+  );
+}
+
 interface FileListProps {
   title: string;
   hint: string;
@@ -58,9 +135,9 @@ interface FileListProps {
 
 /** One side of the batch pairing: its own file list, reorderable in place
  * (drag would feel nicer, but up/down arrows are far less fiddly to get
- * right and every row still needs a keyboard-reachable way to move). Row
- * index (1-based, shown) is exactly what pairs it with the other list's
- * same-index row -- see BatchView's pairing summary. */
+ * right and every row still needs a keyboard-reachable way to move). Which
+ * row pairs with which is shown by PairConnector, not in here -- see
+ * BatchView for why it's a separate column instead of an inline badge. */
 function FileList({ title, hint, files, onOpen, onMove, onRemove }: FileListProps) {
   return (
     <section className="panel batch-file-list">
@@ -124,6 +201,151 @@ function FileList({ title, hint, files, onOpen, onMove, onRemove }: FileListProp
   );
 }
 
+/** A thin, dedicated column between the two file-list panels, showing one
+ * ↔ (or ⚠ past pairCount, once one list is longer) per row instead of a
+ * sentence below both tables. It reuses the exact same classes as a real
+ * FileList (.batch-file-list, .batch-hint, .batch-table-wrap, table row
+ * padding) for its own header spacer and rows -- that's what keeps its
+ * arrows lined up with the real tables' rows without any manual pixel
+ * math: same classes, same browser layout, same height, automatically.
+ * The spacer bits are `visibility: hidden` (not `display: none`, which
+ * would collapse their height and break the alignment) so they take
+ * exactly as much space as the real title/button/hint above the other two
+ * tables, without being seen or focusable.
+ *
+ * Alignment holds because all three columns live in one shared
+ * `overflow: auto` row (batch-pairing-row) instead of each scrolling on
+ * its own -- three independently-scrolling panels would drift apart the
+ * moment any one of them was scrolled. */
+function PairConnector({ rowCount, pairCount }: { rowCount: number; pairCount: number }) {
+  return (
+    <div className="batch-file-list batch-connector">
+      <h2 className="batch-connector-spacer">&nbsp;</h2>
+      <div className="primary-button file-open-button batch-connector-spacer">&nbsp;</div>
+      <p className="batch-hint batch-connector-spacer">&nbsp;</p>
+      {rowCount > 0 && (
+        <div className="batch-table-wrap">
+          <table>
+            <colgroup>
+              <col />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>&nbsp;</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: rowCount }, (_, i) => (
+                <tr key={i}>
+                  <td className={`batch-connector-cell${i >= pairCount ? " batch-pair-badge-warn" : ""}`}>
+                    {i < pairCount ? "↔" : "⚠"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** "Vérifier toutes les pistes" modal: probes *every* file in both lists
+ * (unlike the track pickers above, which only ever look at the first file
+ * of each) so the user can audit that every episode really does have the
+ * expected tracks in the expected order before committing to one
+ * reference/candidate index for the whole batch. Fetched fresh each time
+ * the modal opens rather than kept live -- this is a manual spot-check,
+ * not something that needs to track file-list edits in real time. */
+function AllTracksModal({ referenceFiles, candidateFiles, onClose }: { referenceFiles: string[]; candidateFiles: string[]; onClose: () => void }) {
+  const [entries, setEntries] = useState<Record<string, { tracks: TrackInfo[] | null; error: string | null }>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const paths = [...new Set([...referenceFiles, ...candidateFiles])];
+    setLoading(true);
+    Promise.all(
+      paths.map((path) =>
+        probe(path)
+          .then((res) => [path, { tracks: res.tracks, error: null }] as const)
+          .catch((err) => [path, { tracks: null, error: err instanceof Error ? err.message : String(err) }] as const),
+      ),
+    ).then((results) => {
+      if (cancelled) return;
+      setEntries(Object.fromEntries(results));
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally a one-shot snapshot on open, not live-tracking the lists
+  }, []);
+
+  function renderSide(title: string, files: string[]) {
+    return (
+      <div className="batch-tracks-side">
+        <h3>{title}</h3>
+        {files.length === 0 ? (
+          <p className="placeholder">Aucun fichier.</p>
+        ) : (
+          files.map((path, i) => {
+            const entry = entries[path];
+            return (
+              <div className="batch-tracks-file" key={`${i}-${path}`}>
+                <p className="batch-tracks-filename" title={path}>
+                  {i + 1}. {basename(path)}
+                </p>
+                {loading && !entry && <p className="placeholder">Sondage...</p>}
+                {entry?.error && <p className="error">{entry.error}</p>}
+                {entry?.tracks && (
+                  <table className="batch-tracks-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Langue</th>
+                        <th>Codec</th>
+                        <th>Canaux</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {entry.tracks.map((t) => (
+                        <tr key={t.index}>
+                          <td>@{t.index}</td>
+                          <td>{t.language ?? "?"}</td>
+                          <td>{t.codec ?? "?"}</td>
+                          <td>{t.channels ?? "?"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="batch-tracks-overlay" role="dialog" aria-modal="true">
+      <div className="batch-tracks-panel">
+        <div className="batch-tracks-header">
+          <h2>Vérifier toutes les pistes</h2>
+          <button className="small-button" onClick={onClose}>
+            Fermer
+          </button>
+        </div>
+        <div className="batch-tracks-columns">
+          {renderSide("Fichiers référence", referenceFiles)}
+          {renderSide("Fichiers à corriger", candidateFiles)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Batch mode: process a whole series of episodes in one pass instead of
  * one file at a time. Two independently-imported file lists, paired
  * strictly by position (row 1 of each = pair 1, etc.) -- chosen over
@@ -133,8 +355,10 @@ function FileList({ title, hint, files, onOpen, onMove, onRemove }: FileListProp
  * track index pair, applied to every pair alike -- a series is assumed to
  * keep the same track layout episode to episode (both @0 is a real,
  * expected case: a reference file with only VO and a to-correct file with
- * only VF). Export isn't wired up yet -- this slice stops at detection, to
- * confirm the pairing + analysis flow before building render on top.
+ * only VF); "Vérifier toutes les pistes" lets that assumption actually be
+ * checked instead of just hoped. Export isn't wired up yet -- this slice
+ * stops at detection, to confirm the pairing + analysis flow before
+ * building render on top.
  *
  * Always kept mounted by the caller (App.tsx) even while on the other tab
  * -- `hidden` just toggles visibility -- so switching tabs never resets
@@ -146,6 +370,23 @@ export function BatchView({ hidden }: { hidden: boolean }) {
   const [candidateTrackIndex, setCandidateTrackIndex] = useState(1);
   const [analyses, setAnalyses] = useState<PairAnalysis[]>([]);
   const [running, setRunning] = useState(false);
+  const [showTracksModal, setShowTracksModal] = useState(false);
+
+  const referenceProbe = useTracksOf(referenceFiles[0]);
+  const candidateProbe = useTracksOf(candidateFiles[0]);
+
+  // Re-pick a sensible default the moment a *new* first file's tracks come
+  // in (e.g. the reference list was just (re)populated) -- doesn't fight a
+  // manual pick afterwards, since this only fires when the tracks array
+  // itself changes, not on every render.
+  useEffect(() => {
+    if (referenceProbe.tracks && referenceProbe.tracks.length > 0) setReferenceTrackIndex(referenceProbe.tracks[0].index);
+  }, [referenceProbe.tracks]);
+  useEffect(() => {
+    if (candidateProbe.tracks && candidateProbe.tracks.length > 0) {
+      setCandidateTrackIndex(candidateProbe.tracks.length > 1 ? candidateProbe.tracks[1].index : candidateProbe.tracks[0].index);
+    }
+  }, [candidateProbe.tracks]);
 
   async function pickFiles(setFiles: (files: string[]) => void) {
     const selected = await open({ multiple: true, filters: MEDIA_FILTERS });
@@ -154,7 +395,7 @@ export function BatchView({ hidden }: { hidden: boolean }) {
   }
 
   const pairCount = Math.min(referenceFiles.length, candidateFiles.length);
-  const unpaired = Math.abs(referenceFiles.length - candidateFiles.length);
+  const rowCount = Math.max(referenceFiles.length, candidateFiles.length);
 
   function updatePair(index: number, patch: Partial<PairAnalysis>) {
     setAnalyses((current) => current.map((a, i) => (i === index ? { ...a, ...patch } : a)));
@@ -178,53 +419,54 @@ export function BatchView({ hidden }: { hidden: boolean }) {
   return (
     <main className="batch-main" style={hidden ? { display: "none" } : undefined}>
       <div className="batch-config panel">
-        <label>
-          Piste référence :
-          <input
-            type="number"
-            min={0}
-            value={referenceTrackIndex}
-            onChange={(e) => setReferenceTrackIndex(Math.max(0, Number(e.target.value)))}
-          />
-        </label>
-        <label>
-          Piste à corriger :
-          <input
-            type="number"
-            min={0}
-            value={candidateTrackIndex}
-            onChange={(e) => setCandidateTrackIndex(Math.max(0, Number(e.target.value)))}
-          />
-        </label>
-        <span className="batch-config-hint">Appliqué à toutes les paires.</span>
+        <TrackPicker
+          label="Piste référence"
+          tracks={referenceProbe.tracks}
+          loading={referenceProbe.loading}
+          error={referenceProbe.error}
+          value={referenceTrackIndex}
+          onChange={setReferenceTrackIndex}
+        />
+        <TrackPicker
+          label="Piste à corriger"
+          tracks={candidateProbe.tracks}
+          loading={candidateProbe.loading}
+          error={candidateProbe.error}
+          value={candidateTrackIndex}
+          onChange={setCandidateTrackIndex}
+        />
+        <span className="batch-config-hint">D'après le 1er fichier de chaque liste, appliqué à toutes les paires.</span>
+        <button
+          className="small-button"
+          onClick={() => setShowTracksModal(true)}
+          disabled={referenceFiles.length === 0 && candidateFiles.length === 0}
+        >
+          Vérifier toutes les pistes
+        </button>
         <button className="primary-button" onClick={handleAnalyzeAll} disabled={pairCount === 0 || running}>
           {running ? "Analyse en cours..." : "Analyser tout"}
         </button>
       </div>
 
-      <FileList
-        title="Fichiers référence"
-        hint="Piste à ne jamais modifier (ex. VO), une par épisode."
-        files={referenceFiles}
-        onOpen={() => pickFiles(setReferenceFiles)}
-        onMove={(from, to) => setReferenceFiles((f) => moved(f, from, to))}
-        onRemove={(i) => setReferenceFiles((f) => f.filter((_, idx) => idx !== i))}
-      />
-      <FileList
-        title="Fichiers à corriger"
-        hint="Piste à resynchroniser et intégrer (ex. VF), une par épisode."
-        files={candidateFiles}
-        onOpen={() => pickFiles(setCandidateFiles)}
-        onMove={(from, to) => setCandidateFiles((f) => moved(f, from, to))}
-        onRemove={(i) => setCandidateFiles((f) => f.filter((_, idx) => idx !== i))}
-      />
-
-      {(referenceFiles.length > 0 || candidateFiles.length > 0) && (
-        <p className="batch-pair-summary">
-          {pairCount} paire{pairCount > 1 ? "s" : ""} formée{pairCount > 1 ? "s" : ""} par position (ligne 1 ↔ ligne 1, etc.).
-          {unpaired > 0 && ` ${unpaired} fichier${unpaired > 1 ? "s" : ""} sans binôme, ignoré${unpaired > 1 ? "s" : ""} pour l'instant.`}
-        </p>
-      )}
+      <div className="batch-pairing-row">
+        <FileList
+          title="Fichiers référence"
+          hint="Piste à ne jamais modifier (ex. VO), une par épisode."
+          files={referenceFiles}
+          onOpen={() => pickFiles(setReferenceFiles)}
+          onMove={(from, to) => setReferenceFiles((f) => moved(f, from, to))}
+          onRemove={(i) => setReferenceFiles((f) => f.filter((_, idx) => idx !== i))}
+        />
+        <PairConnector rowCount={rowCount} pairCount={pairCount} />
+        <FileList
+          title="Fichiers à corriger"
+          hint="Piste à resynchroniser et intégrer (ex. VF), une par épisode."
+          files={candidateFiles}
+          onOpen={() => pickFiles(setCandidateFiles)}
+          onMove={(from, to) => setCandidateFiles((f) => moved(f, from, to))}
+          onRemove={(i) => setCandidateFiles((f) => f.filter((_, idx) => idx !== i))}
+        />
+      </div>
 
       {analyses.length > 0 && (
         <div className="batch-results panel">
@@ -269,6 +511,10 @@ export function BatchView({ hidden }: { hidden: boolean }) {
             </table>
           </div>
         </div>
+      )}
+
+      {showTracksModal && (
+        <AllTracksModal referenceFiles={referenceFiles} candidateFiles={candidateFiles} onClose={() => setShowTracksModal(false)} />
       )}
     </main>
   );

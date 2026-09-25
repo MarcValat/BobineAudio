@@ -192,6 +192,7 @@ body {
 }
 
 input,
+select,
 button {
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
@@ -220,12 +221,34 @@ button:disabled {
   border-color: var(--border);
 }
 
+/* Native <select>s otherwise keep the OS's own default look (a
+   plain-text-with-no-border on some platforms, a chunky bevelled box on
+   others) regardless of the rules above, since browsers special-case form
+   control "appearance" -- appearance: none opts back into normal box
+   styling, and the custom chevron replaces the native dropdown arrow that
+   comes with it. */
+select {
+  appearance: none;
+  padding-right: 2.3em;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23888888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='4,6 8,10 12,6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75em center;
+  background-size: 0.8em;
+  cursor: pointer;
+}
+
+select:hover {
+  border-color: var(--accent);
+}
+
 input,
+select,
 button {
   outline: none;
 }
 
 input:focus-visible,
+select:focus-visible,
 button:focus-visible {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
