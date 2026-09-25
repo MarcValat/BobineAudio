@@ -42,7 +42,7 @@ function FileList({ title, hint, files, onOpen, onMove, onRemove }: FileListProp
           <table>
             <thead>
               <tr>
-                <th>#</th>
+                <th className="batch-index">#</th>
                 <th>Fichier</th>
                 <th></th>
               </tr>

@@ -39,8 +39,13 @@
   overflow: hidden;
 }
 
+/* table-layout: fixed makes the filename column (the only one below with
+   no explicit width) claim every pixel the # and actions columns don't
+   need, instead of auto layout's shrink-to-fit sizing -- that previously
+   left the filename truncating well before the panel's actual edge. */
 .batch-table-wrap table {
   border-collapse: collapse;
+  table-layout: fixed;
   width: 100%;
   font-size: 0.85em;
 }
@@ -76,8 +81,17 @@
 .batch-index {
   width: 2em;
   text-align: center;
-  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+}
+
+td.batch-index {
+  color: var(--text-muted);
+}
+
+/* .batch-table-wrap th's own text-align: left would otherwise outrank
+   .batch-index's (one extra class in the selector beats one). */
+.batch-table-wrap th.batch-index {
+  text-align: center;
 }
 
 .batch-filename {
@@ -85,10 +99,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 1px; /* forces the ellipsis to respect the table's own width instead of growing it */
 }
 
 .batch-row-actions {
+  width: 6.5em;
   white-space: nowrap;
   text-align: right;
 }
