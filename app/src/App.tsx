@@ -250,9 +250,16 @@ function App() {
         </button>
       </div>
 
-      {mode === "batch" ? (
-        <BatchView />
-      ) : (
+      {/* Always mounted, just hidden -- unmounting on tab switch (as a
+          `mode === "batch" ? <BatchView /> : ...` ternary did before) would
+          reset BatchView's own state (imported files, etc.) every time the
+          user came back to this tab. Inline `display: none` is required
+          (not the `hidden` attribute): `[hidden]` is a user-agent-origin
+          style, which always loses to .batch-main's own author-origin
+          `display: grid` regardless of specificity. */}
+      <BatchView hidden={mode !== "batch"} />
+
+      {mode === "single" && (
       <main className="app-main">
         <div className="left-column">
           <button className="primary-button file-open-button" onClick={handleOpenFile}>

@@ -97,8 +97,12 @@ function FileList({ title, hint, files, onOpen, onMove, onRemove }: FileListProp
  * visible and fixable with the up/down arrows, a wrong filename-based
  * guess could silently pair the wrong episodes. Detection/export for the
  * formed pairs isn't wired up yet -- this is the import + pairing slice
- * only, to validate the pairing UX before building on top of it. */
-export function BatchView() {
+ * only, to validate the pairing UX before building on top of it.
+ *
+ * Always kept mounted by the caller (App.tsx) even while on the other tab
+ * -- `hidden` just toggles visibility -- so switching tabs never resets
+ * the imported file lists. */
+export function BatchView({ hidden }: { hidden: boolean }) {
   const [referenceFiles, setReferenceFiles] = useState<string[]>([]);
   const [candidateFiles, setCandidateFiles] = useState<string[]>([]);
 
@@ -112,7 +116,7 @@ export function BatchView() {
   const unpaired = Math.abs(referenceFiles.length - candidateFiles.length);
 
   return (
-    <main className="batch-main">
+    <main className="batch-main" style={hidden ? { display: "none" } : undefined}>
       <FileList
         title="Fichiers référence"
         hint="Piste à ne jamais modifier (ex. VO), une par épisode."
