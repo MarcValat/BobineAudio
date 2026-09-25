@@ -40,6 +40,16 @@ function FileList({ title, hint, files, onOpen, onMove, onRemove }: FileListProp
       ) : (
         <div className="batch-table-wrap">
           <table>
+            {/* table-layout: fixed sizes columns strictly from this row's
+                widths, not any row's -- without it, the empty actions <th>
+                (no text to size itself by) let the browser hand it far more
+                width than its 3 tiny buttons need, at the filename's
+                expense. */}
+            <colgroup>
+              <col className="batch-col-index" />
+              <col />
+              <col className="batch-col-actions" />
+            </colgroup>
             <thead>
               <tr>
                 <th className="batch-index">#</th>
