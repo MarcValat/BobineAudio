@@ -241,11 +241,11 @@ function App() {
 
   return (
     <div className="container">
-      <div className="mode-tabs">
-        <button className={`mode-tab${mode === "single" ? " active" : ""}`} onClick={() => setMode("single")}>
+      <div className="mode-switch">
+        <button className={mode === "single" ? "primary-button" : ""} onClick={() => setMode("single")}>
           Fichier unique
         </button>
-        <button className={`mode-tab${mode === "batch" ? " active" : ""}`} onClick={() => setMode("batch")}>
+        <button className={mode === "batch" ? "primary-button" : ""} onClick={() => setMode("batch")}>
           Batch
         </button>
       </div>

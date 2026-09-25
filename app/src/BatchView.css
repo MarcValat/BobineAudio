@@ -1,12 +1,17 @@
 /* Two equal columns (unlike the single-file view's asymmetric tracks/
-   analysis split) -- both file lists deserve the same weight here. The
-   pairing summary spans both, as a third implicit row. */
+   analysis split) -- both file lists deserve the same weight here.
+   grid-template-rows gives the file-list row all the leftover height
+   (1fr) and keeps the pairing summary row to its own natural size below
+   it; within that row, grid's default item stretch then makes both
+   file-list panels exactly as tall as each other, regardless of which one
+   has more files. */
 .batch-main {
   grid-template-columns: 1fr 1fr;
-  align-content: start;
+  grid-template-rows: 1fr auto;
 }
 
 .batch-file-list {
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 0.6em;
