@@ -102,7 +102,7 @@ export function BatchView() {
   const unpaired = Math.abs(referenceFiles.length - candidateFiles.length);
 
   return (
-    <main className="app-main batch-main">
+    <main className="batch-main">
       <FileList
         title="Fichiers référence"
         hint="Piste à ne jamais modifier (ex. VO), une par épisode."

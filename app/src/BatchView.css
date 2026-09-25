@@ -1,13 +1,22 @@
-/* Two equal columns (unlike the single-file view's asymmetric tracks/
-   analysis split) -- both file lists deserve the same weight here.
-   grid-template-rows gives the file-list row all the leftover height
-   (1fr) and keeps the pairing summary row to its own natural size below
-   it; within that row, grid's default item stretch then makes both
-   file-list panels exactly as tall as each other, regardless of which one
-   has more files. */
+/* Not just .app-main plus overrides: relying on cascade order between two
+   same-specificity classes from two different stylesheets is fragile (it
+   silently depends on CSS import/bundling order) -- .batch-main instead
+   defines everything it needs on its own. Two equal columns (unlike the
+   single-file view's asymmetric tracks/analysis split), since both file
+   lists deserve the same weight here. grid-template-rows gives the
+   file-list row all the leftover height (1fr) and keeps the pairing
+   summary row to its own natural size below it; within that row, grid's
+   default item stretch then makes both file-list panels exactly as tall
+   as each other, regardless of which one has more files. */
 .batch-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 1em;
+  display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr auto;
+  gap: 1em;
+  overflow: hidden;
 }
 
 .batch-file-list {
