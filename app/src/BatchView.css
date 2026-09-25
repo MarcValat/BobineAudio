@@ -113,6 +113,12 @@ td.batch-index {
   text-align: right;
 }
 
+/* .batch-table-wrap td's own padding shorthand would otherwise outrank
+   this single-class rule (one extra class in the selector beats one). */
+.batch-table-wrap td.batch-row-actions {
+  padding-right: 1em;
+}
+
 .batch-row-actions button {
   padding: 0.15em 0.5em;
   margin-left: 0.2em;
