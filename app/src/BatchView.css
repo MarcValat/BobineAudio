@@ -1,0 +1,96 @@
+/* Two equal columns (unlike the single-file view's asymmetric tracks/
+   analysis split) -- both file lists deserve the same weight here. The
+   pairing summary spans both, as a third implicit row. */
+.batch-main {
+  grid-template-columns: 1fr 1fr;
+  align-content: start;
+}
+
+.batch-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6em;
+  overflow: auto;
+}
+
+.batch-hint {
+  margin: -0.3em 0 0;
+  font-size: 0.8em;
+  color: var(--text-muted);
+}
+
+.batch-table-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.batch-table-wrap table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.85em;
+}
+
+.batch-table-wrap th {
+  padding: 0.4em;
+  text-align: left;
+  font-size: 0.75em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--border);
+}
+
+.batch-table-wrap td {
+  padding: 0.45em 0.5em;
+  border-bottom: 1px solid var(--border);
+}
+
+.batch-table-wrap tr:last-child td {
+  border-bottom: none;
+}
+
+/* Same row index gets the same tint in both tables (zebra striping keyed
+   by index, not just alternation) -- a lightweight visual aid to eyeball
+   which row of one table lines up with which row of the other. */
+.batch-table-wrap tr:nth-child(even) {
+  background: var(--surface-alt);
+}
+
+.batch-index {
+  width: 2em;
+  text-align: center;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.batch-filename {
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 1px; /* forces the ellipsis to respect the table's own width instead of growing it */
+}
+
+.batch-row-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.batch-row-actions button {
+  padding: 0.15em 0.5em;
+  margin-left: 0.2em;
+}
+
+.batch-pair-summary {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0.7em 1em;
+  font-size: 0.85em;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}

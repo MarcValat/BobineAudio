@@ -16,6 +16,7 @@ import { SegmentChart } from "./SegmentChart";
 import { LogPanel } from "./LogPanel";
 import { SegmentEditor } from "./SegmentEditor";
 import { TrackPreview } from "./TrackPreview";
+import { BatchView } from "./BatchView";
 import { basename } from "./paths";
 import "./App.css";
 
@@ -45,6 +46,7 @@ interface TrackAnalysis {
 }
 
 function App() {
+  const [mode, setMode] = useState<"single" | "batch">("single");
   const [engineStatus, setEngineStatus] = useState<EngineStatus>("starting");
   const [filePath, setFilePath] = useState<string | null>(null);
   const [tracks, setTracks] = useState<TrackInfo[] | null>(null);
@@ -239,6 +241,18 @@ function App() {
 
   return (
     <div className="container">
+      <div className="mode-tabs">
+        <button className={`mode-tab${mode === "single" ? " active" : ""}`} onClick={() => setMode("single")}>
+          Fichier unique
+        </button>
+        <button className={`mode-tab${mode === "batch" ? " active" : ""}`} onClick={() => setMode("batch")}>
+          Batch
+        </button>
+      </div>
+
+      {mode === "batch" ? (
+        <BatchView />
+      ) : (
       <main className="app-main">
         <div className="left-column">
           <button className="primary-button file-open-button" onClick={handleOpenFile}>
@@ -400,8 +414,9 @@ function App() {
             })}
         </section>
       </main>
+      )}
 
-      {editingTrack !== null && editingEntry?.result && (
+      {mode === "single" && editingTrack !== null && editingEntry?.result && (
         <SegmentEditor
           segments={editingEntry.result.segments}
           onClose={() => setEditingTrack(null)}
