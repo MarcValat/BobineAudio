@@ -415,6 +415,17 @@ export function BatchView({ hidden }: { hidden: boolean }) {
     setFiles(Array.isArray(selected) ? selected : [selected]);
   }
 
+  /** `analyses` is indexed by pairing position, so moving or removing a
+   * file in either list shifts what every later index actually refers to
+   * -- keeping the old entries around would either crash the results table
+   * (reading a filename past the shrunk list's end) or, worse, silently
+   * show/export a pair's analysis against the wrong file. Clearing forces
+   * a re-analysis instead of trusting stale indices. */
+  function resetAnalyses() {
+    setAnalyses([]);
+    setEditingPairIndex(null);
+  }
+
   const pairCount = Math.min(referenceFiles.length, candidateFiles.length);
   // No arrows/warnings at all until both sides have at least one file --
   // one list starting empty while the other is being built up is a normal,
@@ -528,8 +539,14 @@ export function BatchView({ hidden }: { hidden: boolean }) {
           files={referenceFiles}
           tbodyRef={referenceTbodyRef}
           onOpen={() => pickFiles(setReferenceFiles)}
-          onMove={(from, to) => setReferenceFiles((f) => moved(f, from, to))}
-          onRemove={(i) => setReferenceFiles((f) => f.filter((_, idx) => idx !== i))}
+          onMove={(from, to) => {
+            setReferenceFiles((f) => moved(f, from, to));
+            resetAnalyses();
+          }}
+          onRemove={(i) => {
+            setReferenceFiles((f) => f.filter((_, idx) => idx !== i));
+            resetAnalyses();
+          }}
         />
         <FileList
           title="Fichiers à corriger"
@@ -537,8 +554,14 @@ export function BatchView({ hidden }: { hidden: boolean }) {
           files={candidateFiles}
           tbodyRef={candidateTbodyRef}
           onOpen={() => pickFiles(setCandidateFiles)}
-          onMove={(from, to) => setCandidateFiles((f) => moved(f, from, to))}
-          onRemove={(i) => setCandidateFiles((f) => f.filter((_, idx) => idx !== i))}
+          onMove={(from, to) => {
+            setCandidateFiles((f) => moved(f, from, to));
+            resetAnalyses();
+          }}
+          onRemove={(i) => {
+            setCandidateFiles((f) => f.filter((_, idx) => idx !== i));
+            resetAnalyses();
+          }}
         />
         {/* Sibling overlay, not a descendant of either panel -- see
             usePairArrowTops for why that matters (.panel/.batch-table-wrap
