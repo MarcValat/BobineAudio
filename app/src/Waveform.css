@@ -118,6 +118,37 @@
   background: var(--success, #2a8c4a);
 }
 
+.waveform-navigator {
+  flex: 0 0 auto;
+  margin-top: 0.4em;
+}
+
+.waveform-navigator-svg {
+  width: 100%;
+  height: 26px;
+  display: block;
+  border: 1px solid var(--border, rgba(128, 128, 128, 0.25));
+  border-radius: var(--radius-sm, 8px);
+  cursor: pointer;
+}
+
+.waveform-navigator-path {
+  fill: currentColor;
+  opacity: 0.35;
+}
+
+.waveform-navigator-window {
+  fill: var(--accent);
+  opacity: 0.3;
+  stroke: var(--accent);
+  stroke-width: 1;
+  cursor: grab;
+}
+
+.waveform-navigator-window:active {
+  cursor: grabbing;
+}
+
 .waveform-zoom-controls {
   flex: 0 0 auto;
   display: flex;

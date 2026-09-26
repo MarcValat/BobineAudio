@@ -35,7 +35,10 @@ interface WaveformProps {
 const WHEEL_ZOOM_IN_FACTOR = 0.85;
 const WHEEL_ZOOM_OUT_FACTOR = 1 / WHEEL_ZOOM_IN_FACTOR;
 
-function peaksToPath(min: number[], max: number[], x0: number, x1: number, height: number): string {
+/** Exported for WaveformNavigator.tsx's mini overview waveform -- same peak
+ * data, just drawn over the whole-track axis instead of the current
+ * [viewStart, viewStart+viewDuration] window. */
+export function peaksToPath(min: number[], max: number[], x0: number, x1: number, height: number): string {
   const n = min.length;
   if (n === 0 || x1 <= x0) return "";
   const xStep = (x1 - x0) / n;

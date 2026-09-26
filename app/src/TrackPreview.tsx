@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchClip, fetchWaveform, type SegmentOut } from "./api";
 import { formatTime } from "./SegmentChart";
 import { Waveform, type HighlightRegion } from "./Waveform";
+import { WaveformNavigator } from "./WaveformNavigator";
 
 const PREVIEW_DURATION_S = 12;
 const WAVEFORM_BUCKETS = 800;
@@ -656,6 +657,17 @@ export function TrackPreview({
             className="waveform-final"
           />
         </div>
+      )}
+
+      {refDuration !== null && refFullPeaks && viewDuration !== null && (
+        <WaveformNavigator
+          duration={refDuration}
+          viewStart={viewStart}
+          viewDuration={viewDuration}
+          peaksMin={refFullPeaks.min}
+          peaksMax={refFullPeaks.max}
+          onNavigate={setViewStart}
+        />
       )}
 
       <div className="preview-controls">
