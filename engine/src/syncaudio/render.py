@@ -512,6 +512,20 @@ def render(
             cmd += ["-filter_complex", ";".join(filter_complex_parts)]
         cmd += ["-map", "0:v:0", *audio_map_args, *native_sub_map_args, "-map", "0:t?", *sub_map_args]
         cmd += ["-c:v", "copy", *audio_codec_args, "-c:s", "copy", *metadata_args]
+        if len(inputs) > 1:
+            # A track built from a *donor* file (batch mode's case: reference
+            # and to-correct files are always two separate inputs) is muxed
+            # from a second, independent input alongside the first input's
+            # own stream-copied tracks. ffmpeg's default interleaving buffer
+            # (10s) can then place that track's packets much later in the
+            # file than a player's initial probe expects -- the data is
+            # genuinely intact (confirmed: mkvextract and Windows Media
+            # Player play it fine), but VLC's demuxer is stricter about
+            # finding every mapped track early and can come up with
+            # silence/no-track for it. Forcing tight interleaving (0 =
+            # flush as soon as every stream has a packet ready) avoids that;
+            # harmless for the single-input case too, which doesn't need it.
+            cmd += ["-max_interleave_delta", "0"]
         cmd += ["-t", str(ref_duration), output_path]
         _run(cmd)
     return [output_path]
