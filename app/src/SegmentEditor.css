@@ -29,7 +29,7 @@
    width to stay usable, so this doesn't just split the plain panel's width
    in two. */
 .editor-panel-wide {
-  max-width: 1500px;
+  max-width: 1800px;
 }
 
 .editor-columns {
