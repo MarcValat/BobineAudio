@@ -289,7 +289,14 @@ def test_render_endpoint_segmented_uses_supplied_segment_override(offset_mkv: tu
     assert body["written"] == [output_path]
     segs = body["corrections"][0]["segments"]
     assert segs == [
-        {"start_s": 0.0, "end_s": 30.0, "offset_start": fake_offset, "offset_end": fake_offset, "is_drift": False}
+        {
+            "start_s": 0.0,
+            "end_s": 30.0,
+            "offset_start": fake_offset,
+            "offset_end": fake_offset,
+            "is_drift": False,
+            "confidence": 1.0,
+        }
     ]
 
 

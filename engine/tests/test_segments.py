@@ -187,3 +187,61 @@ def test_classify_segments_detects_drift() -> None:
     assert abs(segments[0].offset_start - 0.0) < 0.5
     expected_end = duration_s * (1 - 1 / stretch_factor)
     assert abs(segments[0].offset_end - expected_end) < 0.6
+
+
+def test_confidence_is_high_for_a_well_supported_segment() -> None:
+    hop_s = 10.0
+    n_windows = 20
+    windows = [
+        WindowOffset(time_s=i * hop_s, offset_seconds=0.01 * ((i % 5) - 2), confidence=0.8, ambiguous=False)
+        for i in range(n_windows)
+    ]
+
+    segments = classify_segments(windows, total_duration_s=n_windows * hop_s)
+
+    assert len(segments) == 1
+    assert segments[0].confidence > 0.7
+
+
+def test_confidence_is_low_for_a_small_trailing_group_even_with_confident_windows() -> None:
+    """Real bug shape: a spurious tail 'drift' carried by only a handful of
+    windows, each of which can look individually confident (a correct-
+    looking correlation peak on real audio) without that meaning the
+    *segment* -- a jump sustained by so few windows -- deserves any trust.
+    Confidence must reflect the weak sample size even though every window's
+    own confidence here is deliberately set high."""
+    hop_s = 10.0
+    n_lead = 16
+    n_tail = 3
+    windows = [
+        WindowOffset(time_s=i * hop_s, offset_seconds=0.01 * ((i % 5) - 2), confidence=0.8, ambiguous=False)
+        for i in range(n_lead)
+    ]
+    windows += [
+        WindowOffset(time_s=(n_lead + i) * hop_s, offset_seconds=1.5, confidence=0.8, ambiguous=False)
+        for i in range(n_tail)
+    ]
+
+    segments = classify_segments(windows, total_duration_s=(n_lead + n_tail) * hop_s)
+
+    assert len(segments) == 2
+    assert segments[0].confidence > 0.7
+    assert segments[1].confidence < 0.5
+    assert segments[1].confidence < segments[0].confidence
+
+
+def test_confidence_is_low_when_windows_themselves_are_unconfident() -> None:
+    """The other half of the formula: even a large, internally consistent
+    group shouldn't be trusted if the underlying correlation itself was
+    weak (e.g. a mostly-silent/dialogue-only stretch)."""
+    hop_s = 10.0
+    n_windows = 20
+    windows = [
+        WindowOffset(time_s=i * hop_s, offset_seconds=0.01 * ((i % 5) - 2), confidence=0.1, ambiguous=False)
+        for i in range(n_windows)
+    ]
+
+    segments = classify_segments(windows, total_duration_s=n_windows * hop_s)
+
+    assert len(segments) == 1
+    assert segments[0].confidence < 0.2

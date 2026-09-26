@@ -49,6 +49,14 @@ _DRIFT_EPS_S = 0.2
 # test_classify_segments_detects_a_jump), so nothing reliably detectable is
 # being traded away.
 _OUTLIER_FILTER_SIZE = 5
+# A segment's confidence (see _segment_confidence) is discounted below this
+# many supporting windows -- a handful of windows can agree with each other
+# by chance (a small group's own line/mean always fits it reasonably
+# tightly, that alone proves nothing), so raw per-window confidence isn't
+# enough on its own to trust a segment built from very few of them. Matches
+# _OUTLIER_FILTER_SIZE's neighbourhood size, which is the smallest sample
+# already treated as meaningful elsewhere in this file.
+_CONFIDENT_WINDOW_COUNT = 5
 
 
 @dataclass(frozen=True)
@@ -137,6 +145,13 @@ class Segment:
     end_s: float
     offset_start: float
     offset_end: float
+    # How much this segment's classification/offsets should be trusted, in
+    # [0, 1] -- see _segment_confidence. Defaulted so every existing
+    # 4-positional-arg call site (tests, render.py's own construction of
+    # ad-hoc segments, SegmentOut.to_segment for a manually-edited segment
+    # sent back from the GUI) keeps working unchanged; render itself never
+    # reads this, it's purely for the GUI to surface.
+    confidence: float = 1.0
 
     @property
     def is_drift(self) -> bool:
@@ -187,6 +202,30 @@ def _fit_line_or_constant(times: np.ndarray, offsets: np.ndarray) -> tuple[float
     return float(slope), float(intercept)
 
 
+def _segment_confidence(group: Sequence[WindowOffset]) -> float:
+    """How much a segment's classification should be trusted, in [0, 1].
+
+    Combines two independent things that can each make a segment
+    untrustworthy on their own:
+
+    - Each window's own correlation confidence (``estimate_offset``'s
+      peak-prominence z-score) -- low when the underlying audio itself
+      didn't have enough shared music/SFX content to correlate against
+      confidently (a silent or dialogue-only stretch).
+    - How many windows actually support this segment. A segment built from
+      only 1-2 windows can look perfectly clean -- a line through 2 points
+      always fits -- without that meaning anything: this is exactly the
+      shape of a reported false drift, a short, spurious segment at a
+      file's tail carried by a handful of trailing windows. Discounted
+      linearly below ``_CONFIDENT_WINDOW_COUNT`` rather than treated as a
+      hard cutoff, since a 3-4 window segment isn't necessarily wrong, just
+      less proven than a 10+ window one.
+    """
+    mean_confidence = float(np.mean([w.confidence for w in group]))
+    sample_factor = min(1.0, len(group) / _CONFIDENT_WINDOW_COUNT)
+    return mean_confidence * sample_factor
+
+
 def classify_segments(
     windows: Sequence[WindowOffset],
     total_duration_s: float,
@@ -200,7 +239,11 @@ def classify_segments(
     excluded from deciding both the linear fit and the jump boundaries: at
     the window scale, real content residuals mean *confidence* alone stays
     low even for correct estimates (see README caveats), so ``ambiguous`` is
-    used as the reliability signal instead of a confidence threshold.
+    used as the reliability signal instead of a confidence threshold for
+    *that* decision. Each returned segment still carries its own aggregate
+    ``confidence`` (see ``_segment_confidence``) -- unlike a single window's,
+    that one *is* meant to be read and acted on (the GUI's manual editor
+    surfaces it and can bulk-discard low-confidence segments).
 
     First tries a single line through every usable window; if that already
     explains the data within ``residual_tol_s``, the whole track is one
@@ -212,7 +255,7 @@ def classify_segments(
     if len(usable) < 2:
         usable = list(windows)
     if not usable:
-        return [Segment(0.0, total_duration_s, 0.0, 0.0)]
+        return [Segment(0.0, total_duration_s, 0.0, 0.0, confidence=0.0)]
 
     times = np.array([w.time_s for w in usable])
     offsets = np.array([w.offset_seconds for w in usable])
@@ -254,6 +297,7 @@ def classify_segments(
                     end_s=total_duration_s,
                     offset_start=float(intercept),
                     offset_end=float(intercept + slope * total_duration_s),
+                    confidence=_segment_confidence(usable),
                 )
             ]
 
@@ -282,7 +326,7 @@ def classify_segments(
             offset_end = float(g_intercept + g_slope * seg_end)
         else:
             offset_start = offset_end = group[0].offset_seconds
-        segments.append(Segment(seg_start, seg_end, offset_start, offset_end))
+        segments.append(Segment(seg_start, seg_end, offset_start, offset_end, confidence=_segment_confidence(group)))
     return segments
 
 

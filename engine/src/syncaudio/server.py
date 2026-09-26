@@ -315,16 +315,24 @@ class SegmentOut(BaseModel):
     offset_start: float
     offset_end: float
     is_drift: bool
+    # Defaulted to 1.0 (not 0.0): a segment reaching this API without an
+    # explicit confidence is one the GUI itself constructed (a manual edit
+    # sent back for render) rather than one the detector produced -- treat a
+    # human-reviewed value as fully trusted, not as if it were unsupported.
+    confidence: float = 1.0
 
     @staticmethod
     def from_segment(seg: Segment) -> SegmentOut:
         return SegmentOut(
             start_s=seg.start_s, end_s=seg.end_s, offset_start=seg.offset_start, offset_end=seg.offset_end,
-            is_drift=seg.is_drift,
+            is_drift=seg.is_drift, confidence=seg.confidence,
         )
 
     def to_segment(self) -> Segment:
-        return Segment(start_s=self.start_s, end_s=self.end_s, offset_start=self.offset_start, offset_end=self.offset_end)
+        return Segment(
+            start_s=self.start_s, end_s=self.end_s, offset_start=self.offset_start, offset_end=self.offset_end,
+            confidence=self.confidence,
+        )
 
 
 class SegmentsResponse(BaseModel):
