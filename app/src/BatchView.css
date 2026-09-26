@@ -26,7 +26,12 @@
   gap: 1em;
 }
 
-.batch-pairing-row > .batch-file-list {
+/* .batch-connector also carries .batch-file-list (see PairConnector's
+   comment for why), so this rule would otherwise apply to it too and its
+   own `flex: 0 0 auto; width: 2.4em;` -- same specificity -- would lose to
+   whichever of the two rules happens to come later in the file. Excluding
+   it here removes the ambiguity instead of relying on source order. */
+.batch-pairing-row > .batch-file-list:not(.batch-connector) {
   flex: 1 1 0;
   min-width: 0;
 }
@@ -255,10 +260,19 @@ td.batch-index {
   font-size: 1.1em;
 }
 
+/* Stacks to one column on a narrow window instead of squeezing both
+   side-by-side unreadably -- the app window is user-resizable, this modal
+   isn't a fixed-size dialog. */
 .batch-tracks-columns {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1.5em;
+}
+
+@media (max-width: 700px) {
+  .batch-tracks-columns {
+    grid-template-columns: 1fr;
+  }
 }
 
 .batch-tracks-side h3 {
