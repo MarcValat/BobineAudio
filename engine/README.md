@@ -121,7 +121,7 @@ Pour corriger ce que `segments` a détecté (pas juste le visualiser), voir `ren
 
 Limites connues à ce stade :
 - La précision de localisation d'un saut dépend de la richesse en musique/bruitages du contenu *juste autour* de la transition, pas seulement de la taille de fenêtre : sur une zone plutôt silencieuse/dialoguée à cet instant précis, même la passe de raffinement peut rester à plusieurs secondes de l'instant réel (vu sur `jump_single`, un cas par ailleurs propre — la correction finale reste malgré tout très bonne, voir ci-dessous).
-- Sur des cas avec plusieurs sauts rapprochés, un segment isolé parasite peut occasionnellement apparaître près d'une transition (vu sur `jump_multi`).
+- Une fenêtre (ou deux consécutives) dont l'estimation locale est très aberrante par rapport à ses voisines immédiates est désormais détectée et écartée avant classification, ce qui élimine le segment isolé parasite qui pouvait auparavant apparaître près d'une transition sur des cas avec plusieurs sauts rapprochés (vu sur `jump_multi`).
 
 ## Corriger une dérive ou des sauts (`render --segmented`)
 

@@ -5,6 +5,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 import numpy as np
+from scipy.ndimage import median_filter
 
 from syncaudio.align import estimate_offset
 from syncaudio.analysis_cache import ANALYSIS_SAMPLE_RATE, get_envelope
@@ -35,6 +36,19 @@ _RESIDUAL_TOL_S = 0.4
 # constant shift rather than drift (looser than render.py's threshold: these
 # per-window estimates come from shorter, noisier slices).
 _DRIFT_EPS_S = 0.2
+# Median-filter size used to flag and drop individual outlier windows before
+# classification (see classify_segments): catches up to 2 consecutive
+# outliers -- a locally ambiguous/aliased correlation lock the `ambiguous`
+# flag doesn't catch -- that would otherwise read as a jump away and
+# immediately back, emitting a spurious ~1-2-window segment in content
+# that's actually one continuous segment (the real bug report this fixes: a
+# ~20s spurious segment, i.e. 2 windows at the default 10s hop). 5 needs a
+# majority (3 of 5) of neighbours to agree, so it never flags a real,
+# sustained jump: one lasting under ~3 windows is already past the coarse
+# pass's own documented boundary-precision floor (see
+# test_classify_segments_detects_a_jump), so nothing reliably detectable is
+# being traded away.
+_OUTLIER_FILTER_SIZE = 5
 
 
 @dataclass(frozen=True)
@@ -162,6 +176,26 @@ def classify_segments(
 
     times = np.array([w.time_s for w in usable])
     offsets = np.array([w.offset_seconds for w in usable])
+
+    # Drop individual outlier windows entirely before doing anything else --
+    # a locally ambiguous/aliased correlation lock the `ambiguous` flag
+    # doesn't catch, flagged by comparing each window's raw offset to a
+    # small median-filtered neighbourhood. This must happen before grouping,
+    # not just influence its decisions: merely *smoothing the grouping
+    # decision* (an earlier version of this fix) let a real outlier get
+    # folded into a neighbouring group -- its own smoothed neighbourhood
+    # looked normal enough to pass -- while its raw, wrong value still went
+    # into that group's line fit, producing a nonsensical steep "drift"
+    # from just 2 points, one of them garbage. Dropping it outright, like an
+    # `ambiguous` window, avoids that regardless of which group would have
+    # absorbed it.
+    if len(offsets) >= _OUTLIER_FILTER_SIZE:
+        smoothed = median_filter(offsets, size=_OUTLIER_FILTER_SIZE, mode="nearest")
+        reliable = np.abs(offsets - smoothed) <= jump_threshold_s
+        if 2 <= int(reliable.sum()) < len(offsets):
+            usable = [w for w, keep in zip(usable, reliable) if keep]
+            times = times[reliable]
+            offsets = offsets[reliable]
 
     if len(usable) >= 2:
         slope, intercept = np.polyfit(times, offsets, 1)

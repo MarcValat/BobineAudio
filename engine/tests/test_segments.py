@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from syncaudio.features import extract_envelope
-from syncaudio.segments import classify_segments, refine_segments, windowed_offsets
+from syncaudio.segments import WindowOffset, classify_segments, refine_segments, windowed_offsets
 
 SAMPLE_RATE = 16000
 
@@ -113,6 +113,32 @@ def test_classify_segments_detects_a_jump() -> None:
     refined_error = abs(refined[0].end_s - jump_time_s)
     assert refined_error < 5.0
     assert refined_error <= coarse_error
+
+
+def test_classify_segments_ignores_an_isolated_outlier_window() -> None:
+    """Real bug report: a single window (or two) reads a wildly different
+    offset than every neighbour on both sides -- a locally
+    ambiguous/aliased correlation lock, not a real jump-and-back -- and used
+    to come back as its own spurious mini-segment. A real jump persists
+    across many consecutive windows; this constructs windows directly
+    (bypassing audio synthesis entirely) to isolate exactly that one
+    failure shape."""
+    hop_s = 10.0
+    n_windows = 20
+    windows = [WindowOffset(time_s=i * hop_s, offset_seconds=0.02 * ((i % 5) - 2), confidence=0.5, ambiguous=False) for i in range(n_windows)]
+    # Two consecutive outlier windows in the middle, clearly past the jump
+    # threshold, surrounded on both sides by windows that agree with each
+    # other -- matches the reported case (a ~20s spurious segment amid an
+    # otherwise-flat multi-minute track).
+    outlier_at = n_windows // 2
+    windows[outlier_at] = WindowOffset(time_s=outlier_at * hop_s, offset_seconds=-1.71, confidence=0.5, ambiguous=False)
+    windows[outlier_at + 1] = WindowOffset(time_s=(outlier_at + 1) * hop_s, offset_seconds=-1.71, confidence=0.5, ambiguous=False)
+
+    segments = classify_segments(windows, total_duration_s=n_windows * hop_s)
+
+    assert len(segments) == 1
+    assert not segments[0].is_drift
+    assert abs(segments[0].mean_offset) < 0.3
 
 
 def test_classify_segments_detects_drift() -> None:
