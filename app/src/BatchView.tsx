@@ -384,7 +384,8 @@ export function BatchView({ hidden }: { hidden: boolean }) {
   const [referenceTrackIndex, setReferenceTrackIndex] = useState(0);
   const [candidateTrackIndex, setCandidateTrackIndex] = useState(1);
   const [analyses, setAnalyses] = useState<PairAnalysis[]>([]);
-  const [running, setRunning] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [showTracksModal, setShowTracksModal] = useState(false);
   const [editingPairIndex, setEditingPairIndex] = useState<number | null>(null);
 
@@ -430,7 +431,7 @@ export function BatchView({ hidden }: { hidden: boolean }) {
   }
 
   async function handleAnalyzeAll() {
-    setRunning(true);
+    setAnalyzing(true);
     setAnalyses(Array.from({ length: pairCount }, () => ({ status: "pending", result: null, error: null, log: [], ...IDLE_EXPORT })));
     for (let i = 0; i < pairCount; i++) {
       updatePair(i, { status: "running" });
@@ -444,7 +445,7 @@ export function BatchView({ hidden }: { hidden: boolean }) {
         updatePair(i, { status: "error", error: err instanceof Error ? err.message : String(err) });
       }
     }
-    setRunning(false);
+    setAnalyzing(false);
   }
 
   const exportableCount = analyses.filter((a) => a.status === "done" && a.result).length;
@@ -455,9 +456,13 @@ export function BatchView({ hidden }: { hidden: boolean }) {
    * render from. Uses each pair's current `result.segments`, which is
    * exactly what "Modifier" (below) lets the user hand-adjust first -- same
    * principle as the single-file view: export must reflect a reviewed
-   * edit, not silently re-run detection and discard it. */
+   * edit, not silently re-run detection and discard it. Both buttons below
+   * are disabled while *either* operation runs, not just their own: export
+   * reads `analyses` as it currently stands, so a concurrent re-analysis
+   * could rewrite a pair's segments out from under an export already using
+   * them. */
   async function handleExportAll() {
-    setRunning(true);
+    setExporting(true);
     for (let i = 0; i < analyses.length; i++) {
       const entry = analyses[i];
       if (entry.status !== "done" || !entry.result) continue;
@@ -478,7 +483,7 @@ export function BatchView({ hidden }: { hidden: boolean }) {
         updatePair(i, { exportStatus: "error", exportError: err instanceof Error ? err.message : String(err) });
       }
     }
-    setRunning(false);
+    setExporting(false);
   }
 
   return (
@@ -508,11 +513,11 @@ export function BatchView({ hidden }: { hidden: boolean }) {
         >
           Vérifier toutes les pistes
         </button>
-        <button className="primary-button" onClick={handleAnalyzeAll} disabled={pairCount === 0 || running}>
-          {running ? "Analyse en cours..." : "Analyser tout"}
+        <button className="primary-button" onClick={handleAnalyzeAll} disabled={pairCount === 0 || analyzing || exporting}>
+          {analyzing ? "Analyse en cours..." : "Analyser tout"}
         </button>
-        <button className="primary-button" onClick={handleExportAll} disabled={exportableCount === 0 || running}>
-          {running ? "Export en cours..." : "Exporter tout"}
+        <button className="primary-button" onClick={handleExportAll} disabled={exportableCount === 0 || analyzing || exporting}>
+          {exporting ? "Export en cours..." : "Exporter tout"}
         </button>
       </div>
 
