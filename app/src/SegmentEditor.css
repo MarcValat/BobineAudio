@@ -154,6 +154,20 @@
   font-size: 0.95em;
 }
 
+.editor-confidence-cell {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.editor-confidence-cell.low {
+  color: var(--danger, #cc3333);
+  font-weight: 600;
+}
+
+.editor-row-low-confidence {
+  background: color-mix(in srgb, var(--danger, #cc3333) 8%, transparent);
+}
+
 /* A concrete height (not just min-height) is the point: .preview and its
    own children (see App.css/Waveform.css) are all `flex: 1 1 auto; min-
    height: 0`, which only lets them shrink to whatever space a *bounded*

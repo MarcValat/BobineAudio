@@ -16,14 +16,28 @@ const PLOT_H = HEIGHT - MARGIN.top - MARGIN.bottom;
 // segment the backend classified as constant the moment it's opened for
 // editing -- exactly the bug this comment replaced.
 const DRIFT_EPS_S = 0.2;
+// A segment below this is flagged in the UI and eligible for "Ignorer les
+// segments peu fiables" -- see engine/segments.py's _segment_confidence,
+// which discounts both weak per-window correlation and a segment built
+// from too few supporting windows. Picked as "clearly more discounted than
+// trusted" rather than a statistically derived cutoff (confidence itself
+// is a heuristic score, not a calibrated probability): a segment scoring
+// under this has already lost at least half its mean per-window confidence
+// to one or both factors.
+const LOW_CONFIDENCE_THRESHOLD = 0.4;
 
 /** The editable form of a segment list: N+1 boundary times (shared between
  * consecutive segments, so dragging or typing one can never open a gap or
- * an overlap) plus each segment's own two offset values. */
+ * an overlap) plus each segment's own two offset values and its original
+ * detection confidence (informational only past this point -- editing a
+ * segment's own offsets doesn't change how much the *original* detection
+ * should have been trusted, so this is never recomputed, just carried
+ * along and merged like the other per-segment fields). */
 interface EditorState {
   times: number[];
   offsetStarts: number[];
   offsetEnds: number[];
+  confidences: number[];
 }
 
 function toEditorState(segments: SegmentOut[]): EditorState {
@@ -31,6 +45,7 @@ function toEditorState(segments: SegmentOut[]): EditorState {
     times: [segments[0].start_s, ...segments.map((s) => s.end_s)],
     offsetStarts: segments.map((s) => s.offset_start),
     offsetEnds: segments.map((s) => s.offset_end),
+    confidences: segments.map((s) => s.confidence),
   };
 }
 
@@ -43,6 +58,7 @@ function toSegments(state: EditorState): SegmentOut[] {
       offset_start,
       offset_end,
       is_drift: Math.abs(offset_end - offset_start) > DRIFT_EPS_S,
+      confidence: state.confidences[i],
     };
   });
 }
@@ -67,7 +83,25 @@ function mergeSegment(state: EditorState, i: number): EditorState {
     times: [...state.times.slice(0, lo + 1), ...state.times.slice(hi + 1)],
     offsetStarts: [...state.offsetStarts.slice(0, lo), state.offsetStarts[j], ...state.offsetStarts.slice(hi + 1)],
     offsetEnds: [...state.offsetEnds.slice(0, lo), state.offsetEnds[j], ...state.offsetEnds.slice(hi + 1)],
+    confidences: [...state.confidences.slice(0, lo), state.confidences[j], ...state.confidences.slice(hi + 1)],
   };
+}
+
+/** "Ignorer les segments peu fiables": repeatedly merges away the first
+ * remaining segment under LOW_CONFIDENCE_THRESHOLD (same merge -- absorb
+ * into the next segment, or the previous one if it's the last -- a manual
+ * "Fusionner" click already does), until none are left below the
+ * threshold or only one segment remains. Repeats rather than a single
+ * pass because merging shifts every later index and can change which
+ * segment is now "last". */
+function ignoreLowConfidenceSegments(state: EditorState): EditorState {
+  let next = state;
+  while (next.confidences.length > 1) {
+    const i = next.confidences.findIndex((c) => c < LOW_CONFIDENCE_THRESHOLD);
+    if (i === -1) break;
+    next = mergeSegment(next, i);
+  }
+  return next;
 }
 
 interface PreviewSource {
@@ -248,6 +282,7 @@ export function SegmentEditor({
                         textAnchor="middle"
                       >
                         {seg.is_drift ? `${seg.offset_start.toFixed(2)}s → ${seg.offset_end.toFixed(2)}s` : `${flat.toFixed(2)}s`}
+                        {seg.confidence < LOW_CONFIDENCE_THRESHOLD ? " ⚠" : ""}
                       </text>
                     </g>
                   );
@@ -276,12 +311,13 @@ export function SegmentEditor({
                     <th>Fin (s)</th>
                     <th>Décalage début (s)</th>
                     <th>Décalage fin (s)</th>
+                    <th>Confiance</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {segmentsPreview.map((seg, i) => (
-                    <tr key={i}>
+                    <tr key={i} className={seg.confidence < LOW_CONFIDENCE_THRESHOLD ? "editor-row-low-confidence" : undefined}>
                       <td>{i + 1}</td>
                       <td>
                         <input
@@ -321,6 +357,13 @@ export function SegmentEditor({
                           onBlur={() => handleCellBlur(`offsetEnd-${i}`)}
                         />
                       </td>
+                      <td
+                        className={seg.confidence < LOW_CONFIDENCE_THRESHOLD ? "editor-confidence-cell low" : "editor-confidence-cell"}
+                        title="À quel point cette détection (décalage et classification dérive/constant) est fiable -- voir engine/segments.py:_segment_confidence. Un score bas vient d'une corrélation faible et/ou de trop peu de fenêtres d'analyse en soutien, pas forcément d'une erreur certaine."
+                      >
+                        {seg.confidence < LOW_CONFIDENCE_THRESHOLD ? "⚠ " : ""}
+                        {Math.round(seg.confidence * 100)}%
+                      </td>
                       <td>
                         <button
                           className="small-button"
@@ -354,6 +397,14 @@ export function SegmentEditor({
         </div>
 
         <div className="editor-actions">
+          <button
+            className="small-button"
+            disabled={!state.confidences.some((c) => c < LOW_CONFIDENCE_THRESHOLD)}
+            title="Fusionne automatiquement chaque segment dont la confiance est sous le seuil avec son voisin (même effet que cliquer sur Fusionner pour chacun) -- ex. une fausse dérive détectée en fin de fichier sur trop peu de fenêtres."
+            onClick={() => setState(ignoreLowConfidenceSegments)}
+          >
+            Ignorer les segments peu fiables
+          </button>
           <button
             className="primary-button"
             onClick={() => {

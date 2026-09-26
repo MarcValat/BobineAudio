@@ -27,6 +27,7 @@ export interface SegmentOut {
   offset_start: number;
   offset_end: number;
   is_drift: boolean;
+  confidence: number;
 }
 
 export interface SegmentsResponse {
