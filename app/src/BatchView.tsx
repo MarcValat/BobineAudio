@@ -656,6 +656,12 @@ export function BatchView({ hidden }: { hidden: boolean }) {
               current.map((a, idx) => (idx === i && a.result ? { ...a, result: { ...a.result, segments: edited } } : a)),
             );
           }}
+          preview={{
+            referenceFilePath: referenceFiles[editingPairIndex],
+            candidateFilePath: candidateFiles[editingPairIndex],
+            referenceIndex: referenceTrackIndex,
+            trackIndex: candidateTrackIndex,
+          }}
         />
       )}
     </main>

@@ -129,6 +129,12 @@
   font-size: 0.95em;
 }
 
+.editor-preview {
+  margin-top: 1em;
+  padding-top: 0.8em;
+  border-top: 1px solid var(--border, rgba(128, 128, 128, 0.3));
+}
+
 .editor-actions {
   margin-top: 1em;
   display: flex;

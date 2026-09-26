@@ -399,7 +399,8 @@ function App() {
                     <div className="segments-result">
                       {filePath && (
                         <TrackPreview
-                          filePath={filePath}
+                          referenceFilePath={filePath}
+                          candidateFilePath={filePath}
                           referenceIndex={entry.referenceIndex}
                           trackIndex={t.index}
                           segments={entry.result.segments}

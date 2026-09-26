@@ -174,7 +174,13 @@ function playSource(ctx: AudioContext, buffer: AudioBuffer, gain: GainNode, when
 }
 
 interface TrackPreviewProps {
-  filePath: string;
+  /** Usually the same file (single-file mode's reference and candidate
+   * tracks live side by side in one container) but not always: batch mode's
+   * cross-file pairs have the reference in one file and the track to
+   * correct in another, and /clip and /waveform both take a `path` per
+   * call, so there's no reason this component needs them to match. */
+  referenceFilePath: string;
+  candidateFilePath: string;
   referenceIndex: number;
   trackIndex: number;
   segments: SegmentOut[];
@@ -200,7 +206,8 @@ interface TrackPreviewProps {
  * against the same AudioContext clock (`start(when, offset)`) starts them
  * at a genuinely identical instant instead. */
 export function TrackPreview({
-  filePath,
+  referenceFilePath,
+  candidateFilePath,
   referenceIndex,
   trackIndex,
   segments,
@@ -306,8 +313,8 @@ export function TrackPreview({
       setWaveformError(null);
       try {
         const [refWave, candWave] = await Promise.all([
-          fetchWaveform(filePath, referenceIndex, 0, null, FULL_TRACK_BUCKETS),
-          fetchWaveform(filePath, trackIndex, 0, null, FULL_TRACK_BUCKETS),
+          fetchWaveform(referenceFilePath, referenceIndex, 0, null, FULL_TRACK_BUCKETS),
+          fetchWaveform(candidateFilePath, trackIndex, 0, null, FULL_TRACK_BUCKETS),
         ]);
         if (cancelled) return;
         setRefDuration(refWave.duration);
@@ -325,7 +332,7 @@ export function TrackPreview({
     return () => {
       cancelled = true;
     };
-  }, [filePath, referenceIndex, trackIndex]);
+  }, [referenceFilePath, candidateFilePath, referenceIndex, trackIndex]);
 
   // Re-derive all three waveforms' data for the current view from the
   // already-fetched full-track peaks -- synchronous, no network round trip,
@@ -432,9 +439,9 @@ export function TrackPreview({
       const candidateStart = Math.max(0, rawCandidateStart);
       const leadingSilenceS = Math.max(0, -rawCandidateStart);
       const [refBlob, candBlob, candOriginalBlob] = await Promise.all([
-        fetchClip(filePath, referenceIndex, startAt, PREVIEW_DURATION_S),
-        fetchClip(filePath, trackIndex, candidateStart, Math.max(0.1, PREVIEW_DURATION_S - leadingSilenceS)),
-        fetchClip(filePath, trackIndex, startAt, PREVIEW_DURATION_S),
+        fetchClip(referenceFilePath, referenceIndex, startAt, PREVIEW_DURATION_S),
+        fetchClip(candidateFilePath, trackIndex, candidateStart, Math.max(0.1, PREVIEW_DURATION_S - leadingSilenceS)),
+        fetchClip(candidateFilePath, trackIndex, startAt, PREVIEW_DURATION_S),
       ]);
       if (loadGenerationRef.current !== generation) return; // superseded while fetching
 

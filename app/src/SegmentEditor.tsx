@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { SegmentOut } from "./api";
 import { formatTime } from "./SegmentChart";
+import { TrackPreview } from "./TrackPreview";
 import "./SegmentEditor.css";
 
 const WIDTH = 900;
@@ -69,14 +70,33 @@ function mergeSegment(state: EditorState, i: number): EditorState {
   };
 }
 
+interface PreviewSource {
+  referenceFilePath: string;
+  candidateFilePath: string;
+  referenceIndex: number;
+  trackIndex: number;
+  referenceStartTime?: number;
+  trackStartTime?: number;
+}
+
 export function SegmentEditor({
   segments,
   onSave,
   onClose,
+  preview,
 }: {
   segments: SegmentOut[];
   onSave: (segments: SegmentOut[]) => void;
   onClose: () => void;
+  /** When given, renders the same always-visible waveform comparison as the
+   * main analysis view, below the offset chart/table -- fed the *live*
+   * edited segments (segmentsPreview), not the original `segments` prop, so
+   * dragging a boundary or retyping an offset updates "Résultat final"
+   * immediately, before Enregistrer is even clicked. Optional: single-file
+   * mode already shows this inline outside the modal, so it only passes
+   * this in from batch mode, where the compact per-pair table has nowhere
+   * else to put it. */
+  preview?: PreviewSource;
 }) {
   const [state, setState] = useState<EditorState>(() => toEditorState(segments));
   const [dragging, setDragging] = useState<number | null>(null);
@@ -314,6 +334,20 @@ export function SegmentEditor({
             </tbody>
           </table>
         </div>
+
+        {preview && (
+          <div className="editor-preview">
+            <TrackPreview
+              referenceFilePath={preview.referenceFilePath}
+              candidateFilePath={preview.candidateFilePath}
+              referenceIndex={preview.referenceIndex}
+              trackIndex={preview.trackIndex}
+              segments={segmentsPreview}
+              referenceStartTime={preview.referenceStartTime ?? 0}
+              trackStartTime={preview.trackStartTime ?? 0}
+            />
+          </div>
+        )}
 
         <div className="editor-actions">
           <button
