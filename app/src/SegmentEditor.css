@@ -27,9 +27,14 @@
 /* Wider when the waveform column is present -- side by side, both the
    offset chart/table and the waveforms need close to their normal full
    width to stay usable, so this doesn't just split the plain panel's width
-   in two. */
+   in two. A vw-relative cap, not a fixed px one: a hardcoded number (tried
+   1500px, then 1800px) is either too narrow on a bigger/higher-res display
+   (unused space either side, the exact complaint that led here) or
+   potentially too wide on a small one -- scaling with the viewport avoids
+   both, and the 2400px ceiling only guards against the columns stretching
+   absurdly thin-and-wide on an ultra-wide monitor. */
 .editor-panel-wide {
-  max-width: 1800px;
+  max-width: min(94vw, 2400px);
 }
 
 .editor-columns {
