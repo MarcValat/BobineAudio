@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { probe, startSegmentsJob, connectJobWS, type SegmentsResponse, type TrackInfo } from "./api";
 import { basename } from "./paths";
@@ -128,6 +128,7 @@ interface FileListProps {
   title: string;
   hint: string;
   files: string[];
+  tbodyRef: React.RefObject<HTMLTableSectionElement | null>;
   onOpen: () => void;
   onMove: (from: number, to: number) => void;
   onRemove: (index: number) => void;
@@ -135,10 +136,12 @@ interface FileListProps {
 
 /** One side of the batch pairing: its own file list, reorderable in place
  * (drag would feel nicer, but up/down arrows are far less fiddly to get
- * right and every row still needs a keyboard-reachable way to move). Which
- * row pairs with which is shown by PairConnector, not in here -- see
- * BatchView for why it's a separate column instead of an inline badge. */
-function FileList({ title, hint, files, onOpen, onMove, onRemove }: FileListProps) {
+ * right and every row still needs a keyboard-reachable way to move).
+ * `tbodyRef` lets BatchView measure each row's real screen position, to
+ * float a ↔ between this table and the other one at the same height --
+ * see usePairArrowTops for why that needs actual measurement rather than
+ * a CSS-only layout trick. */
+function FileList({ title, hint, files, tbodyRef, onOpen, onMove, onRemove }: FileListProps) {
   return (
     <section className="panel batch-file-list">
       <h2>{title}</h2>
@@ -168,7 +171,7 @@ function FileList({ title, hint, files, onOpen, onMove, onRemove }: FileListProp
                 <th></th>
               </tr>
             </thead>
-            <tbody>
+            <tbody ref={tbodyRef}>
               {files.map((f, i) => (
                 <tr key={`${i}-${f}`}>
                   <td className="batch-index">{i + 1}</td>
@@ -201,53 +204,52 @@ function FileList({ title, hint, files, onOpen, onMove, onRemove }: FileListProp
   );
 }
 
-/** A thin, dedicated column between the two file-list panels, showing one
- * ↔ (or ⚠ past pairCount, once one list is longer) per row instead of a
- * sentence below both tables. It reuses the exact same classes as a real
- * FileList (.batch-file-list, .batch-hint, .batch-table-wrap, table row
- * padding) for its own header spacer and rows -- that's what keeps its
- * arrows lined up with the real tables' rows without any manual pixel
- * math: same classes, same browser layout, same height, automatically.
- * The spacer bits are `visibility: hidden` (not `display: none`, which
- * would collapse their height and break the alignment) so they take
- * exactly as much space as the real title/button/hint above the other two
- * tables, without being seen or focusable.
- *
- * Alignment holds because all three columns live in one shared
- * `overflow: auto` row (batch-pairing-row) instead of each scrolling on
- * its own -- three independently-scrolling panels would drift apart the
- * moment any one of them was scrolled. */
-function PairConnector({ rowCount, pairCount }: { rowCount: number; pairCount: number }) {
-  return (
-    <div className="batch-file-list batch-connector">
-      <h2 className="batch-connector-spacer">&nbsp;</h2>
-      <div className="primary-button file-open-button batch-connector-spacer">&nbsp;</div>
-      <p className="batch-hint batch-connector-spacer">&nbsp;</p>
-      {rowCount > 0 && (
-        <div className="batch-table-wrap">
-          <table>
-            <colgroup>
-              <col />
-            </colgroup>
-            <thead>
-              <tr>
-                <th>&nbsp;</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Array.from({ length: rowCount }, (_, i) => (
-                <tr key={i}>
-                  <td className={`batch-connector-cell${i >= pairCount ? " batch-pair-badge-warn" : ""}`}>
-                    {i < pairCount ? "↔" : "⚠"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
+/** Real screen Y-position (relative to `containerRef`'s box) of each of the
+ * first `rowCount` rows, read from whichever of the two tbodies actually
+ * has that row. A reserved connector column (an earlier version of this)
+ * kept its own rows the same height as the real tables by sharing their
+ * exact CSS classes -- but both `.panel` and `.batch-table-wrap` clip
+ * overflow (for their rounded corners), so anything meant to float loose
+ * in the gap *between* two clipped boxes can't be a descendant of either:
+ * it has to be a sibling, positioned from real measured coordinates
+ * instead of shared layout. Recomputed on resize (a ResizeObserver on the
+ * container catches width changes; row count/content changes go through
+ * the effect's own dependency list). */
+function usePairArrowTops(
+  containerRef: React.RefObject<HTMLDivElement | null>,
+  leftTbodyRef: React.RefObject<HTMLTableSectionElement | null>,
+  rightTbodyRef: React.RefObject<HTMLTableSectionElement | null>,
+  rowCount: number,
+): number[] {
+  const [tops, setTops] = useState<number[]>([]);
+
+  useLayoutEffect(() => {
+    function recompute() {
+      const container = containerRef.current;
+      if (!container || rowCount === 0) {
+        setTops([]);
+        return;
+      }
+      const containerTop = container.getBoundingClientRect().top;
+      const leftRows = leftTbodyRef.current?.children;
+      const rightRows = rightTbodyRef.current?.children;
+      const next: number[] = [];
+      for (let i = 0; i < rowCount; i++) {
+        const row = (leftRows?.[i] ?? rightRows?.[i]) as HTMLElement | undefined;
+        if (!row) continue;
+        const rect = row.getBoundingClientRect();
+        next.push(rect.top + rect.height / 2 - containerTop);
+      }
+      setTops(next);
+    }
+    recompute();
+    const container = containerRef.current;
+    const ro = new ResizeObserver(recompute);
+    if (container) ro.observe(container);
+    return () => ro.disconnect();
+  }, [containerRef, leftTbodyRef, rightTbodyRef, rowCount]);
+
+  return tops;
 }
 
 /** "Vérifier toutes les pistes" modal: probes *every* file in both lists
@@ -372,6 +374,10 @@ export function BatchView({ hidden }: { hidden: boolean }) {
   const [running, setRunning] = useState(false);
   const [showTracksModal, setShowTracksModal] = useState(false);
 
+  const pairingRowRef = useRef<HTMLDivElement>(null);
+  const referenceTbodyRef = useRef<HTMLTableSectionElement>(null);
+  const candidateTbodyRef = useRef<HTMLTableSectionElement>(null);
+
   const referenceProbe = useTracksOf(referenceFiles[0]);
   const candidateProbe = useTracksOf(candidateFiles[0]);
 
@@ -395,7 +401,13 @@ export function BatchView({ hidden }: { hidden: boolean }) {
   }
 
   const pairCount = Math.min(referenceFiles.length, candidateFiles.length);
-  const rowCount = Math.max(referenceFiles.length, candidateFiles.length);
+  // No arrows/warnings at all until both sides have at least one file --
+  // one list starting empty while the other is being built up is a normal,
+  // expected in-progress state, not a mismatch worth flagging (pairCount
+  // would otherwise be 0 and every row past it would show a ⚠).
+  const bothStarted = referenceFiles.length > 0 && candidateFiles.length > 0;
+  const rowCount = bothStarted ? Math.max(referenceFiles.length, candidateFiles.length) : 0;
+  const arrowTops = usePairArrowTops(pairingRowRef, referenceTbodyRef, candidateTbodyRef, rowCount);
 
   function updatePair(index: number, patch: Partial<PairAnalysis>) {
     setAnalyses((current) => current.map((a, i) => (i === index ? { ...a, ...patch } : a)));
@@ -448,24 +460,36 @@ export function BatchView({ hidden }: { hidden: boolean }) {
         </button>
       </div>
 
-      <div className="batch-pairing-row">
+      <div className="batch-pairing-row" ref={pairingRowRef}>
         <FileList
           title="Fichiers référence"
           hint="Piste à ne jamais modifier (ex. VO), une par épisode."
           files={referenceFiles}
+          tbodyRef={referenceTbodyRef}
           onOpen={() => pickFiles(setReferenceFiles)}
           onMove={(from, to) => setReferenceFiles((f) => moved(f, from, to))}
           onRemove={(i) => setReferenceFiles((f) => f.filter((_, idx) => idx !== i))}
         />
-        <PairConnector rowCount={rowCount} pairCount={pairCount} />
         <FileList
           title="Fichiers à corriger"
           hint="Piste à resynchroniser et intégrer (ex. VF), une par épisode."
           files={candidateFiles}
+          tbodyRef={candidateTbodyRef}
           onOpen={() => pickFiles(setCandidateFiles)}
           onMove={(from, to) => setCandidateFiles((f) => moved(f, from, to))}
           onRemove={(i) => setCandidateFiles((f) => f.filter((_, idx) => idx !== i))}
         />
+        {/* Sibling overlay, not a descendant of either panel -- see
+            usePairArrowTops for why that matters (.panel/.batch-table-wrap
+            both clip overflow for their rounded corners). pointer-events:
+            none (set in CSS) lets clicks reach the real buttons underneath. */}
+        <div className="batch-arrows-overlay" aria-hidden="true">
+          {arrowTops.map((top, i) => (
+            <span key={i} className={`batch-pair-arrow${i >= pairCount ? " batch-pair-arrow-warn" : ""}`} style={{ top }}>
+              {i < pairCount ? "↔" : "⚠"}
+            </span>
+          ))}
+        </div>
       </div>
 
       {analyses.length > 0 && (

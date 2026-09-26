@@ -7,8 +7,9 @@
    pairing row -- it's allowed to grow past its 1fr share when there are
    many files, and this container's own overflow: auto scrolls the whole
    view together at that point (config bar and results included) rather
-   than each piece scrolling independently, which is what keeps the pairing
-   row's connector column aligned with both tables (see PairConnector). */
+   than each piece scrolling independently, which is what keeps the
+   floating pairing arrows lined up with both tables (see
+   usePairArrowTops in BatchView.tsx). */
 .batch-main {
   flex: 1 1 auto;
   min-height: 0;
@@ -21,19 +22,48 @@
 }
 
 .batch-pairing-row {
+  position: relative;
   display: flex;
   align-items: stretch;
   gap: 1em;
 }
 
-/* .batch-connector also carries .batch-file-list (see PairConnector's
-   comment for why), so this rule would otherwise apply to it too and its
-   own `flex: 0 0 auto; width: 2.4em;` -- same specificity -- would lose to
-   whichever of the two rules happens to come later in the file. Excluding
-   it here removes the ambiguity instead of relying on source order. */
-.batch-pairing-row > .batch-file-list:not(.batch-connector) {
+.batch-pairing-row > .batch-file-list {
   flex: 1 1 0;
   min-width: 0;
+}
+
+/* A sibling of both panels, not a descendant of either -- see
+   usePairArrowTops in BatchView.tsx for why. Spans the exact box of
+   .batch-pairing-row (both panels + the gap between them), so `left: 50%`
+   on an arrow lands exactly in the middle of that gap (the two panels are
+   equal width, so the row's own horizontal center is the gap's center). */
+.batch-arrows-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.batch-pair-arrow {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7em;
+  height: 1.7em;
+  border-radius: 50%;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.8em;
+}
+
+.batch-pair-arrow-warn {
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .batch-config {
@@ -119,7 +149,7 @@
 }
 
 .batch-col-index {
-  width: 3.6em;
+  width: 2.5em;
 }
 
 .batch-col-actions {
@@ -162,30 +192,6 @@ td.batch-index {
 .batch-row-actions button {
   padding: 0.15em 0.5em;
   margin-left: 0.2em;
-}
-
-/* See PairConnector in BatchView.tsx for why this reuses .batch-file-list/
-   .batch-hint/.batch-table-wrap instead of its own bespoke layout: sharing
-   classes with the real file-list tables is what keeps its rows the same
-   height as theirs without any manual measurement. */
-.batch-connector {
-  flex: 0 0 auto;
-  width: 2.4em;
-}
-
-.batch-connector-spacer {
-  visibility: hidden;
-}
-
-.batch-connector-cell {
-  text-align: center;
-  color: var(--text-muted);
-  opacity: 0.7;
-}
-
-.batch-connector-cell.batch-pair-badge-warn {
-  color: var(--danger);
-  opacity: 1;
 }
 
 .batch-track-status {
