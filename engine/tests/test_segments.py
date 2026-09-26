@@ -203,16 +203,16 @@ def test_confidence_is_high_for_a_well_supported_segment() -> None:
     assert segments[0].confidence > 0.7
 
 
-def test_confidence_is_low_for_a_small_trailing_group_even_with_confident_windows() -> None:
-    """Real bug shape: a spurious tail 'drift' carried by only a handful of
-    windows, each of which can look individually confident (a correct-
-    looking correlation peak on real audio) without that meaning the
-    *segment* -- a jump sustained by so few windows -- deserves any trust.
-    Confidence must reflect the weak sample size even though every window's
-    own confidence here is deliberately set high."""
+def test_confidence_is_low_for_a_small_trailing_group_even_when_it_agrees_with_itself() -> None:
+    """Real bug shape: a spurious tail segment carried by only a handful of
+    windows that happen to agree with each other perfectly -- which proves
+    very little (a line always fits 1-2 points closely) -- shouldn't be
+    trusted just because of that agreement. Confidence must reflect the
+    weak sample size even when there's zero internal scatter to otherwise
+    penalize."""
     hop_s = 10.0
     n_lead = 16
-    n_tail = 3
+    n_tail = 2
     windows = [
         WindowOffset(time_s=i * hop_s, offset_seconds=0.01 * ((i % 5) - 2), confidence=0.8, ambiguous=False)
         for i in range(n_lead)
@@ -230,18 +230,46 @@ def test_confidence_is_low_for_a_small_trailing_group_even_with_confident_window
     assert segments[1].confidence < segments[0].confidence
 
 
-def test_confidence_is_low_when_windows_themselves_are_unconfident() -> None:
-    """The other half of the formula: even a large, internally consistent
-    group shouldn't be trusted if the underlying correlation itself was
-    weak (e.g. a mostly-silent/dialogue-only stretch)."""
+def test_confidence_is_low_for_a_segment_whose_windows_disagree_with_each_other() -> None:
+    """The other half of the formula, and the actual reported bug: a
+    segment with *plenty* of supporting windows (well past
+    _CONFIDENT_WINDOW_COUNT) can still be untrustworthy if those windows
+    don't agree with each other. Alternating +/-0.3 (not random noise, so
+    the residual math below is exact, not luck-of-the-seed): every
+    individual jump is only 0.6s, safely under the 0.75s jump threshold
+    (so this stays one segment/group, not several), and the single-line
+    fit's max residual is exactly 0.3s, under _RESIDUAL_TOL_S (0.4) --
+    matching the reported shape (plausible-looking per-window estimates
+    that just don't agree with each other) rather than a real jump/drift."""
     hop_s = 10.0
-    n_windows = 20
+    n_windows = 22
     windows = [
-        WindowOffset(time_s=i * hop_s, offset_seconds=0.01 * ((i % 5) - 2), confidence=0.1, ambiguous=False)
+        WindowOffset(time_s=i * hop_s, offset_seconds=0.3 if i % 2 == 0 else -0.3, confidence=0.8, ambiguous=False)
         for i in range(n_windows)
     ]
 
     segments = classify_segments(windows, total_duration_s=n_windows * hop_s)
 
     assert len(segments) == 1
-    assert segments[0].confidence < 0.2
+    # agreement = 1 - 0.3/0.4 = 0.25, confidence = 0.25 * sample_factor(1.0)
+    assert segments[0].confidence < 0.3
+
+
+def test_confidence_is_high_despite_low_raw_window_confidence_when_windows_agree() -> None:
+    """Real bug report: a visibly correct, dead-flat ~20-minute segment
+    still averaged only ~2% *raw* per-window confidence (that statistic
+    genuinely does run low on real dialogue/SFX content -- see
+    _segment_confidence's docstring) -- confirming a segment's confidence
+    must be driven by inter-window agreement, not each window's own,
+    already-known-unreliable-in-isolation z-score."""
+    hop_s = 10.0
+    n_windows = 20
+    windows = [
+        WindowOffset(time_s=i * hop_s, offset_seconds=0.01 * ((i % 5) - 2), confidence=0.02, ambiguous=False)
+        for i in range(n_windows)
+    ]
+
+    segments = classify_segments(windows, total_duration_s=n_windows * hop_s)
+
+    assert len(segments) == 1
+    assert segments[0].confidence > 0.7

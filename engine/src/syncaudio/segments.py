@@ -205,25 +205,44 @@ def _fit_line_or_constant(times: np.ndarray, offsets: np.ndarray) -> tuple[float
 def _segment_confidence(group: Sequence[WindowOffset]) -> float:
     """How much a segment's classification should be trusted, in [0, 1].
 
-    Combines two independent things that can each make a segment
-    untrustworthy on their own:
+    Deliberately *not* built from each window's own correlation confidence
+    (``estimate_offset``'s peak-prominence z-score): that statistic is
+    already known to run low even for a correct estimate on real dialogue/
+    SFX content, which is exactly why ``classify_segments`` uses
+    ``ambiguous`` rather than a confidence threshold as its window-level
+    reliability signal (see its docstring). An earlier version of this
+    function multiplied it in anyway and it showed immediately on a real
+    file: a ~20-minute, visibly dead-flat segment (confirmed correct by
+    ear) still averaged ~2% raw window confidence, which isn't something a
+    "trust this or not" score can be built from.
 
-    - Each window's own correlation confidence (``estimate_offset``'s
-      peak-prominence z-score) -- low when the underlying audio itself
-      didn't have enough shared music/SFX content to correlate against
-      confidently (a silent or dialogue-only stretch).
-    - How many windows actually support this segment. A segment built from
-      only 1-2 windows can look perfectly clean -- a line through 2 points
-      always fits -- without that meaning anything: this is exactly the
-      shape of a reported false drift, a short, spurious segment at a
-      file's tail carried by a handful of trailing windows. Discounted
-      linearly below ``_CONFIDENT_WINDOW_COUNT`` rather than treated as a
-      hard cutoff, since a 3-4 window segment isn't necessarily wrong, just
-      less proven than a 10+ window one.
+    Instead this combines two things that are actually diagnostic of a
+    *segment's* classification specifically:
+
+    - Agreement: how tightly the group's own offsets cluster around the
+      fitted line/mean, relative to ``_RESIDUAL_TOL_S``. Many independent
+      windows landing within a fraction of a second of each other is strong
+      evidence on its own, regardless of how any single window's own z-score
+      reads -- and, conversely, this is what actually catches a spurious
+      segment whose windows are individually plausible-looking but don't
+      agree with each other (the reported false drift: ~22 windows, plenty
+      of samples, just scattered).
+    - Sample size: agreement from just 1-2 points proves very little (a
+      line always fits a handful of points closely), so it's still
+      discounted below ``_CONFIDENT_WINDOW_COUNT`` -- linearly, not a hard
+      cutoff, since a 3-4 window segment isn't necessarily wrong, just less
+      proven than a 10+ window one.
     """
-    mean_confidence = float(np.mean([w.confidence for w in group]))
     sample_factor = min(1.0, len(group) / _CONFIDENT_WINDOW_COUNT)
-    return mean_confidence * sample_factor
+    if len(group) < 2:
+        return sample_factor  # nothing to compare for agreement; judged on sample size alone
+
+    times = np.array([w.time_s for w in group])
+    offsets = np.array([w.offset_seconds for w in group])
+    slope, intercept = _fit_line_or_constant(times, offsets)
+    residual_rms = float(np.sqrt(np.mean((offsets - (intercept + slope * times)) ** 2)))
+    agreement = max(0.0, 1.0 - residual_rms / _RESIDUAL_TOL_S)
+    return agreement * sample_factor
 
 
 def classify_segments(

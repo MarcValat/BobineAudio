@@ -18,12 +18,12 @@ const PLOT_H = HEIGHT - MARGIN.top - MARGIN.bottom;
 const DRIFT_EPS_S = 0.2;
 // A segment below this is flagged in the UI and eligible for "Ignorer les
 // segments peu fiables" -- see engine/segments.py's _segment_confidence,
-// which discounts both weak per-window correlation and a segment built
-// from too few supporting windows. Picked as "clearly more discounted than
-// trusted" rather than a statistically derived cutoff (confidence itself
-// is a heuristic score, not a calibrated probability): a segment scoring
-// under this has already lost at least half its mean per-window confidence
-// to one or both factors.
+// which discounts a segment whose supporting windows don't agree with each
+// other and/or a segment built from too few of them. Picked as "clearly
+// more discounted than trusted" rather than a statistically derived cutoff
+// (confidence itself is a heuristic score, not a calibrated probability):
+// a segment scoring under this has already lost at least half its
+// agreement and/or sample-size factor.
 const LOW_CONFIDENCE_THRESHOLD = 0.4;
 
 /** The editable form of a segment list: N+1 boundary times (shared between
@@ -359,7 +359,7 @@ export function SegmentEditor({
                       </td>
                       <td
                         className={seg.confidence < LOW_CONFIDENCE_THRESHOLD ? "editor-confidence-cell low" : "editor-confidence-cell"}
-                        title="À quel point cette détection (décalage et classification dérive/constant) est fiable -- voir engine/segments.py:_segment_confidence. Un score bas vient d'une corrélation faible et/ou de trop peu de fenêtres d'analyse en soutien, pas forcément d'une erreur certaine."
+                        title="À quel point cette détection (décalage et classification dérive/constant) est fiable -- voir engine/segments.py:_segment_confidence. Un score bas vient de fenêtres d'analyse qui ne s'accordent pas entre elles et/ou de trop peu de fenêtres en soutien, pas forcément d'une erreur certaine."
                       >
                         {seg.confidence < LOW_CONFIDENCE_THRESHOLD ? "⚠ " : ""}
                         {Math.round(seg.confidence * 100)}%
@@ -400,7 +400,7 @@ export function SegmentEditor({
           <button
             className="small-button"
             disabled={!state.confidences.some((c) => c < LOW_CONFIDENCE_THRESHOLD)}
-            title="Fusionne automatiquement chaque segment dont la confiance est sous le seuil avec son voisin (même effet que cliquer sur Fusionner pour chacun) -- ex. une fausse dérive détectée en fin de fichier sur trop peu de fenêtres."
+            title="Fusionne automatiquement chaque segment dont la confiance est sous le seuil avec son voisin (même effet que cliquer sur Fusionner pour chacun) -- ex. une fausse dérive détectée sur des fenêtres d'analyse qui ne s'accordent pas entre elles."
             onClick={() => setState(ignoreLowConfidenceSegments)}
           >
             Ignorer les segments peu fiables
