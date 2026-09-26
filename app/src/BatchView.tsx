@@ -10,6 +10,7 @@ import {
   type TrackInfo,
 } from "./api";
 import { SegmentEditor } from "./SegmentEditor";
+import { LogPanel } from "./LogPanel";
 import { basename } from "./paths";
 import "./BatchView.css";
 
@@ -50,12 +51,14 @@ interface PairAnalysis {
   status: "pending" | "running" | "done" | "error";
   result: SegmentsResponse | null;
   error: string | null;
+  log: string[];
   exportStatus: "idle" | "pending" | "running" | "done" | "error";
   exportResult: RenderResponse | null;
   exportError: string | null;
+  exportLog: string[];
 }
 
-const IDLE_EXPORT = { exportStatus: "idle" as const, exportResult: null, exportError: null };
+const IDLE_EXPORT = { exportStatus: "idle" as const, exportResult: null, exportError: null, exportLog: [] as string[] };
 
 /** Probes one file's tracks, to fill the track-picker dropdown. Only ever
  * called on the *first* file of each list, not every file: one picked
@@ -420,19 +423,21 @@ export function BatchView({ hidden }: { hidden: boolean }) {
   const rowCount = bothStarted ? Math.max(referenceFiles.length, candidateFiles.length) : 0;
   const arrowTops = usePairArrowTops(pairingRowRef, referenceTbodyRef, candidateTbodyRef, rowCount);
 
-  function updatePair(index: number, patch: Partial<PairAnalysis>) {
-    setAnalyses((current) => current.map((a, i) => (i === index ? { ...a, ...patch } : a)));
+  function updatePair(index: number, patch: Partial<PairAnalysis> | ((entry: PairAnalysis) => Partial<PairAnalysis>)) {
+    setAnalyses((current) =>
+      current.map((a, i) => (i === index ? { ...a, ...(typeof patch === "function" ? patch(a) : patch) } : a)),
+    );
   }
 
   async function handleAnalyzeAll() {
     setRunning(true);
-    setAnalyses(Array.from({ length: pairCount }, () => ({ status: "pending", result: null, error: null, ...IDLE_EXPORT })));
+    setAnalyses(Array.from({ length: pairCount }, () => ({ status: "pending", result: null, error: null, log: [], ...IDLE_EXPORT })));
     for (let i = 0; i < pairCount; i++) {
       updatePair(i, { status: "running" });
       try {
         const result = await runJob<SegmentsResponse>(
           startSegmentsJob(referenceFiles[i], referenceTrackIndex, candidateFiles[i], candidateTrackIndex),
-          () => {},
+          (message) => updatePair(i, (a) => ({ log: [...a.log, message] })),
         );
         updatePair(i, { status: "done", result });
       } catch (err) {
@@ -456,7 +461,7 @@ export function BatchView({ hidden }: { hidden: boolean }) {
     for (let i = 0; i < analyses.length; i++) {
       const entry = analyses[i];
       if (entry.status !== "done" || !entry.result) continue;
-      updatePair(i, { exportStatus: "running" });
+      updatePair(i, { exportStatus: "running", exportLog: [] });
       try {
         const result = await runJob<RenderResponse>(
           startCrossFileSegmentedRenderJob(
@@ -466,7 +471,7 @@ export function BatchView({ hidden }: { hidden: boolean }) {
             candidateTrackIndex,
             entry.result.segments,
           ),
-          () => {},
+          (message) => updatePair(i, (a) => ({ exportLog: [...a.exportLog, message] })),
         );
         updatePair(i, { exportStatus: "done", exportResult: result });
       } catch (err) {
@@ -583,12 +588,14 @@ export function BatchView({ hidden }: { hidden: boolean }) {
                         a.result &&
                         `${a.result.segments.length} segment${a.result.segments.length > 1 ? "s" : ""}`}
                       {a.status === "error" && (a.error ?? "Erreur")}
+                      <LogPanel lines={a.log} />
                     </td>
                     <td className={`batch-status batch-status-${a.exportStatus === "idle" ? "pending" : a.exportStatus}`}>
                       {a.exportStatus === "idle" && "—"}
                       {a.exportStatus === "running" && "Export en cours..."}
                       {a.exportStatus === "done" && a.exportResult && basename(a.exportResult.written[0] ?? "")}
                       {a.exportStatus === "error" && (a.exportError ?? "Erreur")}
+                      <LogPanel lines={a.exportLog} />
                     </td>
                     <td className="batch-row-actions">
                       <button
