@@ -359,9 +359,6 @@ export function SegmentEditor({
           >
             Enregistrer
           </button>
-          <button className="small-button" onClick={onClose}>
-            Annuler
-          </button>
         </div>
       </div>
     </div>
