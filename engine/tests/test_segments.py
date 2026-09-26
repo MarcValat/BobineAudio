@@ -141,6 +141,31 @@ def test_classify_segments_ignores_an_isolated_outlier_window() -> None:
     assert abs(segments[0].mean_offset) < 0.3
 
 
+def test_classify_segments_does_not_extrapolate_an_insignificant_slope() -> None:
+    """Real bug report: pure per-window noise around an otherwise-flat true
+    offset produced a technically-nonzero least-squares fit whose
+    *extrapolated* endpoints (offset_start ~+0.22s, offset_end ~-0.03s over
+    a ~24-minute segment) looked like real drift and shifted+re-corrected
+    audio for nothing. These windows have no real trend at all -- any
+    apparent slope is pure noise -- so classify_segments should report a
+    flat, near-constant segment instead of extrapolating it end to end."""
+    hop_s = 10.0
+    n_windows = 142  # ~1420s at a 10s hop, matching the real report's duration
+    true_offset = 0.1
+    rng = np.random.default_rng(7)
+    noise = rng.normal(0, 0.12, n_windows)
+    windows = [
+        WindowOffset(time_s=i * hop_s, offset_seconds=true_offset + noise[i], confidence=0.5, ambiguous=False)
+        for i in range(n_windows)
+    ]
+
+    segments = classify_segments(windows, total_duration_s=n_windows * hop_s)
+
+    assert len(segments) == 1
+    assert not segments[0].is_drift
+    assert abs(segments[0].mean_offset - true_offset) < 0.15
+
+
 def test_classify_segments_detects_drift() -> None:
     duration_s = 120.0
     stretch_factor = 1.02  # candidate ~2% slower -> lag grows to roughly 2.3s

@@ -147,6 +147,46 @@ class Segment:
         return (self.offset_start + self.offset_end) / 2.0
 
 
+def _fit_line_or_constant(times: np.ndarray, offsets: np.ndarray) -> tuple[float, float]:
+    """Least-squares (slope, intercept) for ``offsets`` vs ``times`` -- but
+    the slope is zeroed out (falling back to the plain mean, a pure
+    constant) when it isn't statistically distinguishable from noise around
+    that mean.
+
+    Why this matters: only the *endpoint* values (``offset_start``/
+    ``offset_end``, i.e. the fitted line evaluated at the segment's actual
+    start/end) ever get shown or used for correction -- and those endpoints
+    are usually an *extrapolation* past the fitted windows' own time range
+    (a segment's boundaries come from jump detection/segment edges, not from
+    where the first/last window happened to land). A small, statistically
+    meaningless slope, extrapolated across a long segment, swings from one
+    visible value at the start to a different one at the end even though
+    the true offset never moved -- reported directly: a ~23-minute segment
+    whose per-window noise alone spans barely 0.25s got shown (and
+    corrected) as "starts at +0.22s, ends at -0.03s" purely from that
+    extrapolation, when the true offset was plausibly constant throughout.
+    """
+    n = len(times)
+    mean_offset = float(np.mean(offsets))
+    if n < 3:
+        return 0.0, mean_offset
+    slope, intercept = np.polyfit(times, offsets, 1)
+    dof = n - 2
+    residual_var = float(np.sum((offsets - (intercept + slope * times)) ** 2) / dof) if dof > 0 else 0.0
+    time_spread = float(np.sum((times - times.mean()) ** 2))
+    if time_spread <= 0:
+        return 0.0, mean_offset
+    slope_se = (residual_var / time_spread) ** 0.5
+    # ~1.5 standard errors, not the usual 2 (~95% confidence): these are
+    # already noisy per-window estimates (see _RESIDUAL_TOL_S), so leaning
+    # slightly further towards "probably not real drift" is the safer
+    # default -- an unnecessary near-zero atempo is harmless, but a spurious
+    # one shifts audio at one end of the segment for nothing.
+    if slope_se == 0.0 or abs(slope) < 1.5 * slope_se:
+        return 0.0, mean_offset
+    return float(slope), float(intercept)
+
+
 def classify_segments(
     windows: Sequence[WindowOffset],
     total_duration_s: float,
@@ -198,9 +238,16 @@ def classify_segments(
             offsets = offsets[reliable]
 
     if len(usable) >= 2:
-        slope, intercept = np.polyfit(times, offsets, 1)
-        residuals = offsets - (intercept + slope * times)
+        # Fit-quality check (does one line explain every window at all)
+        # uses the raw, unregularized fit -- a real, well-supported slope
+        # must still pass this. Only the *reported* endpoints, below, use
+        # the significance-gated version, so a technically-fits-but-noisy
+        # slope doesn't get extrapolated into a start/end swing that was
+        # never actually there (see _fit_line_or_constant).
+        raw_slope, raw_intercept = np.polyfit(times, offsets, 1)
+        residuals = offsets - (raw_intercept + raw_slope * times)
         if np.max(np.abs(residuals)) <= residual_tol_s:
+            slope, intercept = _fit_line_or_constant(times, offsets)
             return [
                 Segment(
                     start_s=0.0,
@@ -230,7 +277,7 @@ def classify_segments(
         if len(group) >= 2:
             g_times = np.array([g.time_s for g in group])
             g_offsets = np.array([g.offset_seconds for g in group])
-            g_slope, g_intercept = np.polyfit(g_times, g_offsets, 1)
+            g_slope, g_intercept = _fit_line_or_constant(g_times, g_offsets)
             offset_start = float(g_intercept + g_slope * seg_start)
             offset_end = float(g_intercept + g_slope * seg_end)
         else:
