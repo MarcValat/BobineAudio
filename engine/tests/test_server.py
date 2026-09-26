@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import syncaudio.analysis_cache as analysis_cache
+import syncaudio.waveform_cache as waveform_cache
 from syncaudio.ffmpeg_backend import resolve_ffmpeg
 from syncaudio.server import app
 
@@ -18,8 +19,10 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def _clear_analysis_cache():
     analysis_cache.clear()
+    waveform_cache.clear()
     yield
     analysis_cache.clear()
+    waveform_cache.clear()
 
 
 def _make_bed(duration_s: float, sr: int, seed: int, hits_per_second: float = 3.0) -> np.ndarray:

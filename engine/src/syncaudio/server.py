@@ -29,8 +29,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+from syncaudio import waveform_cache
 from syncaudio.analysis_cache import ANALYSIS_SAMPLE_RATE, get_envelope
-from syncaudio.ffmpeg_backend import FFmpegError, extract_peaks, extract_wav_clip, probe_audio_streams, probe_stream_start_time
+from syncaudio.ffmpeg_backend import FFmpegError, extract_wav_clip, probe_audio_streams, probe_stream_start_time
 from syncaudio.jobs import Job, get_job, start_job
 from syncaudio.models import AudioTrackSpec
 from syncaudio.render import (
@@ -205,7 +206,7 @@ def waveform(path: str, index: int, start: float = 0.0, duration: float | None =
     """
     spec = AudioTrackSpec(raw=f"{path}@{index}", path=path, stream_index=index)
     try:
-        mins, maxes, actual_duration = extract_peaks(spec, buckets, start=max(0.0, start), duration=duration)
+        mins, maxes, actual_duration = waveform_cache.get_peaks(spec, buckets, start=max(0.0, start), duration=duration)
     except FFmpegError as exc:
         raise _http_error(exc) from exc
     return WaveformResponse(duration=actual_duration, peaks_min=mins.tolist(), peaks_max=maxes.tolist())
