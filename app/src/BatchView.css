@@ -247,6 +247,7 @@ td.batch-index {
   box-shadow: var(--shadow);
   padding: 1.2em 1.4em;
   width: 100%;
+  min-width: 0;
   max-width: 1100px;
   max-height: 100%;
   overflow-y: auto;
@@ -273,6 +274,17 @@ td.batch-index {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1.5em;
+  /* Same-shape bug as .batch-filename hit earlier: a nowrap+ellipsis
+     paragraph's implicit minimum width is its full, untruncated text
+     width, and a grid item's default min-width: auto respects that --
+     without this, the filename below never actually gets to truncate, it
+     just forces this whole grid (and the modal panel it's in) wider than
+     the window instead. */
+  min-width: 0;
+}
+
+.batch-tracks-side {
+  min-width: 0;
 }
 
 @media (max-width: 700px) {
