@@ -24,6 +24,26 @@
   text-align: left;
 }
 
+/* Wider when the waveform column is present -- side by side, both the
+   offset chart/table and the waveforms need close to their normal full
+   width to stay usable, so this doesn't just split the plain panel's width
+   in two. */
+.editor-panel-wide {
+  max-width: 1500px;
+}
+
+.editor-columns {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 1.4em;
+}
+
+.editor-primary {
+  flex: 1 1 520px;
+  min-width: 460px;
+}
+
 .editor-header {
   display: flex;
   align-items: center;
@@ -129,10 +149,29 @@
   font-size: 0.95em;
 }
 
+/* A concrete height (not just min-height) is the point: .preview and its
+   own children (see App.css/Waveform.css) are all `flex: 1 1 auto; min-
+   height: 0`, which only lets them shrink to whatever space a *bounded*
+   ancestor hands them -- in the main view that ancestor is the page's
+   viewport-height layout, which doesn't reach into this modal, so without
+   an explicit height here the whole chain collapsed to each element's own
+   tiny min-height (a barely-visible sliver) instead of actually filling the
+   column. */
 .editor-preview {
-  margin-top: 1em;
-  padding-top: 0.8em;
-  border-top: 1px solid var(--border, rgba(128, 128, 128, 0.3));
+  flex: 1 1 420px;
+  min-width: 340px;
+  height: 520px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border, rgba(128, 128, 128, 0.3));
+  padding-left: 1.4em;
+  box-sizing: border-box;
+}
+
+.editor-preview .preview {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
 }
 
 .editor-actions {

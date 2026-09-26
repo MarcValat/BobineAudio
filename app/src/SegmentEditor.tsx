@@ -202,7 +202,7 @@ export function SegmentEditor({
 
   return (
     <div className="editor-overlay" role="dialog" aria-modal="true">
-      <div className="editor-panel">
+      <div className={preview ? "editor-panel editor-panel-wide" : "editor-panel"}>
         <div className="editor-header">
           <h2>Corriger manuellement les segments</h2>
           <button className="small-button" onClick={onClose}>
@@ -210,144 +210,148 @@ export function SegmentEditor({
           </button>
         </div>
 
-        <svg ref={svgRef} className="editor-chart" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img">
-          <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
-            <line x1={0} y1={y(0)} x2={PLOT_W} y2={y(0)} className="zero-line" />
-            <text x={-8} y={y(0)} className="axis-label" textAnchor="end" dominantBaseline="middle">
-              0s
-            </text>
-
-            {Array.from({ length: 6 }, (_, i) => (totalDuration * i) / 5).map((t) => (
-              <g key={t}>
-                <line x1={x(t)} y1={0} x2={x(t)} y2={PLOT_H} className="grid-line" />
-                <text x={x(t)} y={PLOT_H + 18} className="axis-label" textAnchor="middle">
-                  {formatTime(t)}
+        <div className="editor-columns">
+          <div className="editor-primary">
+            <svg ref={svgRef} className="editor-chart" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img">
+              <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
+                <line x1={0} y1={y(0)} x2={PLOT_W} y2={y(0)} className="zero-line" />
+                <text x={-8} y={y(0)} className="axis-label" textAnchor="end" dominantBaseline="middle">
+                  0s
                 </text>
+
+                {Array.from({ length: 6 }, (_, i) => (totalDuration * i) / 5).map((t) => (
+                  <g key={t}>
+                    <line x1={x(t)} y1={0} x2={x(t)} y2={PLOT_H} className="grid-line" />
+                    <text x={x(t)} y={PLOT_H + 18} className="axis-label" textAnchor="middle">
+                      {formatTime(t)}
+                    </text>
+                  </g>
+                ))}
+
+                {segmentsPreview.map((seg, i) => {
+                  const flat = (seg.offset_start + seg.offset_end) / 2;
+                  const yStart = seg.is_drift ? y(seg.offset_start) : y(flat);
+                  const yEnd = seg.is_drift ? y(seg.offset_end) : y(flat);
+                  return (
+                    <g key={i}>
+                      <line
+                        x1={x(seg.start_s)}
+                        y1={yStart}
+                        x2={x(seg.end_s)}
+                        y2={yEnd}
+                        className={seg.is_drift ? "segment-line drift" : "segment-line constant"}
+                      />
+                      <text
+                        x={(x(seg.start_s) + x(seg.end_s)) / 2}
+                        y={(yStart + yEnd) / 2 - 10}
+                        className="segment-label"
+                        textAnchor="middle"
+                      >
+                        {seg.is_drift ? `${seg.offset_start.toFixed(2)}s → ${seg.offset_end.toFixed(2)}s` : `${flat.toFixed(2)}s`}
+                      </text>
+                    </g>
+                  );
+                })}
+
+                {/* Draggable handles on every *internal* boundary only -- the
+                    first (0) and last (total duration) are fixed. */}
+                {state.times.slice(1, -1).map((t, idx) => {
+                  const i = idx + 1;
+                  return (
+                    <g key={i} className="boundary-handle" onPointerDown={() => setDragging(i)}>
+                      <line x1={x(t)} y1={-4} x2={x(t)} y2={PLOT_H + 4} className="boundary-line" />
+                      <circle cx={x(t)} cy={-4} r={7} />
+                    </g>
+                  );
+                })}
               </g>
-            ))}
+            </svg>
 
-            {segmentsPreview.map((seg, i) => {
-              const flat = (seg.offset_start + seg.offset_end) / 2;
-              const yStart = seg.is_drift ? y(seg.offset_start) : y(flat);
-              const yEnd = seg.is_drift ? y(seg.offset_end) : y(flat);
-              return (
-                <g key={i}>
-                  <line
-                    x1={x(seg.start_s)}
-                    y1={yStart}
-                    x2={x(seg.end_s)}
-                    y2={yEnd}
-                    className={seg.is_drift ? "segment-line drift" : "segment-line constant"}
-                  />
-                  <text
-                    x={(x(seg.start_s) + x(seg.end_s)) / 2}
-                    y={(yStart + yEnd) / 2 - 10}
-                    className="segment-label"
-                    textAnchor="middle"
-                  >
-                    {seg.is_drift ? `${seg.offset_start.toFixed(2)}s → ${seg.offset_end.toFixed(2)}s` : `${flat.toFixed(2)}s`}
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* Draggable handles on every *internal* boundary only -- the
-                first (0) and last (total duration) are fixed. */}
-            {state.times.slice(1, -1).map((t, idx) => {
-              const i = idx + 1;
-              return (
-                <g key={i} className="boundary-handle" onPointerDown={() => setDragging(i)}>
-                  <line x1={x(t)} y1={-4} x2={x(t)} y2={PLOT_H + 4} className="boundary-line" />
-                  <circle cx={x(t)} cy={-4} r={7} />
-                </g>
-              );
-            })}
-          </g>
-        </svg>
-
-        <div className="editor-table-wrap">
-          <table className="editor-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Début (s)</th>
-                <th>Fin (s)</th>
-                <th>Décalage début (s)</th>
-                <th>Décalage fin (s)</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {segmentsPreview.map((seg, i) => (
-                <tr key={i}>
-                  <td>{i + 1}</td>
-                  <td>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={cellValue(`start-${i}`, seg.start_s)}
-                      disabled={i === 0}
-                      onChange={(e) => handleCellChange(`start-${i}`, e.target.value, (n) => updateTime(i, n))}
-                      onBlur={() => handleCellBlur(`start-${i}`)}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={cellValue(`end-${i}`, seg.end_s)}
-                      disabled={i === segmentsPreview.length - 1}
-                      onChange={(e) => handleCellChange(`end-${i}`, e.target.value, (n) => updateTime(i + 1, n))}
-                      onBlur={() => handleCellBlur(`end-${i}`)}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={cellValue(`offsetStart-${i}`, seg.offset_start)}
-                      onChange={(e) => handleCellChange(`offsetStart-${i}`, e.target.value, (n) => updateOffset("start", i, n))}
-                      onBlur={() => handleCellBlur(`offsetStart-${i}`)}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={cellValue(`offsetEnd-${i}`, seg.offset_end)}
-                      onChange={(e) => handleCellChange(`offsetEnd-${i}`, e.target.value, (n) => updateOffset("end", i, n))}
-                      onBlur={() => handleCellBlur(`offsetEnd-${i}`)}
-                    />
-                  </td>
-                  <td>
-                    <button
-                      className="small-button"
-                      disabled={segmentsPreview.length < 2}
-                      title="Fusionne ce segment avec le suivant (ou le précédent si c'est le dernier) -- utile pour retirer un segment parasite."
-                      onClick={() => setState((s) => mergeSegment(s, i))}
-                    >
-                      {i < segmentsPreview.length - 1 ? "Fusionner ↓" : "Fusionner ↑"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {preview && (
-          <div className="editor-preview">
-            <TrackPreview
-              referenceFilePath={preview.referenceFilePath}
-              candidateFilePath={preview.candidateFilePath}
-              referenceIndex={preview.referenceIndex}
-              trackIndex={preview.trackIndex}
-              segments={segmentsPreview}
-              referenceStartTime={preview.referenceStartTime ?? 0}
-              trackStartTime={preview.trackStartTime ?? 0}
-            />
+            <div className="editor-table-wrap">
+              <table className="editor-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Début (s)</th>
+                    <th>Fin (s)</th>
+                    <th>Décalage début (s)</th>
+                    <th>Décalage fin (s)</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {segmentsPreview.map((seg, i) => (
+                    <tr key={i}>
+                      <td>{i + 1}</td>
+                      <td>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={cellValue(`start-${i}`, seg.start_s)}
+                          disabled={i === 0}
+                          onChange={(e) => handleCellChange(`start-${i}`, e.target.value, (n) => updateTime(i, n))}
+                          onBlur={() => handleCellBlur(`start-${i}`)}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={cellValue(`end-${i}`, seg.end_s)}
+                          disabled={i === segmentsPreview.length - 1}
+                          onChange={(e) => handleCellChange(`end-${i}`, e.target.value, (n) => updateTime(i + 1, n))}
+                          onBlur={() => handleCellBlur(`end-${i}`)}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={cellValue(`offsetStart-${i}`, seg.offset_start)}
+                          onChange={(e) => handleCellChange(`offsetStart-${i}`, e.target.value, (n) => updateOffset("start", i, n))}
+                          onBlur={() => handleCellBlur(`offsetStart-${i}`)}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={cellValue(`offsetEnd-${i}`, seg.offset_end)}
+                          onChange={(e) => handleCellChange(`offsetEnd-${i}`, e.target.value, (n) => updateOffset("end", i, n))}
+                          onBlur={() => handleCellBlur(`offsetEnd-${i}`)}
+                        />
+                      </td>
+                      <td>
+                        <button
+                          className="small-button"
+                          disabled={segmentsPreview.length < 2}
+                          title="Fusionne ce segment avec le suivant (ou le précédent si c'est le dernier) -- utile pour retirer un segment parasite."
+                          onClick={() => setState((s) => mergeSegment(s, i))}
+                        >
+                          {i < segmentsPreview.length - 1 ? "Fusionner ↓" : "Fusionner ↑"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        )}
+
+          {preview && (
+            <div className="editor-preview">
+              <TrackPreview
+                referenceFilePath={preview.referenceFilePath}
+                candidateFilePath={preview.candidateFilePath}
+                referenceIndex={preview.referenceIndex}
+                trackIndex={preview.trackIndex}
+                segments={segmentsPreview}
+                referenceStartTime={preview.referenceStartTime ?? 0}
+                trackStartTime={preview.trackStartTime ?? 0}
+              />
+            </div>
+          )}
+        </div>
 
         <div className="editor-actions">
           <button
