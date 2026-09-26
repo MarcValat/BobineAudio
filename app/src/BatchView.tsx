@@ -1,6 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { probe, startSegmentsJob, connectJobWS, type SegmentsResponse, type TrackInfo } from "./api";
+import {
+  probe,
+  startSegmentsJob,
+  startCrossFileSegmentedRenderJob,
+  connectJobWS,
+  type SegmentsResponse,
+  type RenderResponse,
+  type TrackInfo,
+} from "./api";
+import { SegmentEditor } from "./SegmentEditor";
 import { basename } from "./paths";
 import "./BatchView.css";
 
@@ -20,18 +29,14 @@ function moved<T>(arr: T[], from: number, to: number): T[] {
  * concurrently: a batch can be many episodes, and each analysis is already
  * CPU-heavy across every core on its own (see analysis_cache/features.py),
  * so running several at once would oversubscribe cores instead of
- * finishing sooner. */
-function runSegmentsJob(
-  referencePath: string,
-  referenceIndex: number,
-  trackPath: string,
-  trackIndex: number,
-  onLog: (message: string) => void,
-): Promise<SegmentsResponse> {
+ * finishing sooner. Renders are lighter, but kept sequential too, for the
+ * same predictable one-at-a-time progress and to avoid writing several
+ * large output files to disk at once. */
+function runJob<T>(jobId: Promise<string>, onLog: (message: string) => void): Promise<T> {
   return new Promise((resolve, reject) => {
-    startSegmentsJob(referencePath, referenceIndex, trackPath, trackIndex)
-      .then((jobId) => {
-        connectJobWS<SegmentsResponse>(jobId, (event) => {
+    jobId
+      .then((id) => {
+        connectJobWS<T>(id, (event) => {
           if (event.type === "log") onLog(event.message);
           else if (event.type === "done") resolve(event.result);
           else if (event.type === "error") reject(new Error(event.message));
@@ -45,7 +50,12 @@ interface PairAnalysis {
   status: "pending" | "running" | "done" | "error";
   result: SegmentsResponse | null;
   error: string | null;
+  exportStatus: "idle" | "pending" | "running" | "done" | "error";
+  exportResult: RenderResponse | null;
+  exportError: string | null;
 }
+
+const IDLE_EXPORT = { exportStatus: "idle" as const, exportResult: null, exportError: null };
 
 /** Probes one file's tracks, to fill the track-picker dropdown. Only ever
  * called on the *first* file of each list, not every file: one picked
@@ -373,6 +383,7 @@ export function BatchView({ hidden }: { hidden: boolean }) {
   const [analyses, setAnalyses] = useState<PairAnalysis[]>([]);
   const [running, setRunning] = useState(false);
   const [showTracksModal, setShowTracksModal] = useState(false);
+  const [editingPairIndex, setEditingPairIndex] = useState<number | null>(null);
 
   const pairingRowRef = useRef<HTMLDivElement>(null);
   const referenceTbodyRef = useRef<HTMLTableSectionElement>(null);
@@ -415,14 +426,51 @@ export function BatchView({ hidden }: { hidden: boolean }) {
 
   async function handleAnalyzeAll() {
     setRunning(true);
-    setAnalyses(Array.from({ length: pairCount }, () => ({ status: "pending", result: null, error: null })));
+    setAnalyses(Array.from({ length: pairCount }, () => ({ status: "pending", result: null, error: null, ...IDLE_EXPORT })));
     for (let i = 0; i < pairCount; i++) {
       updatePair(i, { status: "running" });
       try {
-        const result = await runSegmentsJob(referenceFiles[i], referenceTrackIndex, candidateFiles[i], candidateTrackIndex, () => {});
+        const result = await runJob<SegmentsResponse>(
+          startSegmentsJob(referenceFiles[i], referenceTrackIndex, candidateFiles[i], candidateTrackIndex),
+          () => {},
+        );
         updatePair(i, { status: "done", result });
       } catch (err) {
         updatePair(i, { status: "error", error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    setRunning(false);
+  }
+
+  const exportableCount = analyses.filter((a) => a.status === "done" && a.result).length;
+
+  /** Exports every successfully-analyzed pair, in the order analyzed --
+   * pairs that failed detection or never ran are left alone (exportStatus
+   * stays "idle") rather than attempted, since there's no segment list to
+   * render from. Uses each pair's current `result.segments`, which is
+   * exactly what "Modifier" (below) lets the user hand-adjust first -- same
+   * principle as the single-file view: export must reflect a reviewed
+   * edit, not silently re-run detection and discard it. */
+  async function handleExportAll() {
+    setRunning(true);
+    for (let i = 0; i < analyses.length; i++) {
+      const entry = analyses[i];
+      if (entry.status !== "done" || !entry.result) continue;
+      updatePair(i, { exportStatus: "running" });
+      try {
+        const result = await runJob<RenderResponse>(
+          startCrossFileSegmentedRenderJob(
+            referenceFiles[i],
+            referenceTrackIndex,
+            candidateFiles[i],
+            candidateTrackIndex,
+            entry.result.segments,
+          ),
+          () => {},
+        );
+        updatePair(i, { exportStatus: "done", exportResult: result });
+      } catch (err) {
+        updatePair(i, { exportStatus: "error", exportError: err instanceof Error ? err.message : String(err) });
       }
     }
     setRunning(false);
@@ -457,6 +505,9 @@ export function BatchView({ hidden }: { hidden: boolean }) {
         </button>
         <button className="primary-button" onClick={handleAnalyzeAll} disabled={pairCount === 0 || running}>
           {running ? "Analyse en cours..." : "Analyser tout"}
+        </button>
+        <button className="primary-button" onClick={handleExportAll} disabled={exportableCount === 0 || running}>
+          {running ? "Export en cours..." : "Exporter tout"}
         </button>
       </div>
 
@@ -502,13 +553,17 @@ export function BatchView({ hidden }: { hidden: boolean }) {
                 <col />
                 <col />
                 <col />
+                <col />
+                <col className="batch-col-actions" />
               </colgroup>
               <thead>
                 <tr>
                   <th className="batch-index">#</th>
                   <th>Référence</th>
                   <th>À corriger</th>
-                  <th>Statut</th>
+                  <th>Analyse</th>
+                  <th>Export</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -529,6 +584,21 @@ export function BatchView({ hidden }: { hidden: boolean }) {
                         `${a.result.segments.length} segment${a.result.segments.length > 1 ? "s" : ""}`}
                       {a.status === "error" && (a.error ?? "Erreur")}
                     </td>
+                    <td className={`batch-status batch-status-${a.exportStatus === "idle" ? "pending" : a.exportStatus}`}>
+                      {a.exportStatus === "idle" && "—"}
+                      {a.exportStatus === "running" && "Export en cours..."}
+                      {a.exportStatus === "done" && a.exportResult && basename(a.exportResult.written[0] ?? "")}
+                      {a.exportStatus === "error" && (a.exportError ?? "Erreur")}
+                    </td>
+                    <td className="batch-row-actions">
+                      <button
+                        className="small-button"
+                        onClick={() => setEditingPairIndex(i)}
+                        disabled={a.status !== "done" || !a.result}
+                      >
+                        Modifier
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -539,6 +609,19 @@ export function BatchView({ hidden }: { hidden: boolean }) {
 
       {showTracksModal && (
         <AllTracksModal referenceFiles={referenceFiles} candidateFiles={candidateFiles} onClose={() => setShowTracksModal(false)} />
+      )}
+
+      {editingPairIndex !== null && analyses[editingPairIndex]?.result && (
+        <SegmentEditor
+          segments={analyses[editingPairIndex].result.segments}
+          onClose={() => setEditingPairIndex(null)}
+          onSave={(edited) => {
+            const i = editingPairIndex;
+            setAnalyses((current) =>
+              current.map((a, idx) => (idx === i && a.result ? { ...a, result: { ...a.result, segments: edited } } : a)),
+            );
+          }}
+        />
       )}
     </main>
   );

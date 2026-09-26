@@ -188,6 +188,39 @@ export async function startSegmentedRenderJob(
   return data.job_id as string;
 }
 
+/**
+ * Segmented render pulling the corrected track from a *different* file than
+ * the reference (batch mode's case: reference and to-correct files are two
+ * separate imports, never the same file@index pair `startSegmentedRenderJob`
+ * assumes) -- `input_path` supplies the video/reference/subtitles as-is,
+ * `only_imports` keeps it from also (redundantly) "correcting" any of its
+ * own native tracks, and the corrected track is imported from `candidatePath`
+ * as a donor, same mechanism as the CLI's `--import-audio`.
+ */
+export async function startCrossFileSegmentedRenderJob(
+  referencePath: string,
+  referenceIndex: number,
+  candidatePath: string,
+  candidateIndex: number,
+  segments: SegmentOut[],
+): Promise<string> {
+  const resp = await fetch(`${BASE_URL}/jobs/render`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      input_path: referencePath,
+      reference_index: referenceIndex,
+      only_imports: true,
+      import_audio: [{ path: candidatePath, index: candidateIndex }],
+      segmented: true,
+      segment_overrides: [{ track: { path: candidatePath, index: candidateIndex }, segments }],
+    }),
+  });
+  if (!resp.ok) throw new Error(await readErrorDetail(resp));
+  const data = await resp.json();
+  return data.job_id as string;
+}
+
 export type JobEvent<TResult> =
   | { type: "log"; message: string }
   | { type: "done"; result: TResult }
