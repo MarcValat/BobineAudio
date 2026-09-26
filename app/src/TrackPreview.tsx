@@ -303,19 +303,27 @@ export function TrackPreview({
     };
   }, []);
 
-  // Fetch each track's whole-file peaks once, at high enough resolution
-  // that every zoom/pan afterwards is a pure client-side resample -- this is
-  // what makes the waveform "always visible, whole track" *and* instant to
-  // navigate, instead of gated behind a play click or a fetch per zoom step.
+  // Two-phase load: a coarse whole-track pass (WAVEFORM_BUCKETS -- the same
+  // resolution a single view already renders at, so it's indistinguishable
+  // from "real" data at the fully-zoomed-out starting view) unblocks the
+  // waveform almost immediately, then a full-resolution pass replaces it in
+  // the background. Without this second pass, zooming in while only the
+  // coarse data has landed would resample a handful of coarse buckets back
+  // up to fill the view -- a blocky, stair-stepped look -- until the user
+  // reloads; the fine pass fixes that in place, usually well before anyone
+  // has zoomed in far enough to notice the coarse version at all (ffmpeg
+  // decode time is dominated by track duration, not bucket count, so it's
+  // not meaningfully slower than the coarse pass -- see extract_peaks).
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setWaveformLoading(true);
       setWaveformError(null);
+      let coarseOk = false;
       try {
         const [refWave, candWave] = await Promise.all([
-          fetchWaveform(referenceFilePath, referenceIndex, 0, null, FULL_TRACK_BUCKETS),
-          fetchWaveform(candidateFilePath, trackIndex, 0, null, FULL_TRACK_BUCKETS),
+          fetchWaveform(referenceFilePath, referenceIndex, 0, null, WAVEFORM_BUCKETS),
+          fetchWaveform(candidateFilePath, trackIndex, 0, null, WAVEFORM_BUCKETS),
         ]);
         if (cancelled) return;
         setRefDuration(refWave.duration);
@@ -324,10 +332,27 @@ export function TrackPreview({
         setCandFullPeaks({ min: candWave.peaks_min, max: candWave.peaks_max });
         setViewStart(0);
         setViewDuration(refWave.duration);
+        coarseOk = true;
       } catch (err) {
         if (!cancelled) setWaveformError(err instanceof Error ? err.message : String(err));
       } finally {
         if (!cancelled) setWaveformLoading(false);
+      }
+      if (!coarseOk || cancelled) return;
+
+      // Background refinement -- a failure here just means zooming in stays
+      // at the coarse pass's resolution, not worth surfacing as a hard error
+      // over an already-working waveform.
+      try {
+        const [refFine, candFine] = await Promise.all([
+          fetchWaveform(referenceFilePath, referenceIndex, 0, null, FULL_TRACK_BUCKETS),
+          fetchWaveform(candidateFilePath, trackIndex, 0, null, FULL_TRACK_BUCKETS),
+        ]);
+        if (cancelled) return;
+        setRefFullPeaks({ min: refFine.peaks_min, max: refFine.peaks_max });
+        setCandFullPeaks({ min: candFine.peaks_min, max: candFine.peaks_max });
+      } catch {
+        // Coarse peaks are still shown -- nothing to surface here.
       }
     })();
     return () => {
