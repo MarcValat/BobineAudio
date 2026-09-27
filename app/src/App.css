@@ -41,6 +41,19 @@
   -webkit-text-size-adjust: 100%;
 }
 
+/* Stops the Chromium/WebView2 rubber-band bounce on trackpad scroll: the
+   whole page briefly overscrolls past its edge then springs back, even
+   though .container itself is a fixed 100vh with overflow:hidden and never
+   actually scrolls -- Chromium applies this at the top-level document/
+   viewport regardless. The universal selector covers html/body/#root (the
+   actual source of the reported bounce) *and* every inner scrollable panel
+   (.app-main, .batch-main, .editor-panel, the tracks/log panels...) in one
+   rule, rather than chasing each one by hand. Harmless on non-scrolling
+   elements. */
+* {
+  overscroll-behavior: none;
+}
+
 html,
 body,
 #root {
