@@ -55,15 +55,14 @@ jobs:
         run: npm ci
 
       # If a "STATIC_VCRUNTIME is deprecated" warning still shows up here,
-      # it's not from this repo or from tauri-action (checked: neither sets
-      # it) -- something in the windows-latest runner's own base
-      # environment does, which unconditionally overrides tauri.conf.json's
-      # build.windows.staticVCRuntime (see tauri-build's own source:
-      # env::var_os("STATIC_VCRUNTIME") wins whenever it's merely *present*,
-      # regardless of value). GitHub Actions' `env:` block can only add/
-      # override variables, not delete one already set by the runner, so
-      # there's no clean way to silence it from here -- harmless either way,
-      # the build still links the VC runtime the way we want.
+      # that's expected and harmless -- confirmed (by comparing a plain
+      # `cargo check` against a real `tauri build` locally) that the Tauri
+      # CLI itself sets that env var internally, likely its own backward-
+      # compat bridge for build.rs scripts, since this CLI version's config
+      # schema doesn't actually support tauri.conf.json's documented
+      # build.windows.staticVCRuntime replacement yet either (see build.rs,
+      # which uses the Rust-side WindowsAttributes API instead -- that one
+      # *is* honored by tauri-build, just not by this particular warning).
       - name: Build and publish the release
         uses: tauri-apps/tauri-action@v0
         env:
