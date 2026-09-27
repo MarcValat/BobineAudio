@@ -15,7 +15,7 @@
         {
           "name": "binaries/syncaudio-engine",
           "sidecar": true,
-          "args": ["serve", "--port", "8756"]
+          "args": ["serve", "--port", "8756", "--parent-pid", { "validator": "\\d+" }]
         }
       ]
     }
