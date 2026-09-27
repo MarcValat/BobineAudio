@@ -17,6 +17,7 @@ import { LogPanel } from "./LogPanel";
 import { SegmentEditor } from "./SegmentEditor";
 import { TrackPreview } from "./TrackPreview";
 import { BatchView } from "./BatchView";
+import { UpdateBanner } from "./UpdateBanner";
 import { basename } from "./paths";
 import "./App.css";
 
@@ -241,6 +242,7 @@ function App() {
 
   return (
     <div className="container">
+      <UpdateBanner />
       <div className="mode-switch">
         <button className={mode === "single" ? "primary-button" : ""} onClick={() => setMode("single")}>
           Fichier unique

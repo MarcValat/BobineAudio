@@ -12,6 +12,13 @@ dist
 dist-ssr
 *.local
 
+# Updater signing keypair (generated via `npx tauri signer generate`) --
+# the PRIVATE key must never be committed. It's kept only as the
+# TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) GitHub Actions secrets used to sign
+# release artifacts in CI; only the public key (embedded in
+# src-tauri/tauri.conf.json's plugins.updater.pubkey) is meant to be public.
+.tauri-keys/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
