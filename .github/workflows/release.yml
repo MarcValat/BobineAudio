@@ -1,14 +1,12 @@
 # Builds the Windows installer + auto-updater artifacts and publishes them
 # as a GitHub Release, triggered by pushing a `vX.Y.Z` tag.
 #
-# The canonical repo is on GitLab (mirrored to GitHub); this workflow only
-# runs here because GitHub Actions can't run on GitLab. Pushing a tag on
-# GitLab must also push it to the GitHub mirror for this to fire -- check
-# GitLab's Settings > Repository > Mirroring repositories includes tags,
-# not just branches.
+# GitHub is the canonical remote (this repo used to live on a self-hosted
+# GitLab, mirrored here -- switched away after mirrored pushes turned out
+# not to trigger this workflow at all, never fully root-caused; a direct
+# push from GitHub-as-origin works reliably).
 #
-# Required repo secrets (Settings > Secrets and variables > Actions, on the
-# GitHub side):
+# Required repo secrets (Settings > Secrets and variables > Actions):
 #   TAURI_SIGNING_PRIVATE_KEY          -- contents of app/.tauri-keys/syncaudio.key
 #   TAURI_SIGNING_PRIVATE_KEY_PASSWORD -- the password chosen when generating it
 #     (empty string is fine if none was set)
@@ -26,15 +24,19 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - uses: actions/setup-node@v4
+      - uses: Swatinem/rust-cache@v2
         with:
-          node-version: 20
+          workspaces: app/src-tauri
 
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - uses: astral-sh/setup-uv@v10
 
       - name: Install engine dependencies
         working-directory: engine
@@ -52,6 +54,16 @@ jobs:
         working-directory: app
         run: npm ci
 
+      # If a "STATIC_VCRUNTIME is deprecated" warning still shows up here,
+      # it's not from this repo or from tauri-action (checked: neither sets
+      # it) -- something in the windows-latest runner's own base
+      # environment does, which unconditionally overrides tauri.conf.json's
+      # build.windows.staticVCRuntime (see tauri-build's own source:
+      # env::var_os("STATIC_VCRUNTIME") wins whenever it's merely *present*,
+      # regardless of value). GitHub Actions' `env:` block can only add/
+      # override variables, not delete one already set by the runner, so
+      # there's no clean way to silence it from here -- harmless either way,
+      # the build still links the VC runtime the way we want.
       - name: Build and publish the release
         uses: tauri-apps/tauri-action@v0
         env:

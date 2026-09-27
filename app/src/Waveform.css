@@ -143,6 +143,10 @@
   stroke: var(--accent);
   stroke-width: 1;
   cursor: grab;
+  /* Belt-and-suspenders alongside preventDefault() on pointerdown (see
+     WaveformNavigator.tsx) -- stops the page-text-selection gesture that
+     dragging this handle could otherwise trigger. */
+  user-select: none;
 }
 
 .waveform-navigator-window:active {

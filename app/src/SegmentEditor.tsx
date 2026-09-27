@@ -293,7 +293,18 @@ export function SegmentEditor({
                 {state.times.slice(1, -1).map((t, idx) => {
                   const i = idx + 1;
                   return (
-                    <g key={i} className="boundary-handle" onPointerDown={() => setDragging(i)}>
+                    <g
+                      key={i}
+                      className="boundary-handle"
+                      onPointerDown={(e) => {
+                        // Same fix as WaveformNavigator's drag handle: without
+                        // this, dragging while the pointer passes over
+                        // surrounding page text triggers the browser's native
+                        // text-selection gesture.
+                        e.preventDefault();
+                        setDragging(i);
+                      }}
+                    >
                       <line x1={x(t)} y1={-4} x2={x(t)} y2={PLOT_H + 4} className="boundary-line" />
                       <circle cx={x(t)} cy={-4} r={7} />
                     </g>
