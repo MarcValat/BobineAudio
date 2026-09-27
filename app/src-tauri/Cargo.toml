@@ -1,6 +1,6 @@
 [package]
 name = "syncaudio"
-version = "1.0.1"
+version = "1.0.2"
 description = "Resynchronise les pistes audio multilingues d'un MKV"
 authors = ["Marc Valat"]
 edition = "2024"
