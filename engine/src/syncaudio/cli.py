@@ -517,8 +517,16 @@ def serve(host: str, port: int) -> None:
     """
     import uvicorn
 
+    from syncaudio.server import app as fastapi_app
+
     click.echo(f"SyncAudio sidecar sur http://{host}:{port} (docs : /docs)", err=True)
-    uvicorn.run("syncaudio.server:app", host=host, port=port)
+    # The app object, not the "module:attr" string form -- the string form
+    # has uvicorn re-import the module by name at runtime, which relies on
+    # a real importable package on disk and silently fails inside a
+    # PyInstaller-frozen build ("Could not import module"). Passing the
+    # already-imported object sidesteps that; the only feature this loses
+    # is --reload, which isn't used here anyway.
+    uvicorn.run(fastapi_app, host=host, port=port)
 
 
 def main() -> None:

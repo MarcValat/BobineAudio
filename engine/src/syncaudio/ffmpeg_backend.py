@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from functools import lru_cache
 from pathlib import Path
@@ -10,6 +11,22 @@ from pathlib import Path
 import numpy as np
 
 from syncaudio.models import AudioStreamInfo, AudioTrackSpec
+
+# A packaged sidecar build has no console of its own (see
+# engine/packaging/ -- built windowed, so the app doesn't flash a terminal
+# behind the GUI). ffmpeg is a console-subsystem exe, so without this,
+# every single probe/extract/render call spawns a brand new console window
+# that flickers open and closed -- invisible in dev, where the sidecar
+# itself already runs inside a real terminal and children just share it,
+# only surfacing once actually packaged (a real user report, not a
+# hypothetical).
+_SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+
+
+def _run(*args, **kwargs) -> subprocess.CompletedProcess:
+    """`subprocess.run`, but never flashes a console window on Windows."""
+    kwargs.setdefault("creationflags", _SUBPROCESS_FLAGS)
+    return subprocess.run(*args, **kwargs)
 
 _STREAM_RE = re.compile(
     r"^\s*Stream #\d+:(?P<index>\d+)(?:\((?P<lang>[^)]+)\))?:\s*Audio:\s*"
@@ -66,7 +83,7 @@ def probe_audio_streams(path: str) -> list[AudioStreamInfo]:
     ffmpeg's ``-map 0:a:N`` selector), not the container's global stream index.
     """
     ffmpeg = resolve_ffmpeg()
-    proc = subprocess.run(
+    proc = _run(
         [ffmpeg, "-hide_banner", "-i", path],
         capture_output=True,
         text=True,
@@ -101,7 +118,7 @@ def probe_audio_streams(path: str) -> list[AudioStreamInfo]:
 def probe_duration(path: str) -> float:
     """Return the container's total duration in seconds, as reported by ffmpeg."""
     ffmpeg = resolve_ffmpeg()
-    proc = subprocess.run(
+    proc = _run(
         [ffmpeg, "-hide_banner", "-i", path],
         capture_output=True,
         text=True,
@@ -142,7 +159,7 @@ def probe_stream_start_time(path: str, stream_index: int) -> float:
     ffmpeg = resolve_ffmpeg()
     with tempfile.TemporaryDirectory(prefix="syncaudio-starttime-") as tmp_dir:
         tmp_path = str(Path(tmp_dir) / "probe.mka")
-        extract = subprocess.run(
+        extract = _run(
             [
                 ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
                 "-i", path, "-map", f"0:a:{stream_index}", "-c", "copy", "-copyts", "-t", "5", tmp_path,
@@ -151,7 +168,7 @@ def probe_stream_start_time(path: str, stream_index: int) -> float:
         )
         if extract.returncode != 0:
             return 0.0
-        probe = subprocess.run([ffmpeg, "-hide_banner", "-i", tmp_path], capture_output=True, text=True)
+        probe = _run([ffmpeg, "-hide_banner", "-i", tmp_path], capture_output=True, text=True)
         match = _DURATION_START_RE.search(probe.stderr)
         return float(match["start"]) if match else 0.0
 
@@ -174,14 +191,14 @@ def _seek_args(spec: AudioTrackSpec, start: float) -> list[str]:
 
 @lru_cache(maxsize=256)
 def _probe_format_start_time(path: str) -> float:
-    probe = subprocess.run([resolve_ffmpeg(), "-hide_banner", "-i", path], capture_output=True, text=True)
+    probe = _run([resolve_ffmpeg(), "-hide_banner", "-i", path], capture_output=True, text=True)
     match = _DURATION_START_RE.search(probe.stderr)
     return float(match["start"]) if match else 0.0
 
 
 def _list_subtitle_streams(path: str) -> list[re.Match[str]]:
     ffmpeg = resolve_ffmpeg()
-    proc = subprocess.run(
+    proc = _run(
         [ffmpeg, "-hide_banner", "-i", path],
         capture_output=True,
         text=True,
@@ -209,7 +226,7 @@ def probe_stream_tags(path: str, kind: str) -> list[dict[str, str]]:
     bytes, and the platform default (cp1252 on Windows) would mangle any
     accented title.
     """
-    proc = subprocess.run([resolve_ffmpeg(), "-hide_banner", "-i", path], capture_output=True)
+    proc = _run([resolve_ffmpeg(), "-hide_banner", "-i", path], capture_output=True)
     tags: list[dict[str, str]] = []
     current: dict[str, str] | None = None
     for line in proc.stderr.decode("utf-8", errors="replace").splitlines():
@@ -272,7 +289,7 @@ def extract_pcm(
         "pcm_s16le",
         "-",
     ]
-    proc = subprocess.run(cmd, capture_output=True)
+    proc = _run(cmd, capture_output=True)
     if proc.returncode != 0:
         raise FFmpegError(
             f"Échec de l'extraction audio pour {spec.raw!r} :\n"
@@ -332,7 +349,7 @@ def extract_wav_clip(spec: AudioTrackSpec, start: float, duration: float, sample
         "-ar", str(sample_rate),
         "-f", "wav", "-acodec", "pcm_s16le", "-",
     ]
-    proc = subprocess.run(cmd, capture_output=True)
+    proc = _run(cmd, capture_output=True)
     if proc.returncode != 0:
         raise FFmpegError(
             f"Échec de l'extraction du clip pour {spec.raw!r} :\n"

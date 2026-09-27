@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import subprocess
 import tempfile
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -10,6 +9,7 @@ from syncaudio.align import estimate_offset
 from syncaudio.analysis_cache import ANALYSIS_SAMPLE_RATE, get_envelope
 from syncaudio.ffmpeg_backend import (
     FFmpegError,
+    _run as _run_subprocess,
     probe_audio_streams,
     probe_duration,
     probe_subtitle_codec,
@@ -296,7 +296,7 @@ def _title_args(spec: AudioTrackSpec, kind: str, out_selector: str) -> list[str]
 
 
 def _run(cmd: list[str]) -> None:
-    proc = subprocess.run(cmd, capture_output=True)
+    proc = _run_subprocess(cmd, capture_output=True)
     if proc.returncode != 0:
         raise FFmpegError(f"Échec ffmpeg :\n{' '.join(cmd)}\n{proc.stderr.decode(errors='replace')}")
 
