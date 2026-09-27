@@ -187,6 +187,7 @@ def test_classify_segments_detects_drift() -> None:
     assert abs(segments[0].offset_start - 0.0) < 0.5
     expected_end = duration_s * (1 - 1 / stretch_factor)
     assert abs(segments[0].offset_end - expected_end) < 0.6
+    assert segments[0].confidence > 0.5  # a real drift must not be flagged as unreliable
 
 
 def test_confidence_is_high_for_a_well_supported_segment() -> None:
@@ -234,25 +235,65 @@ def test_confidence_is_low_for_a_segment_whose_windows_disagree_with_each_other(
     """The other half of the formula, and the actual reported bug: a
     segment with *plenty* of supporting windows (well past
     _CONFIDENT_WINDOW_COUNT) can still be untrustworthy if those windows
-    don't agree with each other. Alternating +/-0.3 (not random noise, so
-    the residual math below is exact, not luck-of-the-seed): every
-    individual jump is only 0.6s, safely under the 0.75s jump threshold
-    (so this stays one segment/group, not several), and the single-line
-    fit's max residual is exactly 0.3s, under _RESIDUAL_TOL_S (0.4) --
-    matching the reported shape (plausible-looking per-window estimates
-    that just don't agree with each other) rather than a real jump/drift."""
+    don't agree with each other. Alternating +/-0.35 (not random noise, so
+    the math below is exact, not luck-of-the-seed): every individual jump
+    is only 0.7s, under the 0.75s jump threshold and the outlier filter's
+    tolerance (so this stays one segment), and the single-line fit's max
+    residual is 0.35s, under _RESIDUAL_TOL_S (0.4)."""
     hop_s = 10.0
     n_windows = 22
     windows = [
-        WindowOffset(time_s=i * hop_s, offset_seconds=0.3 if i % 2 == 0 else -0.3, confidence=0.8, ambiguous=False)
+        WindowOffset(time_s=i * hop_s, offset_seconds=0.35 if i % 2 == 0 else -0.35, confidence=0.8, ambiguous=False)
         for i in range(n_windows)
     ]
 
     segments = classify_segments(windows, total_duration_s=n_windows * hop_s)
 
     assert len(segments) == 1
-    # agreement = 1 - 0.3/0.4 = 0.25, confidence = 0.25 * sample_factor(1.0)
+    # robust sigma = 1.4826 * 0.35 ~= 0.52, se = 0.52 / sqrt(22) ~= 0.11,
+    # precision = 1 - 0.11 / 0.15 ~= 0.26
     assert segments[0].confidence < 0.3
+
+
+def test_straggler_seeded_group_is_merged_back_instead_of_becoming_a_fake_drift() -> None:
+    """Real reported case (E02): one straggler window, just inside the
+    outlier filter's tolerance, started a new group; every later window
+    joined it, so two groups described the same offset (both medians
+    -0.969s) and the second one's line fit, pulled by its seed, came out
+    as a fake -1.26s -> -0.81s drift. Modelled here: a constant track with
+    one 0.8s straggler that the outlier filter narrowly keeps."""
+    hop_s = 10.0
+    offsets = [0.0] * 16 + [0.8, 0.2, 0.1] + [0.0] * 8
+    windows = [
+        WindowOffset(time_s=i * hop_s, offset_seconds=o, confidence=0.5, ambiguous=False) for i, o in enumerate(offsets)
+    ]
+
+    segments = classify_segments(windows, total_duration_s=len(offsets) * hop_s)
+
+    assert len(segments) == 1
+    assert not segments[0].is_drift
+    assert abs(segments[0].offset_start) < 0.05
+    assert abs(segments[0].offset_end) < 0.05
+    assert segments[0].confidence > 0.9
+
+
+def test_stragglers_at_one_end_do_not_tilt_a_constant_segment() -> None:
+    """Real reported case (E02 again, once merged): nearly every window
+    exactly on -0.969s, a few stragglers late in the file between -1.1 and
+    -1.4s -- least squares came out as -0.957s -> -1.039s even though the
+    median was -0.969s everywhere. The robust fit must stay on it."""
+    hop_s = 10.0
+    offsets = [-0.97] * 100 + [-1.41, -1.42, -0.97, -1.18, -1.10, -0.97, -1.24] + [-0.97] * 10
+    windows = [
+        WindowOffset(time_s=i * hop_s, offset_seconds=o, confidence=0.5, ambiguous=False) for i, o in enumerate(offsets)
+    ]
+
+    segments = classify_segments(windows, total_duration_s=len(offsets) * hop_s)
+
+    assert len(segments) == 1
+    assert abs(segments[0].offset_start - -0.97) < 0.01
+    assert abs(segments[0].offset_end - -0.97) < 0.01
+    assert segments[0].confidence > 0.9
 
 
 def test_confidence_is_high_despite_low_raw_window_confidence_when_windows_agree() -> None:

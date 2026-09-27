@@ -52,11 +52,17 @@ _OUTLIER_FILTER_SIZE = 5
 # A segment's confidence (see _segment_confidence) is discounted below this
 # many supporting windows -- a handful of windows can agree with each other
 # by chance (a small group's own line/mean always fits it reasonably
-# tightly, that alone proves nothing), so raw per-window confidence isn't
-# enough on its own to trust a segment built from very few of them. Matches
-# _OUTLIER_FILTER_SIZE's neighbourhood size, which is the smallest sample
-# already treated as meaningful elsewhere in this file.
+# tightly, that alone proves nothing). Matches _OUTLIER_FILTER_SIZE's
+# neighbourhood size, the smallest sample already treated as meaningful
+# elsewhere in this file.
 _CONFIDENT_WINDOW_COUNT = 5
+# Robust standard error of a segment's offset (see _segment_confidence) at
+# which its precision factor reaches 0 -- an offset only known to within
+# +/-0.15s isn't usable as a correction. Measured: real, correct segments
+# on actual episodes sit at 0.0002-0.003s (~99-100%); a real but noisy
+# synthetic drift (8 usable windows, ~0.2s per-window scatter) at ~0.07s
+# (~53%) -- a tighter scale (0.05s was tried) flagged that one as 0%.
+_PRECISION_SCALE_S = 0.15
 
 
 @dataclass(frozen=True)
@@ -162,11 +168,33 @@ class Segment:
         return (self.offset_start + self.offset_end) / 2.0
 
 
+def _theil_sen_slope(times: np.ndarray, offsets: np.ndarray) -> float:
+    """Median of every pairwise slope -- a line fit that a few outlying
+    windows can't drag around (unlike least squares, where one extreme
+    point at a segment's edge can single-handedly tilt the whole line).
+    Hand-rolled rather than scipy.stats.theilslopes to avoid importing
+    scipy.stats (a noticeable extra cost at engine startup) for ~10k
+    pairwise divisions at most."""
+    i, j = np.triu_indices(len(times), k=1)
+    dt = times[j] - times[i]
+    valid = dt != 0
+    if not valid.any():
+        return 0.0
+    return float(np.median((offsets[j] - offsets[i])[valid] / dt[valid]))
+
+
 def _fit_line_or_constant(times: np.ndarray, offsets: np.ndarray) -> tuple[float, float]:
-    """Least-squares (slope, intercept) for ``offsets`` vs ``times`` -- but
-    the slope is zeroed out (falling back to the plain mean, a pure
-    constant) when it isn't statistically distinguishable from noise around
-    that mean.
+    """Robust (slope, intercept) for ``offsets`` vs ``times`` -- Theil-Sen
+    slope, median intercept -- with the slope zeroed out (falling back to
+    the plain median, a pure constant) when it isn't statistically
+    distinguishable from the noise around it.
+
+    Robust rather than least squares because of what per-window offset
+    errors actually look like on real episodes: the overwhelming majority
+    of windows land on the exact same value, plus a few isolated stragglers
+    off by 0.1-0.9s. Least squares lets those few stragglers tilt the line
+    (a real reported case: a segment whose median was -0.969s at every
+    point came out as -0.957s -> -1.039s); Theil-Sen/median ignore them.
 
     Why this matters: only the *endpoint* values (``offset_start``/
     ``offset_end``, i.e. the fitted line evaluated at the segment's actual
@@ -182,67 +210,63 @@ def _fit_line_or_constant(times: np.ndarray, offsets: np.ndarray) -> tuple[float
     extrapolation, when the true offset was plausibly constant throughout.
     """
     n = len(times)
-    mean_offset = float(np.mean(offsets))
+    median_offset = float(np.median(offsets))
     if n < 3:
-        return 0.0, mean_offset
-    slope, intercept = np.polyfit(times, offsets, 1)
-    dof = n - 2
-    residual_var = float(np.sum((offsets - (intercept + slope * times)) ** 2) / dof) if dof > 0 else 0.0
+        return 0.0, median_offset
     time_spread = float(np.sum((times - times.mean()) ** 2))
     if time_spread <= 0:
-        return 0.0, mean_offset
-    slope_se = (residual_var / time_spread) ** 0.5
+        return 0.0, median_offset
+    slope = _theil_sen_slope(times, offsets)
+    intercept = float(np.median(offsets - slope * times))
+    residuals = offsets - (intercept + slope * times)
+    robust_sigma = 1.4826 * float(np.median(np.abs(residuals - np.median(residuals))))
+    slope_se = robust_sigma / time_spread**0.5
     # ~1.5 standard errors, not the usual 2 (~95% confidence): these are
     # already noisy per-window estimates (see _RESIDUAL_TOL_S), so leaning
     # slightly further towards "probably not real drift" is the safer
     # default -- an unnecessary near-zero atempo is harmless, but a spurious
-    # one shifts audio at one end of the segment for nothing.
-    if slope_se == 0.0 or abs(slope) < 1.5 * slope_se:
-        return 0.0, mean_offset
-    return float(slope), float(intercept)
+    # one shifts audio at one end of the segment for nothing. slope_se == 0
+    # (every window exactly on the line) with a nonzero slope is a perfect
+    # fit, i.e. maximally significant, not degenerate.
+    if slope == 0.0 or abs(slope) < 1.5 * slope_se:
+        return 0.0, median_offset
+    return slope, intercept
 
 
-def _segment_confidence(group: Sequence[WindowOffset]) -> float:
-    """How much a segment's classification should be trusted, in [0, 1].
+def _segment_confidence(
+    group: Sequence[WindowOffset], start_s: float, end_s: float, offset_start: float, offset_end: float
+) -> float:
+    """How much a segment's reported correction should be trusted, in [0, 1].
 
     Deliberately *not* built from each window's own correlation confidence
-    (``estimate_offset``'s peak-prominence z-score): that statistic is
-    already known to run low even for a correct estimate on real dialogue/
-    SFX content, which is exactly why ``classify_segments`` uses
-    ``ambiguous`` rather than a confidence threshold as its window-level
-    reliability signal (see its docstring). An earlier version of this
-    function multiplied it in anyway and it showed immediately on a real
-    file: a ~20-minute, visibly dead-flat segment (confirmed correct by
-    ear) still averaged ~2% raw window confidence, which isn't something a
-    "trust this or not" score can be built from.
+    (``estimate_offset``'s peak-prominence z-score): that statistic runs low
+    even for a correct estimate on real dialogue/SFX content -- a visibly
+    dead-flat, confirmed-correct ~20-minute segment averaged ~2%. And
+    deliberately *robust* (MAD) rather than RMS, for the same reason the fit
+    itself is (see _fit_line_or_constant): an RMS is dominated by a correct
+    segment's handful of stragglers, capping obviously-perfect segments
+    around 75-85%. Two factors:
 
-    Instead this combines two things that are actually diagnostic of a
-    *segment's* classification specifically:
-
-    - Agreement: how tightly the group's own offsets cluster around the
-      fitted line/mean, relative to ``_RESIDUAL_TOL_S``. Many independent
-      windows landing within a fraction of a second of each other is strong
-      evidence on its own, regardless of how any single window's own z-score
-      reads -- and, conversely, this is what actually catches a spurious
-      segment whose windows are individually plausible-looking but don't
-      agree with each other (the reported false drift: ~22 windows, plenty
-      of samples, just scattered).
-    - Sample size: agreement from just 1-2 points proves very little (a
-      line always fits a handful of points closely), so it's still
-      discounted below ``_CONFIDENT_WINDOW_COUNT`` -- linearly, not a hard
-      cutoff, since a 3-4 window segment isn't necessarily wrong, just less
-      proven than a 10+ window one.
+    - Sample size: discounted below ``_CONFIDENT_WINDOW_COUNT`` -- a line
+      always fits 1-2 points closely, that proves nothing.
+    - Precision: the robust standard error of the segment's offset
+      (1.4826*MAD of residuals around the reported line / sqrt(n)) against
+      ``_PRECISION_SCALE_S`` -- low when the windows genuinely disagree with
+      each other, not just when a couple of them are off.
     """
-    sample_factor = min(1.0, len(group) / _CONFIDENT_WINDOW_COUNT)
-    if len(group) < 2:
-        return sample_factor  # nothing to compare for agreement; judged on sample size alone
+    n = len(group)
+    sample_factor = min(1.0, n / _CONFIDENT_WINDOW_COUNT)
+    if n < 2:
+        return sample_factor
 
     times = np.array([w.time_s for w in group])
     offsets = np.array([w.offset_seconds for w in group])
-    slope, intercept = _fit_line_or_constant(times, offsets)
-    residual_rms = float(np.sqrt(np.mean((offsets - (intercept + slope * times)) ** 2)))
-    agreement = max(0.0, 1.0 - residual_rms / _RESIDUAL_TOL_S)
-    return agreement * sample_factor
+    span = end_s - start_s
+    slope = (offset_end - offset_start) / span if span > 0 else 0.0
+    residuals = offsets - (offset_start + slope * (times - start_s))
+    robust_sigma = 1.4826 * float(np.median(np.abs(residuals - np.median(residuals))))
+    precision = max(0.0, 1.0 - (robust_sigma / n**0.5) / _PRECISION_SCALE_S)
+    return float(sample_factor * precision)
 
 
 def classify_segments(
@@ -310,13 +334,15 @@ def classify_segments(
         residuals = offsets - (raw_intercept + raw_slope * times)
         if np.max(np.abs(residuals)) <= residual_tol_s:
             slope, intercept = _fit_line_or_constant(times, offsets)
+            offset_start = float(intercept)
+            offset_end = float(intercept + slope * total_duration_s)
             return [
                 Segment(
                     start_s=0.0,
                     end_s=total_duration_s,
-                    offset_start=float(intercept),
-                    offset_end=float(intercept + slope * total_duration_s),
-                    confidence=_segment_confidence(usable),
+                    offset_start=offset_start,
+                    offset_end=offset_end,
+                    confidence=_segment_confidence(usable, 0.0, total_duration_s, offset_start, offset_end),
                 )
             ]
 
@@ -328,6 +354,26 @@ def classify_segments(
             groups.append([w])
         else:
             current.append(w)
+
+    # A new group is started by whichever window first deviates past the
+    # threshold -- if that one window is itself a straggler (one the
+    # outlier filter above narrowly let through), every following window
+    # still joins *its* group, and two groups end up describing the exact
+    # same offset. Real reported case: a -1.84s window (0.01s inside the
+    # outlier filter's tolerance) seeded a tail group whose median was
+    # -0.969s, identical to the preceding group's -0.969s, and its line fit,
+    # pulled by that seed, came out as a fake -1.26s -> -0.81s drift.
+    # Neighbouring groups whose medians don't actually differ by a jump are
+    # one segment.
+    merged = [groups[0]]
+    for group in groups[1:]:
+        prev_median = float(np.median([x.offset_seconds for x in merged[-1]]))
+        median = float(np.median([x.offset_seconds for x in group]))
+        if abs(median - prev_median) <= jump_threshold_s:
+            merged[-1] = merged[-1] + group
+        else:
+            merged.append(group)
+    groups = merged
 
     segments: list[Segment] = []
     for idx, group in enumerate(groups):
@@ -345,7 +391,8 @@ def classify_segments(
             offset_end = float(g_intercept + g_slope * seg_end)
         else:
             offset_start = offset_end = group[0].offset_seconds
-        segments.append(Segment(seg_start, seg_end, offset_start, offset_end, confidence=_segment_confidence(group)))
+        confidence = _segment_confidence(group, seg_start, seg_end, offset_start, offset_end)
+        segments.append(Segment(seg_start, seg_end, offset_start, offset_end, confidence=confidence))
     return segments
 
 
