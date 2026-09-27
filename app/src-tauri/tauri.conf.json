@@ -32,7 +32,12 @@
       "icons/icon.ico"
     ],
     "externalBin": ["binaries/syncaudio-engine"],
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": true,
+    "windows": {
+      "nsis": {
+        "installerHooks": "./windows/installer-hooks.nsh"
+      }
+    }
   },
   "plugins": {
     "updater": {

@@ -24,6 +24,86 @@ impl SidecarChild {
 
 struct SidecarState(Mutex<Option<SidecarChild>>);
 
+/// Ties the sidecar's lifetime to this process at the OS level, whatever
+/// way this process ends.
+///
+/// Killing the sidecar from an exit handler (see `run`) only works when an
+/// exit handler actually runs -- not on a crash, a forced kill, or when the
+/// in-app updater terminates the app to replace its files. A sidecar left
+/// running keeps its own exe locked, which is exactly what made the update
+/// installer fail ("Error opening file for writing: ...syncaudio-engine.exe").
+/// A Job Object with KILL_ON_JOB_CLOSE fixes that at the source: the OS
+/// closes this process's handle to the job however it exits, and closing the
+/// last handle kills every process in the job. Processes the sidecar itself
+/// spawns afterwards (the PyInstaller bootloader's real interpreter child,
+/// `uv run`'s python.exe in dev) join the job automatically.
+///
+/// Only the sidecar is put in the job, never this process itself: otherwise
+/// everything *we* spawn would be in it too -- including the updater's
+/// installer, which would then get killed the moment this app exits to let it
+/// run.
+#[cfg(windows)]
+struct KillOnCloseJob(windows_sys::Win32::Foundation::HANDLE);
+
+// A job handle is a plain kernel handle, valid from any thread.
+#[cfg(windows)]
+unsafe impl Send for KillOnCloseJob {}
+#[cfg(windows)]
+unsafe impl Sync for KillOnCloseJob {}
+
+#[cfg(windows)]
+impl KillOnCloseJob {
+    fn new() -> Option<Self> {
+        use windows_sys::Win32::Foundation::CloseHandle;
+        use windows_sys::Win32::System::JobObjects::{
+            CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject,
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+        };
+        unsafe {
+            let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+            if job.is_null() {
+                return None;
+            }
+            let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            let ok = SetInformationJobObject(
+                job,
+                JobObjectExtendedLimitInformation,
+                &info as *const _ as *const core::ffi::c_void,
+                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            );
+            if ok == 0 {
+                CloseHandle(job);
+                return None;
+            }
+            Some(Self(job))
+        }
+    }
+
+    fn assign(&self, pid: u32) -> bool {
+        use windows_sys::Win32::Foundation::CloseHandle;
+        use windows_sys::Win32::System::JobObjects::AssignProcessToJobObject;
+        use windows_sys::Win32::System::Threading::{
+            OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE,
+        };
+        unsafe {
+            let process = OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, 0, pid);
+            if process.is_null() {
+                return false;
+            }
+            let ok = AssignProcessToJobObject(self.0, process);
+            CloseHandle(process);
+            ok != 0
+        }
+    }
+}
+
+/// Kept in managed state for the app's whole lifetime and deliberately
+/// never closed by hand: the handle closing *is* the kill signal, and it
+/// must only happen when this process is gone.
+#[cfg(windows)]
+struct SidecarJob(#[allow(dead_code)] Option<KillOnCloseJob>);
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -111,10 +191,15 @@ fn kill_process_tree(pid: u32) {
 /// a release) is logged, not fatal: the GUI window still opens, it just
 /// can't reach the engine until fixed and restarted.
 fn spawn_sidecar(app: &tauri::AppHandle) -> Option<SidecarChild> {
+    // Second, independent safety net next to the Job Object (see
+    // KillOnCloseJob): the engine watches this PID itself and exits once
+    // it's gone. Covers dev mode's `uv run` hop and any gap between spawning
+    // and assigning to the job.
+    let parent_pid = std::process::id().to_string();
     if cfg!(debug_assertions) {
         let dir = engine_dir();
         match Command::new("uv")
-            .args(["run", "syncaudio", "serve", "--port", "8756"])
+            .args(["run", "syncaudio", "serve", "--port", "8756", "--parent-pid", &parent_pid])
             .current_dir(&dir)
             .spawn()
         {
@@ -135,7 +220,7 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Option<SidecarChild> {
                 return None;
             }
         };
-        match sidecar.args(["serve", "--port", "8756"]).spawn() {
+        match sidecar.args(["serve", "--port", "8756", "--parent-pid", &parent_pid]).spawn() {
             Ok((_rx, child)) => {
                 println!("[sidecar] démarré (pid {})", child.pid());
                 Some(SidecarChild::Packaged(child))
@@ -158,7 +243,22 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let handle = app.handle().clone();
+            #[cfg(windows)]
+            let job = KillOnCloseJob::new();
             let child = spawn_sidecar(&handle);
+            #[cfg(windows)]
+            {
+                // Right after spawning: the PyInstaller bootloader unpacks
+                // its archive (tens of MB) before starting its child, so the
+                // child is born inside the job and inherits it. The engine's
+                // own --parent-pid watchdog covers the case where it isn't.
+                if let (Some(job), Some(child)) = (&job, &child) {
+                    if !job.assign(child.pid()) {
+                        eprintln!("[sidecar] impossible de rattacher le moteur au job de l'UI");
+                    }
+                }
+                app.manage(SidecarJob(job));
+            }
             app.manage(SidecarState(Mutex::new(child)));
             Ok(())
         })
