@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 
@@ -40,6 +41,14 @@ export function UpdateBanner() {
     setPhase("downloading");
     setError(null);
     try {
+      // Real bug: the installer failed to overwrite the sidecar's own exe
+      // ("Error opening file for writing") because it was still running --
+      // Tauri's updater closes/replaces the main app for us, but has no
+      // idea this separately-managed child process exists. Stop it first
+      // so its file is free by the time the installer gets to it;
+      // relaunch() below starts a fresh app (and sidecar) regardless, so
+      // there's nothing left needing it alive in between.
+      await invoke("stop_sidecar");
       await update.downloadAndInstall((event) => {
         if (event.event === "Started") {
           setProgress({ downloaded: 0, total: event.data.contentLength ?? null });
