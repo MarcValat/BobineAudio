@@ -1,0 +1,60 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#23252b"/>
+      <stop offset="100%" stop-color="#16171b"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7fa4ff"/>
+      <stop offset="100%" stop-color="#3f6fd8"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="1024" height="1024" rx="224" fill="url(#bg)"/>
+
+  <!-- Ghost waveform: the "before" track, offset up-left, faint. Same +13
+       horizontal shift as the main waveform below, to keep it exactly
+       behind it rather than reintroducing a horizontal mismatch. -->
+  <g transform="translate(-13,-22)" fill="#7fa4ff" opacity="0.22">
+    <rect x="262" y="452" width="54" height="120" rx="27"/>
+    <rect x="346" y="392" width="54" height="240" rx="27"/>
+    <rect x="430" y="322" width="54" height="380" rx="27"/>
+    <rect x="514" y="372" width="54" height="280" rx="27"/>
+    <rect x="598" y="432" width="54" height="160" rx="27"/>
+    <rect x="682" y="402" width="54" height="220" rx="27"/>
+  </g>
+
+  <!-- Main waveform: the corrected, aligned track. The bars' own bounding
+       box (x: 262-736) centers at x=499, 13px left of the canvas/ring
+       center (512): shifted here so it's exactly on-center instead of
+       eyeballed. Vertical bounds (272-752) already center exactly on 512,
+       no y shift needed. -->
+  <g fill="url(#bar)" transform="translate(13,0)">
+    <rect x="262" y="452" width="54" height="120" rx="27"/>
+    <rect x="346" y="362" width="54" height="300" rx="27"/>
+    <rect x="430" y="272" width="54" height="480" rx="27"/>
+    <rect x="514" y="332" width="54" height="360" rx="27"/>
+    <rect x="598" y="422" width="54" height="180" rx="27"/>
+    <rect x="682" y="382" width="54" height="260" rx="27"/>
+  </g>
+
+  <!-- Sync ring: a single partial ring, gap centered near the TOP (25deg on
+       the right, 30deg on the left: a deliberate slight asymmetry, tuned
+       by eye between a 25/25 and a 25/43 split), sweeping clockwise from
+       25deg to 330deg the long way, through the bottom. The end angle
+       (330deg) matches the arrowhead's base angle below, so the ring's own
+       round-linecap end lands exactly on the triangle's base (its
+       midpoint, since the ring's r=336 sits between the base's r=291/381)
+       instead of poking out past it. -->
+  <path d="M 654 207.5 A 336 336 0 1 1 344.0 221.0" fill="none" stroke="#f2f2f2" stroke-width="34" stroke-linecap="round"/>
+  <!-- Arrowhead at the sweep's end: a solid EQUILATERAL triangle (side 90),
+       not an open chevron, so it reads as a proper arrow tip. The base
+       (the two points below) sits ON the ring's own curve: theta=330deg,
+       one point at r=291 (just inside the ring) and one at r=381 (just
+       outside), which is what makes that edge visually track the curve.
+       The tip is NOT also placed via that same polar scheme (an earlier
+       attempt did that and proved, by law of cosines, that it can never
+       come out equilateral); instead it's the apex of an equilateral
+       triangle built on that base, on the outward side. -->
+  <polygon points="411.5,182.0 366.5,260.0 321.5,182.0" fill="#f2f2f2" stroke="#f2f2f2" stroke-width="34" stroke-linejoin="round"/>
+</svg>
