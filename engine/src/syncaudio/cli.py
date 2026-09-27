@@ -509,7 +509,13 @@ def segments(
 @cli.command()
 @click.option("--host", default="127.0.0.1", show_default=True, help="Adresse d'écoute.")
 @click.option("--port", default=8756, show_default=True, type=int, help="Port d'écoute.")
-def serve(host: str, port: int) -> None:
+@click.option(
+    "--parent-pid",
+    type=int,
+    default=None,
+    help="PID du processus parent (le GUI) : le serveur s'arrête dès que ce processus disparaît.",
+)
+def serve(host: str, port: int, parent_pid: int | None) -> None:
     """Lance le sidecar HTTP (probe/align/segments/render) pour un futur GUI.
 
     Couche fine au-dessus du même moteur que le CLI ; le CLI reste
@@ -518,6 +524,11 @@ def serve(host: str, port: int) -> None:
     import uvicorn
 
     from syncaudio.server import app as fastapi_app
+
+    if parent_pid is not None:
+        from syncaudio.parent_watchdog import exit_when_parent_dies
+
+        exit_when_parent_dies(parent_pid)
 
     click.echo(f"SyncAudio sidecar sur http://{host}:{port} (docs : /docs)", err=True)
     # The app object, not the "module:attr" string form -- the string form
