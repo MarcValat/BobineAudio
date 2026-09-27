@@ -106,6 +106,10 @@
 
 .boundary-handle {
   cursor: ew-resize;
+  /* Belt-and-suspenders alongside preventDefault() on pointerdown --
+     stops the page-text-selection gesture dragging this handle could
+     otherwise trigger. */
+  user-select: none;
 }
 
 .boundary-line {

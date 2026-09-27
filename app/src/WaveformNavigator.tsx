@@ -58,6 +58,11 @@ export function WaveformNavigator({ duration, viewStart, viewDuration, peaksMin,
   }, [drag]);
 
   function handleWindowPointerDown(e: React.PointerEvent<SVGRectElement>) {
+    // Without this, dragging the window while the pointer passes over
+    // surrounding page text triggers the browser's native text-selection
+    // gesture -- harmless functionally (reported: no actual bug in the
+    // pan itself), but distracting since it visibly highlights text.
+    e.preventDefault();
     e.stopPropagation();
     setDrag({ startClientX: e.clientX, startViewStart: viewStart });
   }
