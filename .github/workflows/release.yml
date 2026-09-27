@@ -36,7 +36,7 @@ jobs:
         with:
           node-version: 24
 
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
 
       - name: Install engine dependencies
         working-directory: engine
