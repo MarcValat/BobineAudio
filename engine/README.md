@@ -115,6 +115,8 @@ Affiche un ou plusieurs segments, chacun avec un décalage de début/fin :
 
 Quand plusieurs segments sont détectés, chaque frontière est automatiquement raffinée par une seconde passe locale (fenêtre bien plus petite, uniquement autour de la transition) pour la localiser plus précisément que la passe grossière seule.
 
+Chaque segment porte aussi un score de confiance (`confidence`, 0 à 1), affiché et exploitable dans le GUI (bouton "Ignorer les segments peu fiables" dans l'éditeur manuel). Contrairement au score de confiance par fenêtre ci-dessus (peu fiable isolément — voir « Limites connues »), celui-ci mesure ce qui est réellement diagnostique pour un *segment* : à quel point ses fenêtres s'accordent entre elles (médiane/MAD, robuste aux fenêtres isolées aberrantes) et sur combien de fenêtres il repose (un segment porté par 1-2 fenêtres est peu probant même si elles concordent parfaitement). Voir `_segment_confidence` dans `segments.py`.
+
 Options : `--window`/`--hop` (taille/pas de la fenêtre glissante, secondes), `--margin` (décalage local max recherché par fenêtre), `--json` (sortie machine, fenêtres brutes + segments classifiés), `--start`/`--duration` comme pour `align`.
 
 Pour corriger ce que `segments` a détecté (pas juste le visualiser), voir `render --segmented` ci-dessous.
@@ -177,3 +179,13 @@ uv run pytest
 ```
 
 `tests/test_align.py` valide l'algorithme sur des signaux synthétiques (sans ffmpeg). `tests/test_ffmpeg_backend.py` valide l'extraction/probe de bout en bout avec le ffmpeg embarqué. `tests/test_server.py` valide le sidecar HTTP avec `fastapi.testclient`.
+
+## Empaquetage (binaire autonome pour l'app)
+
+```
+uv run python packaging/build_sidecar.py
+```
+
+Fige `syncaudio serve` en exécutable autonome via PyInstaller (`packaging/syncaudio-engine.spec`), puis le copie dans `../app/src-tauri/binaries/` avec le suffixe attendu par le mécanisme "sidecar" de Tauri — voir `app/README.md` pour le processus complet de build/release. Aucune dépendance Python/`uv` requise à l'exécution du binaire produit ; `ffmpeg` reste géré via `imageio-ffmpeg` comme en usage normal (voir plus haut).
+
+`syncaudio serve` construit son app FastAPI en passant l'objet directement à uvicorn plutôt que par le nom du module (`"syncaudio.server:app"`) : cette dernière forme réimporte le module par son nom au runtime, ce qui échoue silencieusement une fois figé par PyInstaller (pas de vrai paquet importable sur disque). Tous les appels à `ffmpeg`/`ffprobe` passent aussi par un wrapper (`ffmpeg_backend._run`) qui force `CREATE_NO_WINDOW` sous Windows — sans ça, chaque appel ouvre et referme une fenêtre de console, invisible en dev (le sidecar tourne déjà dans un vrai terminal) mais visible une fois le binaire empaqueté (pas de console propre).

@@ -5,8 +5,8 @@ Resynchronise les pistes audio d'un contenu multi-langues (ex. un MKV avec plusi
 ## Structure du repo
 
 - [`engine/`](engine/README.md) — moteur Python (détection, correction/rendu, sidecar HTTP) ; utilisable seul en CLI ou comme serveur local pour l'app.
-- `app/` — GUI standalone (Tauri + React/TypeScript) : ouverture de fichier, sélection des pistes, aperçu waveform/audio avant export, édition manuelle des segments détectés.
+- `app/` — GUI standalone (Tauri + React/TypeScript) : ouverture de fichier (unique ou par lot), sélection des pistes, aperçu waveform/audio avant export, édition manuelle des segments détectés, mise à jour automatique.
 
 ## Statut
 
-En cours de développement par phases. Le moteur (détection constante/dérive/sauts, rendu, sidecar HTTP) et l'essentiel du GUI (analyse, aperçu, édition, export) sont fonctionnels ; empaquetage/installateur et mode batch multi-fichiers restent à venir. Voir `engine/README.md` pour l'usage détaillé du CLI et de l'API HTTP.
+Fonctionnel de bout en bout : moteur (détection constante/dérive/sauts, rendu, sidecar HTTP), GUI (analyse, aperçu, édition manuelle, export) et mode batch (traiter toute une série en une passe). Empaqueté en installateur Windows avec mise à jour automatique — voir `app/README.md` pour compiler/publier une release. Voir `engine/README.md` pour l'usage détaillé du CLI et de l'API HTTP.
