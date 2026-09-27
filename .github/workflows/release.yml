@@ -1,0 +1,69 @@
+# Builds the Windows installer + auto-updater artifacts and publishes them
+# as a GitHub Release, triggered by pushing a `vX.Y.Z` tag.
+#
+# The canonical repo is on GitLab (mirrored to GitHub); this workflow only
+# runs here because GitHub Actions can't run on GitLab. Pushing a tag on
+# GitLab must also push it to the GitHub mirror for this to fire -- check
+# GitLab's Settings > Repository > Mirroring repositories includes tags,
+# not just branches.
+#
+# Required repo secrets (Settings > Secrets and variables > Actions, on the
+# GitHub side):
+#   TAURI_SIGNING_PRIVATE_KEY          -- contents of app/.tauri-keys/syncaudio.key
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD -- the password chosen when generating it
+#     (empty string is fine if none was set)
+# `GITHUB_TOKEN` is provided automatically, no setup needed.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: astral-sh/setup-uv@v3
+
+      - name: Install engine dependencies
+        working-directory: engine
+        run: uv sync
+
+      - name: Run engine tests
+        working-directory: engine
+        run: uv run pytest -q
+
+      - name: Build the engine sidecar (PyInstaller -> app/src-tauri/binaries)
+        working-directory: engine
+        run: uv run python packaging/build_sidecar.py
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Build and publish the release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: app
+          tagName: ${{ github.ref_name }}
+          releaseName: "SyncAudio ${{ github.ref_name }}"
+          # Draft: reviewed and published by hand once, not auto-public the
+          # instant a build succeeds -- flip to false once that extra step
+          # stops being wanted.
+          releaseDraft: true
+          prerelease: false
