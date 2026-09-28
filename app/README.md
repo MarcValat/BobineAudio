@@ -40,7 +40,7 @@ cd ../app
 npm run tauri build
 ```
 
-`build_sidecar.py` fige `syncaudio serve` avec PyInstaller (voir `engine/packaging/syncaudio-engine.spec`) et copie le binaire dans `src-tauri/binaries/syncaudio-engine-<target-triple>.exe` — l'emplacement/nommage attendu par le mécanisme "sidecar" de Tauri (`bundle.externalBin` dans `tauri.conf.json`). `ffmpeg` n'a pas besoin d'être géré séparément : `imageio-ffmpeg` l'embarque déjà (voir `engine/README.md`).
+`build_sidecar.py` fige `syncaudio serve` avec PyInstaller (voir `engine/packaging/syncaudio-engine.spec`) sous forme de **dossier** (l'exe et ses bibliothèques à côté, rien à décompresser au lancement : le moteur démarre en ~1 s au lieu de ~3 s pour un exe unique) et le copie dans `src-tauri/binaries/syncaudio-engine/`. `tauri.conf.json` l'embarque comme ressource (`bundle.resources`), installée dans `engine\` à côté de l'exe de l'app, d'où `src-tauri/src/lib.rs` le lance. Ce dossier doit exister pour compiler l'app, `tauri dev` compris. `ffmpeg` n'a pas besoin d'être géré séparément : `imageio-ffmpeg` l'embarque déjà (voir `engine/README.md`).
 
 `tauri build` produit un `.msi` et un `.exe` NSIS dans `src-tauri/target/release/bundle/`, plus les signatures de mise à jour (`.sig`) si `TAURI_SIGNING_PRIVATE_KEY` est défini dans l'environnement (voir section suivante) — sans cette variable, les installateurs sont quand même produits, juste sans capacité de mise à jour auto.
 

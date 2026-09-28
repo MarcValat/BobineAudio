@@ -46,7 +46,7 @@ jobs:
         working-directory: engine
         run: uv run pytest -q
 
-      - name: Build the engine sidecar (PyInstaller -> app/src-tauri/binaries)
+      - name: Build the engine sidecar (PyInstaller folder -> app/src-tauri/binaries/syncaudio-engine)
         working-directory: engine
         run: uv run python packaging/build_sidecar.py
 
