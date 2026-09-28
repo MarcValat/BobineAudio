@@ -805,7 +805,7 @@ def destretched_windows(
     ]
 
 
-def detect_segments(
+def analyze_segments(
     reference: AudioTrackSpec,
     candidate: AudioTrackSpec,
     *,
@@ -815,11 +815,12 @@ def detect_segments(
     hop_s: float = DEFAULT_HOP_S,
     margin_s: float = DEFAULT_MARGIN_S,
     log: Callable[[str], None] = lambda msg: None,
-) -> list[Segment]:
-    """End-to-end: extract both tracks, detect windowed offsets, classify, refine.
+) -> tuple[list[WindowOffset], list[Segment], float]:
+    """The whole detection pipeline: ``(windows, segments, total_duration_s)``.
 
-    The one-stop entry point used by both the `segments` CLI command and
-    `render --segmented`.
+    Windowed offsets (re-measured with any drift compensated), classified
+    into segments, boundaries located to the frame, then each segment's
+    offset measured over its whole span.
     """
     ref_env, frame_rate = get_envelope(reference, ANALYSIS_SAMPLE_RATE, start, duration, log=log)
     cand_env, _ = get_envelope(candidate, ANALYSIS_SAMPLE_RATE, start, duration, log=log)
@@ -840,4 +841,21 @@ def detect_segments(
         segs = refine_segments(
             ref_env, cand_env, frame_rate, segs, energy=energy_reader(reference, candidate, frame_rate, start)
         )
-    return reestimate_offsets(ref_env, cand_env, frame_rate, segs)
+    return windows, reestimate_offsets(ref_env, cand_env, frame_rate, segs), total_duration_s
+
+
+def detect_segments(
+    reference: AudioTrackSpec,
+    candidate: AudioTrackSpec,
+    *,
+    start: float = 0.0,
+    duration: float | None = None,
+    window_s: float = DEFAULT_WINDOW_S,
+    hop_s: float = DEFAULT_HOP_S,
+    margin_s: float = DEFAULT_MARGIN_S,
+    log: Callable[[str], None] = lambda msg: None,
+) -> list[Segment]:
+    """``analyze_segments``' segments: the entry point for the GUI and `render --segmented`."""
+    return analyze_segments(
+        reference, candidate, start=start, duration=duration, window_s=window_s, hop_s=hop_s, margin_s=margin_s, log=log
+    )[1]
