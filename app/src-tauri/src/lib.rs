@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use tauri::Manager;
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
+use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
 /// Either a dev-time `uv run` child (live Python source) or a packaged
 /// build's frozen sidecar binary -- see `spawn_sidecar` for why both exist.
@@ -241,7 +242,14 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        // Restores the main window's size, position and maximized state as
+        // it's created. It's created hidden (tauri.conf.json) and only shown
+        // here, once restored, so it doesn't flash at the default size first.
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(|app| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+            }
             let handle = app.handle().clone();
             #[cfg(windows)]
             let job = KillOnCloseJob::new();
@@ -267,6 +275,8 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(|app_handle, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event {
+                // Also covers exits that close no window first (the updater's restart).
+                let _ = app_handle.save_window_state(StateFlags::all());
                 let state = app_handle.state::<SidecarState>();
                 let mut guard = state.0.lock().unwrap();
                 if let Some(child) = guard.take() {
