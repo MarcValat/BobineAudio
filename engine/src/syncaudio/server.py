@@ -19,6 +19,7 @@ import asyncio
 from collections.abc import Callable
 from pathlib import Path
 
+import numpy as np
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -184,7 +185,14 @@ def waveform(path: str, index: int, start: float = 0.0, duration: float | None =
         mins, maxes, actual_duration = waveform_cache.get_peaks(spec, buckets, start=max(0.0, start), duration=duration)
     except FFmpegError as exc:
         raise _http_error(exc) from exc
-    return WaveformResponse(duration=actual_duration, peaks_min=mins.tolist(), peaks_max=maxes.tolist())
+    # 4 decimals of full scale are far below a pixel, and halve the JSON of
+    # the GUI's whole-track fetch (over a hundred thousand buckets). float64
+    # first: a rounded float32 still prints with float32's noise digits.
+    return WaveformResponse(
+        duration=actual_duration,
+        peaks_min=np.round(mins.astype(np.float64), 4).tolist(),
+        peaks_max=np.round(maxes.astype(np.float64), 4).tolist(),
+    )
 
 
 class PrefetchRequest(BaseModel):

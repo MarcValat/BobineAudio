@@ -7,10 +7,9 @@ export interface TimeView {
   duration: number;
 }
 
-// Below this, there's nothing more to see: the panel isn't wide enough for
-// finer detail to matter, and the diff highlight is computed analytically
-// anyway, not read off the waveform pixel by pixel.
-export const MIN_VIEW_DURATION_S = 20;
+// Close enough to place a boundary or check a jump by eye; the waveforms'
+// whole-track resolution (TrackPreview's FULL_TRACK_BUCKETS) is sized for it.
+export const MIN_VIEW_DURATION_S = 5;
 
 export const WHEEL_ZOOM_IN_FACTOR = 0.85;
 export const WHEEL_ZOOM_OUT_FACTOR = 1 / WHEEL_ZOOM_IN_FACTOR;
