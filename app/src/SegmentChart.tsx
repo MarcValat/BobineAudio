@@ -161,7 +161,9 @@ export function SegmentChart({ segments, onEdit }: { segments: SegmentOut[]; onE
                   y1={yStart}
                   x2={x(seg.end_s)}
                   y2={yEnd}
-                  className={seg.is_drift ? "segment-line drift" : "segment-line constant"}
+                  className={`segment-line ${seg.is_drift ? "drift" : "constant"}${
+                    seg.confidence < LOW_CONFIDENCE_THRESHOLD ? " low-confidence" : ""
+                  }`}
                 />
                 <text
                   x={(x(seg.start_s) + x(seg.end_s)) / 2}
@@ -184,6 +186,11 @@ export function SegmentChart({ segments, onEdit }: { segments: SegmentOut[]; onE
           <span className="legend-item">
             <span className="legend-swatch drift" /> dérive
           </span>
+          {segments.some((seg) => seg.confidence < LOW_CONFIDENCE_THRESHOLD) && (
+            <span className="legend-item">
+              <span className="legend-swatch low-confidence" /> peu fiable
+            </span>
+          )}
         </div>
         {onEdit && (
           <button className="small-button" onClick={onEdit}>

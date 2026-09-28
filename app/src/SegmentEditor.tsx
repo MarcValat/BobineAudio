@@ -108,6 +108,13 @@ function splitSegment(state: EditorState, i: number, t: number): EditorState {
   };
 }
 
+// Plenty for an editing session, without growing unbounded.
+const MAX_HISTORY = 200;
+
+function sameState(a: EditorState, b: EditorState): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 /** What the pointer is currently dragging on the chart. */
 type Drag =
   | { kind: "boundary"; index: number }
@@ -158,6 +165,16 @@ export function SegmentEditor({
   preview?: PreviewSource;
 }) {
   const [state, setState] = useState<EditorState>(() => toEditorState(segments));
+  // What the editor opened with, for "Réinitialiser".
+  const [initialState] = useState(state);
+  // Undo history: states before each edit, and the ones undone since.
+  const [past, setPast] = useState<EditorState[]>([]);
+  const [future, setFuture] = useState<EditorState[]>([]);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  // The table cell whose current typing session is already in the history,
+  // so typing a value is one undo step, not one per keystroke.
+  const historyCellRef = useRef<string | null>(null);
   const [dragging, setDragging] = useState<Drag | null>(null);
   const [frozenRange, setFrozenRange] = useState<[number, number] | null>(null);
   // The stretch of the timeline on screen, shared with the waveforms (null: whole track).
@@ -166,6 +183,67 @@ export function SegmentEditor({
   // as "move the playback position here".
   const movedRef = useRef(false);
   const svgRef = useRef<SVGSVGElement>(null);
+
+  /** Record the current state as the one to come back to on undo. */
+  function remember() {
+    setPast((p) => [...p.slice(-(MAX_HISTORY - 1)), stateRef.current]);
+    setFuture([]);
+  }
+
+  function applyEdit(update: (s: EditorState) => EditorState) {
+    remember();
+    setState(update);
+  }
+
+  function restore(next: EditorState) {
+    setState(next);
+    setDrafts({});
+    historyCellRef.current = null;
+  }
+
+  function undo() {
+    const remaining = [...past];
+    let previous = remaining.pop();
+    // A drag that never moved left an entry identical to now: skip it.
+    while (previous && sameState(previous, state)) previous = remaining.pop();
+    setPast(remaining);
+    if (!previous) return;
+    setFuture((f) => [...f, state]);
+    restore(previous);
+  }
+
+  function redo() {
+    const remaining = [...future];
+    const next = remaining.pop();
+    if (!next) return;
+    setFuture(remaining);
+    setPast((p) => [...p, state]);
+    restore(next);
+  }
+
+  function reset() {
+    if (sameState(state, initialState)) return;
+    remember();
+    restore(initialState);
+  }
+
+  // Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z), in the table's cells too: their own
+  // native undo can't follow values the editor rewrites.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const key = e.key.toLowerCase();
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (key === "y" || (key === "z" && e.shiftKey)) {
+        e.preventDefault();
+        redo();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   // Raw text currently being typed into a numeric cell, keyed by e.g.
   // "offsetStart-2" -- kept separate from `state` (the committed numbers)
@@ -185,12 +263,17 @@ export function SegmentEditor({
   const msText = (offset: number) => (offset * 1000).toFixed(1);
 
   function handleCellChange(key: string, raw: string, commit: (n: number) => void) {
+    if (historyCellRef.current !== key) {
+      remember();
+      historyCellRef.current = key;
+    }
     setDrafts((d) => ({ ...d, [key]: raw }));
     const n = parseFloat(raw);
     if (Number.isFinite(n)) commit(n);
   }
 
   function handleCellBlur(key: string) {
+    historyCellRef.current = null;
     setDrafts((d) => {
       if (!(key in d)) return d;
       const next = { ...d };
@@ -242,6 +325,7 @@ export function SegmentEditor({
     // while the pointer passes over surrounding page text triggers the
     // browser's native text-selection gesture.
     e.preventDefault();
+    remember(); // the whole drag is one undo step
     movedRef.current = false;
     setFrozenRange([minOffset, maxOffset]);
     setDragging(next);
@@ -340,7 +424,7 @@ export function SegmentEditor({
     const t = timeFromClientX(e.clientX);
     const i = state.times.findIndex((start, k) => k < state.times.length - 1 && start < t && t < state.times[k + 1]);
     if (i === -1 || t - state.times[i] < MIN_SPLIT_GAP_S || state.times[i + 1] - t < MIN_SPLIT_GAP_S) return;
-    setState((s) => splitSegment(s, i, Math.round(t * 1000) / 1000));
+    applyEdit((s) => splitSegment(s, i, Math.round(t * 1000) / 1000));
   }
 
   return (
@@ -354,6 +438,9 @@ export function SegmentEditor({
                 <li>Glisse un segment vers le haut ou le bas pour changer son décalage.</li>
                 <li>Glisse une poignée ● pour déplacer une frontière.</li>
                 <li>Double-clique sur le graphe pour couper un segment à cet endroit.</li>
+                <li>Molette : zoomer ou dézoomer, en même temps que les formes d'onde.</li>
+                <li>Un segment en pointillés (⚠) est peu fiable : à vérifier à l'écoute.</li>
+                <li>Ctrl+Z / Ctrl+Y : défaire / refaire.</li>
                 {preview && <li>Clique sur le graphe pour placer la lecture à cet endroit.</li>}
                 <li>Décalage : + = la piste est en retard sur la référence, − = en avance.</li>
               </ul>
@@ -412,7 +499,9 @@ export function SegmentEditor({
                         y1={yStart}
                         x2={x(seg.end_s)}
                         y2={yEnd}
-                        className={seg.is_drift ? "segment-line drift" : "segment-line constant"}
+                        className={`segment-line ${seg.is_drift ? "drift" : "constant"}${
+                          seg.confidence < LOW_CONFIDENCE_THRESHOLD ? " low-confidence" : ""
+                        }`}
                       />
                       {/* A wide invisible stroke on top: the visible line is too thin to grab. */}
                       <line
@@ -543,7 +632,7 @@ export function SegmentEditor({
                           className="small-button"
                           disabled={segmentsPreview.length < 2}
                           title="Fusionne ce segment avec le suivant (ou le précédent si c'est le dernier) -- utile pour retirer un segment parasite."
-                          onClick={() => setState((s) => mergeSegment(s, i))}
+                          onClick={() => applyEdit((s) => mergeSegment(s, i))}
                         >
                           {i < segmentsPreview.length - 1 ? "Fusionner ↓" : "Fusionner ↑"}
                         </button>
@@ -575,11 +664,27 @@ export function SegmentEditor({
         </div>
 
         <div className="editor-actions">
+          <div className="editor-history">
+            <button className="small-button" onClick={undo} disabled={past.length === 0} title="Ctrl+Z">
+              ↶ Défaire
+            </button>
+            <button className="small-button" onClick={redo} disabled={future.length === 0} title="Ctrl+Y">
+              ↷ Refaire
+            </button>
+            <button
+              className="small-button"
+              onClick={reset}
+              disabled={sameState(state, initialState)}
+              title="Revient aux segments tels qu'à l'ouverture de l'éditeur."
+            >
+              Réinitialiser
+            </button>
+          </div>
           <button
             className="small-button"
             disabled={!state.confidences.some((c) => c < LOW_CONFIDENCE_THRESHOLD)}
             title="Fusionne automatiquement chaque segment dont la confiance est sous le seuil avec son voisin (même effet que cliquer sur Fusionner pour chacun) -- ex. une fausse dérive détectée sur des fenêtres d'analyse qui ne s'accordent pas entre elles."
-            onClick={() => setState(ignoreLowConfidenceSegments)}
+            onClick={() => applyEdit(ignoreLowConfidenceSegments)}
           >
             Ignorer les segments peu fiables
           </button>

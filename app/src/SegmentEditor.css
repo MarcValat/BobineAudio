@@ -109,6 +109,10 @@
   stroke: #d38a39;
 }
 
+.editor-chart .segment-line.low-confidence {
+  stroke-dasharray: 7 5;
+}
+
 .editor-chart .segment-label {
   font-size: 11px;
   fill: currentColor;
@@ -247,4 +251,11 @@
   display: flex;
   justify-content: center;
   gap: 0.8em;
+}
+
+/* Undo/redo/reset, apart on the left: they act on the edits, not on the result. */
+.editor-history {
+  display: flex;
+  gap: 0.4em;
+  margin-right: auto;
 }
