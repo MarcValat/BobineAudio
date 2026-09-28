@@ -53,6 +53,10 @@ _OUTLIER_FILTER_SIZE = 5
 # neighbourhood size, the smallest sample already treated as meaningful
 # elsewhere in this file.
 _CONFIDENT_WINDOW_COUNT = 5
+# Outlier tolerance (see classify_segments): at least this, or this many
+# window-to-window noise standard deviations where windows are noisier.
+_OUTLIER_MIN_TOL_S = 0.1
+_OUTLIER_NOISE_SIGMAS = 4.0
 # Robust standard error of a segment's offset (see _segment_confidence) at
 # which its precision factor reaches 0 -- an offset only known to within
 # +/-0.15s isn't usable as a correction. Measured: real, correct segments
@@ -266,83 +270,78 @@ def _segment_confidence(
     return float(sample_factor * precision)
 
 
-def classify_segments(
-    windows: Sequence[WindowOffset],
-    total_duration_s: float,
-    *,
-    jump_threshold_s: float = _JUMP_THRESHOLD_S,
-    residual_tol_s: float = _RESIDUAL_TOL_S,
-) -> list[Segment]:
-    """Turn a windowed offset series into a small number of correction segments.
+# Small jumps (see _split_small_jumps): a level change counts from this size
+# up, when it also stands out from the windows' own scatter by this many
+# standard errors, with at least this many windows on each side.
+_SMALL_JUMP_MIN_S = 0.02
+_SMALL_JUMP_MIN_TSTAT = 5.0
+_SMALL_JUMP_MIN_WINDOWS = 3
+# Both judged on the windows right around the split (this many on each
+# side; the far parts of either side may hold further jumps of their own),
+# and the jump must also exceed their scatter by this factor: the standard
+# error alone can call two interleaved values (MAD collapses on them) a
+# staircase of highly significant jumps.
+_SMALL_JUMP_SCATTER_WINDOWS = 5
+_SMALL_JUMP_MIN_SCATTER_RATIO = 3.0
+# Floor for scatter estimates: envelope frames are 16ms, sub-frame
+# refinement doesn't make estimates much steadier than this.
+_NOISE_FLOOR_S = 0.001
 
-    ``ambiguous`` windows (competing correlation peak -- see ``align.py``) are
-    excluded from deciding both the linear fit and the jump boundaries: at
-    the window scale, real content residuals mean *confidence* alone stays
-    low even for correct estimates (see README caveats), so ``ambiguous`` is
-    used as the reliability signal instead of a confidence threshold for
-    *that* decision. Each returned segment still carries its own aggregate
-    ``confidence`` (see ``_segment_confidence``) -- unlike a single window's,
-    that one *is* meant to be read and acted on (the GUI's manual editor
-    surfaces it and can bulk-discard low-confidence segments).
 
-    First tries a single line through every usable window; if that already
-    explains the data within ``residual_tol_s``, the whole track is one
-    segment (flat = constant offset, sloped = pure drift). Otherwise, splits
-    into segments wherever the offset jumps by more than ``jump_threshold_s``
-    and stays there, fitting a line within each.
+def _robust_scale(x: np.ndarray) -> float:
+    return 1.4826 * float(np.median(np.abs(x - np.median(x)))) if len(x) else 0.0
+
+
+def _split_small_jumps(group: list[WindowOffset]) -> list[list[WindowOffset]]:
+    """Recursively split a group at level changes below the big-jump threshold.
+
+    A real dub is often off by a few tens of ms from one scene to the next
+    (measured on the fixtures' source: +47ms, then -36ms, then -115ms), well
+    under ``_JUMP_THRESHOLD_S``. Such a level change is split off when it is
+    at least ``_SMALL_JUMP_MIN_S``, clearly beyond the windows' own scatter
+    and carried by ``_SMALL_JUMP_MIN_WINDOWS`` windows on each side (so a
+    straggler or two never qualifies). A group that one straight line
+    already explains to within its window-to-window noise is left whole:
+    that's drift (or a constant), not a staircase.
     """
-    usable = [w for w in windows if not w.ambiguous]
-    if len(usable) < 2:
-        usable = list(windows)
-    if not usable:
-        return [Segment(0.0, total_duration_s, 0.0, 0.0, confidence=0.0)]
+    n = len(group)
+    if n < 2 * _SMALL_JUMP_MIN_WINDOWS:
+        return [group]
+    times = np.array([w.time_s for w in group])
+    offsets = np.array([w.offset_seconds for w in group])
 
-    times = np.array([w.time_s for w in usable])
-    offsets = np.array([w.offset_seconds for w in usable])
+    step_noise = max(_NOISE_FLOOR_S, _robust_scale(np.diff(offsets)) / np.sqrt(2.0))
+    slope = _theil_sen_slope(times, offsets)
+    line_residuals = offsets - (np.median(offsets - slope * times) + slope * times)
+    if _robust_scale(line_residuals) <= 2.0 * step_noise:
+        return [group]
 
-    # Drop individual outlier windows entirely before doing anything else --
-    # a locally ambiguous/aliased correlation lock the `ambiguous` flag
-    # doesn't catch, flagged by comparing each window's raw offset to a
-    # small median-filtered neighbourhood. This must happen before grouping,
-    # not just influence its decisions: merely *smoothing the grouping
-    # decision* (an earlier version of this fix) let a real outlier get
-    # folded into a neighbouring group -- its own smoothed neighbourhood
-    # looked normal enough to pass -- while its raw, wrong value still went
-    # into that group's line fit, producing a nonsensical steep "drift"
-    # from just 2 points, one of them garbage. Dropping it outright, like an
-    # `ambiguous` window, avoids that regardless of which group would have
-    # absorbed it.
-    if len(offsets) >= _OUTLIER_FILTER_SIZE:
-        smoothed = median_filter(offsets, size=_OUTLIER_FILTER_SIZE, mode="nearest")
-        reliable = np.abs(offsets - smoothed) <= jump_threshold_s
-        if 2 <= int(reliable.sum()) < len(offsets):
-            usable = [w for w, keep in zip(usable, reliable) if keep]
-            times = times[reliable]
-            offsets = offsets[reliable]
+    # Where to split: the point that best explains the group as two levels
+    # (largest drop in total absolute deviation from the median) -- robust
+    # to further jumps elsewhere in the group, which a significance test
+    # over each whole side is not.
+    def l1(x: np.ndarray) -> float:
+        return float(np.sum(np.abs(x - np.median(x))))
 
-    if len(usable) >= 2:
-        # Fit-quality check (does one line explain every window at all)
-        # uses the raw, unregularized fit -- a real, well-supported slope
-        # must still pass this. Only the *reported* endpoints, below, use
-        # the significance-gated version, so a technically-fits-but-noisy
-        # slope doesn't get extrapolated into a start/end swing that was
-        # never actually there (see _fit_line_or_constant).
-        raw_slope, raw_intercept = np.polyfit(times, offsets, 1)
-        residuals = offsets - (raw_intercept + raw_slope * times)
-        if np.max(np.abs(residuals)) <= residual_tol_s:
-            slope, intercept = _fit_line_or_constant(times, offsets)
-            offset_start = float(intercept)
-            offset_end = float(intercept + slope * total_duration_s)
-            return [
-                Segment(
-                    start_s=0.0,
-                    end_s=total_duration_s,
-                    offset_start=offset_start,
-                    offset_end=offset_end,
-                    confidence=_segment_confidence(usable, 0.0, total_duration_s, offset_start, offset_end),
-                )
-            ]
+    total = l1(offsets)
+    splits = range(_SMALL_JUMP_MIN_WINDOWS, n - _SMALL_JUMP_MIN_WINDOWS + 1)
+    best_m = max(splits, key=lambda m: total - l1(offsets[:m]) - l1(offsets[m:]))
 
+    # Whether it's real: judged on the windows right around it only.
+    near_left = offsets[max(0, best_m - _SMALL_JUMP_SCATTER_WINDOWS) : best_m]
+    near_right = offsets[best_m : best_m + _SMALL_JUMP_SCATTER_WINDOWS]
+    ml, mr = float(np.median(near_left)), float(np.median(near_right))
+    deviations = np.concatenate([near_left - ml, near_right - mr])
+    scale = max(_NOISE_FLOOR_S, _robust_scale(deviations))
+    t = abs(mr - ml) / (scale * np.sqrt(1.0 / len(near_left) + 1.0 / len(near_right)))
+    scatter = 1.2533 * float(np.mean(np.abs(deviations)))
+    if t < _SMALL_JUMP_MIN_TSTAT or abs(mr - ml) < max(_SMALL_JUMP_MIN_S, _SMALL_JUMP_MIN_SCATTER_RATIO * scatter):
+        return [group]
+    return _split_small_jumps(group[:best_m]) + _split_small_jumps(group[best_m:])
+
+
+def _group_big_jumps(usable: list[WindowOffset], jump_threshold_s: float) -> list[list[WindowOffset]]:
+    """Split wherever the offset jumps by more than ``jump_threshold_s`` and stays there."""
     groups: list[list[WindowOffset]] = [[usable[0]]]
     for w in usable[1:]:
         current = groups[-1]
@@ -370,7 +369,86 @@ def classify_segments(
             merged[-1] = merged[-1] + group
         else:
             merged.append(group)
-    groups = merged
+    return merged
+
+
+def classify_segments(
+    windows: Sequence[WindowOffset],
+    total_duration_s: float,
+    *,
+    jump_threshold_s: float = _JUMP_THRESHOLD_S,
+    residual_tol_s: float = _RESIDUAL_TOL_S,
+) -> list[Segment]:
+    """Turn a windowed offset series into a small number of correction segments.
+
+    ``ambiguous`` windows (competing correlation peak -- see ``align.py``) are
+    excluded from deciding both the linear fit and the jump boundaries: at
+    the window scale, real content residuals mean *confidence* alone stays
+    low even for correct estimates (see README caveats), so ``ambiguous`` is
+    used as the reliability signal instead of a confidence threshold for
+    *that* decision. Each returned segment still carries its own aggregate
+    ``confidence`` (see ``_segment_confidence``) -- unlike a single window's,
+    that one *is* meant to be read and acted on (the GUI's manual editor
+    surfaces it and can bulk-discard low-confidence segments).
+
+    First tries a single line through every usable window; if that already
+    explains the data within ``residual_tol_s``, there is no big jump.
+    Otherwise, splits into groups wherever the offset jumps by more than
+    ``jump_threshold_s`` and stays there. Each group is then split further
+    at smaller, sustained level changes (see ``_split_small_jumps``), and a
+    line is fitted within each resulting segment (flat = constant offset,
+    sloped = drift).
+    """
+    usable = [w for w in windows if not w.ambiguous]
+    if len(usable) < 2:
+        usable = list(windows)
+    if not usable:
+        return [Segment(0.0, total_duration_s, 0.0, 0.0, confidence=0.0)]
+
+    times = np.array([w.time_s for w in usable])
+    offsets = np.array([w.offset_seconds for w in usable])
+
+    # Drop individual outlier windows entirely before doing anything else --
+    # a locally ambiguous/aliased correlation lock the `ambiguous` flag
+    # doesn't catch, flagged by comparing each window's raw offset to a
+    # small median-filtered neighbourhood. This must happen before grouping,
+    # not just influence its decisions: merely *smoothing the grouping
+    # decision* (an earlier version of this fix) let a real outlier get
+    # folded into a neighbouring group -- its own smoothed neighbourhood
+    # looked normal enough to pass -- while its raw, wrong value still went
+    # into that group's line fit, producing a nonsensical steep "drift"
+    # from just 2 points, one of them garbage. Dropping it outright, like an
+    # `ambiguous` window, avoids that regardless of which group would have
+    # absorbed it.
+    if len(offsets) >= _OUTLIER_FILTER_SIZE:
+        smoothed = median_filter(offsets, size=_OUTLIER_FILTER_SIZE, mode="nearest")
+        # Tight enough to catch a 0.2s blip next to a small jump (it would
+        # drown that jump in scatter, see _split_small_jumps), loosened where
+        # windows are naturally noisy (drift smears the correlation peak).
+        # A real jump's edge windows follow their neighbourhood median, so
+        # they are never flagged, however small the tolerance.
+        step_noise = max(_NOISE_FLOOR_S, _robust_scale(np.diff(offsets)) / np.sqrt(2.0))
+        tolerance = min(jump_threshold_s, max(_OUTLIER_MIN_TOL_S, _OUTLIER_NOISE_SIGMAS * step_noise))
+        reliable = np.abs(offsets - smoothed) <= tolerance
+        if 2 <= int(reliable.sum()) < len(offsets):
+            usable = [w for w, keep in zip(usable, reliable) if keep]
+            times = times[reliable]
+            offsets = offsets[reliable]
+
+    single_line = False
+    if len(usable) >= 2:
+        # Fit-quality check (does one line explain every window at all)
+        # uses the raw, unregularized fit -- a real, well-supported slope
+        # must still pass this. Only the *reported* endpoints, below, use
+        # the significance-gated version, so a technically-fits-but-noisy
+        # slope doesn't get extrapolated into a start/end swing that was
+        # never actually there (see _fit_line_or_constant).
+        raw_slope, raw_intercept = np.polyfit(times, offsets, 1)
+        residuals = offsets - (raw_intercept + raw_slope * times)
+        single_line = bool(np.max(np.abs(residuals)) <= residual_tol_s)
+
+    groups = [list(usable)] if single_line else _group_big_jumps(usable, jump_threshold_s)
+    groups = [part for group in groups for part in _split_small_jumps(group)]
 
     segments: list[Segment] = []
     for idx, group in enumerate(groups):
@@ -549,6 +627,45 @@ def refine_segments(
     return refined
 
 
+# Segment offset re-estimation (see reestimate_offsets): how much of each
+# end is left out (next to a boundary, content may still belong to the
+# neighbour), and how far around the coarse estimate to search.
+_REESTIMATE_EDGE_S = 1.0
+_REESTIMATE_SEARCH_S = 0.5
+
+
+def reestimate_offsets(
+    ref_env: np.ndarray, cand_env: np.ndarray, frame_rate: float, segments: Sequence[Segment]
+) -> list[Segment]:
+    """Measure each constant segment's offset over the whole segment at once.
+
+    The coarse offsets come from 30s windows, some straddling a jump (mixed
+    content pulls them) and each seeing only a slice of the segment; once
+    the boundaries are known, one correlation over everything between them
+    is both unbiased and far more precise. Drift segments keep their fit.
+    """
+    out = []
+    for seg in segments:
+        lo_s, hi_s = seg.start_s + _REESTIMATE_EDGE_S, seg.end_s - _REESTIMATE_EDGE_S
+        if seg.is_drift or hi_s - lo_s < 2 * _REESTIMATE_SEARCH_S:
+            out.append(seg)
+            continue
+        approx = seg.mean_offset
+        ref_lo, ref_hi = int(round(lo_s * frame_rate)), min(len(ref_env), int(round(hi_s * frame_rate)))
+        cand_lo = int(round((lo_s + approx - _REESTIMATE_SEARCH_S) * frame_rate))
+        cand_hi = int(round((hi_s + approx + _REESTIMATE_SEARCH_S) * frame_rate))
+        if ref_hi - ref_lo < 2 or cand_lo < 0 or cand_hi > len(cand_env):
+            out.append(seg)
+            continue
+        estimate = estimate_offset(ref_env[ref_lo:ref_hi], cand_env[cand_lo:cand_hi], frame_rate)
+        offset = estimate.offset_seconds + (cand_lo - ref_lo) / frame_rate
+        if abs(offset - approx) > _REESTIMATE_SEARCH_S:
+            out.append(seg)  # the search edge, not a real peak
+            continue
+        out.append(dataclasses.replace(seg, offset_start=offset, offset_end=offset))
+    return out
+
+
 def energy_reader(
     reference: AudioTrackSpec, candidate: AudioTrackSpec, frame_rate: float, analysis_start_s: float = 0.0
 ) -> EnergyReader:
@@ -603,4 +720,4 @@ def detect_segments(
         segs = refine_segments(
             ref_env, cand_env, frame_rate, segs, energy=energy_reader(reference, candidate, frame_rate, start)
         )
-    return segs
+    return reestimate_offsets(ref_env, cand_env, frame_rate, segs)
