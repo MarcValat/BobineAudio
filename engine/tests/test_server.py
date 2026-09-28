@@ -236,6 +236,12 @@ def test_job_segments_streams_progress_then_segments(offset_mkv: tuple[Path, flo
     segments = events[-1]["result"]["segments"]
     assert len(segments) >= 1
     assert abs(segments[0]["offset_start"] - offset_s) < 0.5
+    # Every analysis window's own estimate comes along, for the GUI to plot.
+    measurements = events[-1]["result"]["measurements"]
+    assert len(measurements) >= 2
+    assert all(0 <= m["time_s"] <= 30 for m in measurements)
+    reliable = [m["offset"] for m in measurements if m["reliable"]]
+    assert reliable and all(abs(o - offset_s) < 0.5 for o in reliable)
 
 
 def test_job_render_writes_a_corrected_file(offset_mkv: tuple[Path, float]) -> None:

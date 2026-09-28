@@ -37,7 +37,7 @@ from syncaudio.render import (
     plan_segmented_correction,
     render as render_tracks,
 )
-from syncaudio.segments import DEFAULT_HOP_S, DEFAULT_MARGIN_S, DEFAULT_WINDOW_S, Segment, detect_segments
+from syncaudio.segments import DEFAULT_HOP_S, DEFAULT_MARGIN_S, DEFAULT_WINDOW_S, Segment, analyze_segments
 
 app = FastAPI(title="SyncAudio", version="0.1.0")
 
@@ -252,10 +252,22 @@ class SegmentOut(BaseModel):
         )
 
 
+class MeasurementOut(BaseModel):
+    """One analysis window's own offset estimate, before any segment is fitted
+    -- what the GUI plots behind the segments so they can be judged."""
+
+    time_s: float  # the window's centre, which its estimate describes
+    offset: float
+    # False for a window whose correlation had competing peaks: the detection
+    # ignores it, and the GUI draws it as such.
+    reliable: bool
+
+
 class SegmentsResponse(BaseModel):
     reference: str
     track: str
     segments: list[SegmentOut]
+    measurements: list[MeasurementOut] = []
 
 
 class CorrectedClipRequest(BaseModel):
@@ -290,7 +302,7 @@ def corrected_clip_endpoint(req: CorrectedClipRequest) -> Response:
 
 def _do_segments(req: SegmentsRequest, log: Callable[[str], None] = _NO_LOG) -> SegmentsResponse:
     try:
-        segs = detect_segments(
+        windows, segs, _total = analyze_segments(
             req.reference.to_spec(),
             req.track.to_spec(),
             start=req.start,
@@ -306,6 +318,9 @@ def _do_segments(req: SegmentsRequest, log: Callable[[str], None] = _NO_LOG) -> 
         reference=req.reference.to_spec().raw,
         track=req.track.to_spec().raw,
         segments=[SegmentOut.from_segment(s) for s in segs],
+        measurements=[
+            MeasurementOut(time_s=w.center_s, offset=w.offset_seconds, reliable=not w.ambiguous) for w in windows
+        ],
     )
 
 
