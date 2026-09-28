@@ -1,54 +1,76 @@
-"""Build the FastAPI sidecar as a standalone binary and drop it where Tauri
-expects an "external binary" (sidecar) to live.
+"""Build the FastAPI sidecar as a standalone folder and drop it where the Tauri
+app bundles it from.
 
-Usage (from engine/):  uv run python packaging/build_sidecar.py
+Usage (from engine/):  uv run python packaging/build_sidecar.py [--force]
 
-Tauri's sidecar mechanism (see app/src-tauri/tauri.conf.json's
-`bundle.externalBin`) requires the binary to be named
-`<name>-<rust-target-triple>[.exe]` -- this runs PyInstaller against
-syncaudio-engine.spec, then copies+renames the result into
-app/src-tauri/binaries/ with the current machine's triple (from `rustc
--vV`), which is also what `npm run tauri dev`/`tauri build` resolve against
-on that same machine. Cross-compiling for another triple isn't handled here
-since this project only targets Windows so far.
+Runs PyInstaller against syncaudio-engine.spec, which produces a folder
+(PyInstaller's "onedir": the exe plus its libraries next to it, nothing
+unpacked at launch), then copies that folder to
+app/src-tauri/binaries/syncaudio-engine/. tauri.conf.json's
+`bundle.resources` ships it as `engine/` next to the app's exe, where
+src-tauri/src/lib.rs launches it from.
+
+`tauri build` runs this itself (tauri.conf.json's `beforeBuildCommand`), so
+an app build never ships a stale engine. PyInstaller only runs when
+something that goes into the engine changed since the last build (see
+`_source_hash`), which makes that step free the rest of the time; `--force`
+rebuilds regardless.
 """
 
 from __future__ import annotations
 
+import hashlib
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 ENGINE_DIR = Path(__file__).resolve().parent.parent
-SIDECAR_DIR = ENGINE_DIR.parent / "app" / "src-tauri" / "binaries"
+BINARIES_DIR = ENGINE_DIR.parent / "app" / "src-tauri" / "binaries"
+BUILT_DIR = BINARIES_DIR / "syncaudio-engine"
+# Next to the bundled folder, not inside it: it isn't shipped.
+HASH_FILE = BINARIES_DIR / "syncaudio-engine.source-hash"
 
 
-def rust_target_triple() -> str:
-    proc = subprocess.run(["rustc", "-vV"], capture_output=True, text=True, check=True)
-    for line in proc.stdout.splitlines():
-        if line.startswith("host:"):
-            return line.split(":", 1)[1].strip()
-    raise RuntimeError("could not determine the Rust target triple from `rustc -vV`")
+def _source_hash() -> str:
+    """A digest of everything the frozen engine is built from: its code, its
+    locked dependencies (PyInstaller's own version included) and the spec."""
+    files = sorted((ENGINE_DIR / "src").rglob("*.py")) + [
+        ENGINE_DIR / "pyproject.toml",
+        ENGINE_DIR / "uv.lock",
+        ENGINE_DIR / "packaging" / "syncaudio-engine.spec",
+    ]
+    digest = hashlib.sha256(sys.version.encode())
+    for path in files:
+        digest.update(path.relative_to(ENGINE_DIR).as_posix().encode())
+        # Line endings normalized: a checkout's CRLF/LF conversion changes nothing built.
+        digest.update(path.read_bytes().replace(b"\r\n", b"\n"))
+    return digest.hexdigest()
 
 
 def main() -> None:
+    source_hash = _source_hash()
+    up_to_date = BUILT_DIR.is_dir() and HASH_FILE.is_file() and HASH_FILE.read_text().strip() == source_hash
+    if up_to_date and "--force" not in sys.argv[1:]:
+        print(f"[build_sidecar] {BUILT_DIR} is up to date, skipping PyInstaller (--force to rebuild)")
+        return
+
     subprocess.run(
         ["uv", "run", "pyinstaller", "packaging/syncaudio-engine.spec", "--noconfirm"],
         cwd=ENGINE_DIR,
         check=True,
     )
 
-    triple = rust_target_triple()
-    suffix = ".exe" if sys.platform == "win32" else ""
-    built = ENGINE_DIR / "dist" / f"syncaudio-engine{suffix}"
-    if not built.exists():
+    built = ENGINE_DIR / "dist" / "syncaudio-engine"
+    if not built.is_dir():
         raise SystemExit(f"expected PyInstaller output at {built}, not found")
 
-    SIDECAR_DIR.mkdir(parents=True, exist_ok=True)
-    target = SIDECAR_DIR / f"syncaudio-engine-{triple}{suffix}"
-    shutil.copy2(built, target)
-    print(f"[build_sidecar] {built} -> {target}")
+    # Replaced whole: a file dropped from the build must not linger in the bundle.
+    if BINARIES_DIR.exists():
+        shutil.rmtree(BINARIES_DIR)
+    shutil.copytree(built, BUILT_DIR)
+    HASH_FILE.write_text(source_hash + "\n")
+    print(f"[build_sidecar] {built} -> {BUILT_DIR}")
 
 
 if __name__ == "__main__":

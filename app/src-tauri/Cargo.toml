@@ -1,6 +1,6 @@
 [package]
 name = "syncaudio"
-version = "1.0.4"
+version = "1.1.0"
 description = "Resynchronise les pistes audio multilingues d'un MKV"
 authors = ["Marc Valat"]
 edition = "2024"
@@ -23,7 +23,6 @@ tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-dialog = "2.7.3"
-tauri-plugin-shell = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-window-state = "2"
@@ -40,9 +39,14 @@ windows-sys = { version = "0.61", features = [
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+#
+# Thin LTO and parallel codegen here, for local `tauri build`s that finish in
+# a fraction of the time. The release workflow overrides both back to the
+# smallest/fastest settings (fat LTO, one codegen unit) through
+# CARGO_PROFILE_RELEASE_* variables (.github/workflows/release.yml), so
+# published installers are built exactly as before.
 [profile.release]
-codegen-units = 1
-lto = true
+lto = "thin"
 opt-level = 3
 panic = "abort"
 strip = true

@@ -597,7 +597,8 @@ def render(
             cmd += inp
         if filter_complex_parts:
             cmd += ["-filter_complex", ";".join(filter_complex_parts)]
-        cmd += ["-map", "0:v:0", *audio_map_args, *native_sub_map_args, "-map", "0:t?", *sub_map_args]
+        # "?": an audio-only input (.mka, .wav, .flac...) has no video to carry over.
+        cmd += ["-map", "0:v:0?", *audio_map_args, *native_sub_map_args, "-map", "0:t?", *sub_map_args]
         cmd += ["-c:v", "copy", *audio_codec_args, "-c:s", "copy", *metadata_args]
         if len(inputs) > 1:
             # A track built from a *donor* file (batch mode's case: reference

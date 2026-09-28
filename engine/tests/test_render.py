@@ -436,6 +436,22 @@ def test_render_segmented_corrects_a_jump(jump_mkv: tuple[Path, float, float]) -
     assert abs(_residual_offset(input_path, output_path)) < 0.3
 
 
+def test_render_segmented_works_without_a_video_track(jump_mkv: tuple[Path, float, float]) -> None:
+    mkv, _jump_time_s, _delta_s = jump_mkv
+    mka = mkv.with_name("jump.mka")
+    subprocess.run(
+        [resolve_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-i", str(mkv), "-map", "0:a", "-c", "copy", str(mka)],
+        check=True, capture_output=True,
+    )
+
+    seg_corr = plan_segmented_correction(_spec(mka, 0), _spec(mka, 1))
+    output_path = str(mka.with_name("out.synced.mkv"))
+    written = render(str(mka), reference_index=0, corrections=[], output_path=output_path, segmented_corrections=[seg_corr])
+    assert written == [output_path]
+    assert len(probe_audio_streams(output_path)) == 2
+    assert abs(_residual_offset(str(mka), output_path)) < 0.3
+
+
 @pytest.fixture()
 def drift_mkv(tmp_path: Path) -> tuple[Path, float]:
     sr = 44100
