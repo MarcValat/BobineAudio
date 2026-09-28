@@ -112,6 +112,29 @@ export async function fetchClip(path: string, index: number, start: number, dura
   return resp.blob();
 }
 
+/**
+ * What the render will produce for this track over [start, start +
+ * duration) of the reference, given `segments` as currently edited -- the
+ * engine builds it with the render's own filter, so jumps, blanks and drift
+ * sound exactly as they will in the exported file.
+ */
+export async function fetchCorrectedClip(
+  path: string,
+  index: number,
+  segments: SegmentOut[],
+  start: number,
+  duration: number,
+): Promise<Blob> {
+  const resp = await fetch(`${BASE_URL}/corrected-clip`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, index, segments, start, duration }),
+    cache: "no-store",
+  });
+  if (!resp.ok) throw new Error(await readErrorDetail(resp));
+  return resp.blob();
+}
+
 export interface WaveformResponse {
   duration: number;
   peaks_min: number[];

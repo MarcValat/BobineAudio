@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import io
 import wave
 from pathlib import Path
 
@@ -665,3 +666,33 @@ def test_contiguous_segments_are_not_faded() -> None:
     # A drift segment followed by one continuing exactly where it stopped.
     segs = [Segment(0.0, 10.0, 0.0, 0.1), Segment(10.0, 20.0, 0.1, 0.1)]
     assert "afade" not in segment_correction_filter(segs, "0:a:1", "out")
+
+
+def _wav_samples(data: bytes) -> np.ndarray:
+    with wave.open(io.BytesIO(data)) as f:
+        return np.frombuffer(f.readframes(f.getnframes()), dtype="<i2").astype(np.float64)
+
+
+def test_a_preview_clip_sounds_exactly_like_that_slice_of_the_render(tmp_path: Path) -> None:
+    """Jumps both ways inside the clip, one right before it: what the
+    preview plays must be the very samples the full render has there."""
+    from syncaudio.render import corrected_clip
+
+    sr, duration_s = 44100, 30.0
+    rng = np.random.default_rng(40)
+    audio = rng.standard_normal(int(duration_s * sr)) * 0.2
+    mkv = _mux_two_track_mkv(tmp_path, "preview", audio, audio, sr, duration_s)
+    segs = [
+        Segment(0.0, 6.0, 0.0, 0.0),
+        Segment(6.0, 12.0, -1.5, -1.5),  # missing content, just before the clip
+        Segment(12.0, 18.0, 0.5, 0.5),  # extra content, inside it
+        Segment(18.0, 30.0, -0.7, -0.7),  # missing content, inside it
+    ]
+    spec = _spec(mkv, 1)
+
+    whole = _wav_samples(corrected_clip(spec, segs, 0.0, duration_s, sample_rate=sr))
+    clip = _wav_samples(corrected_clip(spec, segs, 7.0, 14.0, sample_rate=sr))
+
+    expected = whole[int(7.0 * sr) : int(21.0 * sr)]
+    assert len(clip) == len(expected)
+    assert np.max(np.abs(clip - expected)) <= 1.0  # one LSB of rounding at most

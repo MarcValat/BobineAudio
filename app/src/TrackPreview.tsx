@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fetchClip, fetchWaveform, type SegmentOut } from "./api";
+import { fetchClip, fetchCorrectedClip, fetchWaveform, type SegmentOut } from "./api";
+import { candidateSpansIn, planResult, silentRegions, skippedRegions } from "./resultPlan";
 import { formatTime } from "./SegmentChart";
 import { Waveform, type HighlightRegion } from "./Waveform";
 import { WaveformNavigator } from "./WaveformNavigator";
@@ -37,47 +38,6 @@ function offsetAt(segments: SegmentOut[], t: number): number {
   return 0;
 }
 
-function segmentAt(segments: SegmentOut[], t: number): SegmentOut | null {
-  return segments.find((s) => t >= s.start_s && t <= s.end_s) ?? segments[segments.length - 1] ?? null;
-}
-
-interface DiffRegions {
-  /** Candidate-native time: the part of the original candidate that a
-   * constant-offset correction cuts away. */
-  removed: [number, number] | null;
-  /** Reference time: the part of the corrected result that's added silence. */
-  added: [number, number] | null;
-}
-
-/**
- * Git-diff-style removed/added regions for a constant-offset correction,
- * mirroring exactly what render.py's correction_filter (offset>0: trim the
- * candidate's head, pad the tail / offset<0: pad the head, the candidate's
- * tail runs past the reference's duration and is dropped) does to the whole
- * file. Only meaningful near the file's actual start/end -- for an interior
- * segment far from either edge, both regions naturally fall outside any
- * reasonable view and nothing is drawn. Deliberately NOT modelling gaps/
- * overlaps between adjacent segments at a jump boundary: that needs
- * knowledge of neighbouring segments, not just the one under the cursor --
- * scoped out for now, same as the rest of this preview.
- */
-function computeDiffRegions(offset: number, refDuration: number, candDuration: number): DiffRegions {
-  if (!isFinite(offset) || Math.abs(offset) < 1e-6 || refDuration <= 0 || candDuration <= 0) {
-    return { removed: null, added: null };
-  }
-  if (offset > 0) {
-    const removed: [number, number] = [0, Math.min(offset, candDuration)];
-    const keptCandDuration = candDuration - offset;
-    const added: [number, number] | null = keptCandDuration < refDuration ? [Math.max(0, keptCandDuration), refDuration] : null;
-    return { removed, added };
-  }
-  const abs = -offset;
-  const added: [number, number] = [0, Math.min(abs, refDuration)];
-  const cutPoint = refDuration - abs;
-  const removed: [number, number] | null = candDuration > cutPoint ? [Math.max(0, cutPoint), candDuration] : null;
-  return { removed, added };
-}
-
 interface PeaksData {
   min: number[];
   max: number[];
@@ -88,6 +48,22 @@ interface PeaksData {
 interface FullPeaks {
   min: number[];
   max: number[];
+}
+
+/** Min/max of the whole-track peaks over time range [t0, t1). */
+function peakRange(full: FullPeaks, fullDuration: number, t0: number, t1: number): [number, number] | null {
+  const n = full.min.length;
+  if (n === 0 || fullDuration <= 0 || t1 <= t0) return null;
+  const bucket = fullDuration / n;
+  const lo = Math.max(0, Math.min(n - 1, Math.floor(t0 / bucket)));
+  const hi = Math.max(lo + 1, Math.min(n, Math.ceil(t1 / bucket)));
+  let mn = full.min[lo];
+  let mx = full.max[lo];
+  for (let j = lo; j < hi; j++) {
+    if (full.min[j] < mn) mn = full.min[j];
+    if (full.max[j] > mx) mx = full.max[j];
+  }
+  return [mn, mx];
 }
 
 /**
@@ -223,12 +199,6 @@ export function TrackPreview({
   // without reloading (see handleWaveformSeek), so playback-offset math
   // must be anchored on this, not on `previewStart`.
   const [loadedClipStart, setLoadedClipStart] = useState<number | null>(null);
-  // The exact candidate-time position actually requested from /clip for
-  // "Résultat final" at the last real fetch -- captured at fetch time, not
-  // recomputed live, so it can be compared against what offsetAt(segments,
-  // previewStart) says *now* to tell a genuinely stale load apart from a
-  // wrong computation.
-  const [loadedCandidateStart, setLoadedCandidateStart] = useState<number | null>(null);
   const [refMuted, setRefMuted] = useState(false);
   const [candMuted, setCandMuted] = useState(false);
   const [candOriginalMuted, setCandOriginalMuted] = useState(false);
@@ -335,6 +305,8 @@ export function TrackPreview({
     };
   }, [referenceFilePath, candidateFilePath, referenceIndex, trackIndex]);
 
+  const plan = useMemo(() => planResult(segments), [segments]);
+
   // Re-derive all three waveforms' data for the current view from the
   // already-fetched full-track peaks -- synchronous, no network round trip,
   // so zoom/pan feels instant no matter how far in or out.
@@ -342,32 +314,45 @@ export function TrackPreview({
     if (viewDuration === null || refDuration === null || candDuration === null || !refFullPeaks || !candFullPeaks) {
       return null;
     }
-    // Anchored on previewStart (the actual listening position), not the
-    // view's center -- these must agree exactly with loadAndPlay's own
-    // offsetAt(segments, startAt) call, or "Résultat final" can look
-    // correctly aligned in a wide/zoomed-out view while the audio actually
-    // played back (computed at a different point) uses a different offset,
-    // e.g. across a segment that isn't perfectly flat after a manual merge.
-    const offsetForView = offsetAt(segments, previewStart);
-    const seg = segmentAt(segments, previewStart);
-
-    const refPeaks = resamplePeaks(refFullPeaks, refDuration, viewStart, viewStart + viewDuration, WAVEFORM_BUCKETS);
+    const viewEnd = viewStart + viewDuration;
+    const refPeaks = resamplePeaks(refFullPeaks, refDuration, viewStart, viewEnd, WAVEFORM_BUCKETS);
     // Track 2 (candidate, as-is): the SAME numeric window as the reference
     // view -- not offset-shifted -- so the correction is directly visible as
     // a spatial shift between the two waveforms, the same way two git diff
     // panes line up by position.
-    const candPeaks = resamplePeaks(candFullPeaks, candDuration, viewStart, viewStart + viewDuration, WAVEFORM_BUCKETS);
+    const candPeaks = resamplePeaks(candFullPeaks, candDuration, viewStart, viewEnd, WAVEFORM_BUCKETS);
 
-    // Track 3 (corrected result): candidate content shifted by the offset,
-    // i.e. what will actually occupy this reference-time span after
-    // correction -- same underlying candidate data, just a different slice.
-    const shifted = resamplePeaks(candFullPeaks, candDuration, viewStart + offsetForView, viewStart + offsetForView + viewDuration, WAVEFORM_BUCKETS);
-    const finalPeaks: PeaksData = { min: shifted.min, max: shifted.max, dataStart: shifted.dataStart - offsetForView, dataEnd: shifted.dataEnd - offsetForView };
+    // Track 3 (corrected result): each point shows the candidate audio the
+    // render will actually put there -- per its own segment, with skipped
+    // excess and silenced gaps exactly as the render does them (see
+    // resultPlan), not one offset applied to the whole view.
+    const finalMin = new Array<number>(WAVEFORM_BUCKETS).fill(0);
+    const finalMax = new Array<number>(WAVEFORM_BUCKETS).fill(0);
+    const step = viewDuration / WAVEFORM_BUCKETS;
+    for (let i = 0; i < WAVEFORM_BUCKETS; i++) {
+      let mn = Infinity;
+      let mx = -Infinity;
+      for (const span of candidateSpansIn(plan, viewStart + i * step, viewStart + (i + 1) * step, candDuration)) {
+        const range = peakRange(candFullPeaks, candDuration, span.start, span.end);
+        if (!range) continue;
+        mn = Math.min(mn, range[0]);
+        mx = Math.max(mx, range[1]);
+      }
+      if (mn <= mx) {
+        finalMin[i] = mn;
+        finalMax[i] = mx;
+      }
+    }
+    const finalPeaks: PeaksData = { min: finalMin, max: finalMax, dataStart: viewStart, dataEnd: viewEnd };
 
-    const diff = seg && !seg.is_drift ? computeDiffRegions(offsetForView, refDuration, candDuration) : { removed: null, added: null };
-
-    return { refPeaks, candPeaks, finalPeaks, diff };
-  }, [viewStart, viewDuration, refDuration, candDuration, refFullPeaks, candFullPeaks, segments, previewStart]);
+    return {
+      refPeaks,
+      candPeaks,
+      finalPeaks,
+      removed: skippedRegions(plan, candDuration),
+      added: silentRegions(plan, candDuration),
+    };
+  }, [viewStart, viewDuration, refDuration, candDuration, refFullPeaks, candFullPeaks, plan]);
 
   /** Zoom by `factor` (< 1 zooms in, > 1 zooms out), keeping `centerTime` at
    * the same relative position in the view -- so a wheel-zoom stays anchored
@@ -429,19 +414,12 @@ export function TrackPreview({
     setLoading(true);
     setError(null);
     try {
-      // Unclamped: when negative, the correction is a leading silence (real
-      // candidate content hasn't started yet at this reference position) --
-      // clamping this to 0 for the *fetch* is correct (there's nothing
-      // before candidate-time 0 to fetch), but "Résultat final" must then
-      // actually start `leadingSilenceS` later than the other two, or it
-      // ends up starting at the exact same instant as "Piste corrigée
-      // (originale)".
-      const rawCandidateStart = startAt + offsetAt(segments, startAt);
-      const candidateStart = Math.max(0, rawCandidateStart);
-      const leadingSilenceS = Math.max(0, -rawCandidateStart);
+      // "Résultat final" is rendered by the engine with the render's own
+      // filter over this exact reference span, so all three clips share
+      // one timeline and start together.
       const [refBlob, candBlob, candOriginalBlob] = await Promise.all([
         fetchClip(referenceFilePath, referenceIndex, startAt, PREVIEW_DURATION_S),
-        fetchClip(candidateFilePath, trackIndex, candidateStart, Math.max(0.1, PREVIEW_DURATION_S - leadingSilenceS)),
+        fetchCorrectedClip(candidateFilePath, trackIndex, segments, startAt, PREVIEW_DURATION_S),
         fetchClip(candidateFilePath, trackIndex, startAt, PREVIEW_DURATION_S),
       ]);
       if (loadGenerationRef.current !== generation) return; // superseded while fetching
@@ -459,7 +437,6 @@ export function TrackPreview({
       candBufferRef.current = candBuffer;
       candOriginalBufferRef.current = candOriginalBuffer;
       setLoadedClipStart(startAt);
-      setLoadedCandidateStart(candidateStart);
       setLoading(false);
 
       const refGain = getGain(refGainRef, ctx, refMuted);
@@ -477,7 +454,7 @@ export function TrackPreview({
       const when = ctx.currentTime + 0.05;
       refSourceRef.current = playSource(ctx, refBuffer, refGain, when, 0);
       candOriginalSourceRef.current = playSource(ctx, candOriginalBuffer, candOriginalGain, when, 0);
-      candSourceRef.current = playSource(ctx, candBuffer, candGain, when + leadingSilenceS, 0);
+      candSourceRef.current = playSource(ctx, candBuffer, candGain, when, 0);
 
       playbackStartRef.current = { contextTime: when, refTime: startAt };
       startCursorLoop();
@@ -515,30 +492,17 @@ export function TrackPreview({
       candGainRef.current &&
       candOriginalGainRef.current
     ) {
-      const refOffset = t - loadedClipStart!;
-      const candOriginalOffset = t - loadedClipStart!; // same native axis as the reference
-
-      // Must be the *clamped* value actually passed to /clip
-      // (loadedCandidateStart), not offsetAt(loadedClipStart) recomputed
-      // unclamped: when the clip was loaded with a leading silence, the
-      // buffer's own offset-0 is candidateStart (clamped), not the
-      // unclamped raw position.
-      const rawCandTarget = t + offsetAt(segments, t) - (loadedCandidateStart ?? 0);
+      // All three clips share the reference timeline (see loadAndPlay).
+      const clipOffset = t - loadedClipStart!;
 
       const when = ctx.currentTime + 0.02;
       stopSource(refSourceRef);
       stopSource(candOriginalSourceRef);
       stopSource(candSourceRef);
 
-      refSourceRef.current = playSource(ctx, refBufferRef.current, refGainRef.current, when, refOffset);
-      candOriginalSourceRef.current = playSource(ctx, candOriginalBufferRef.current, candOriginalGainRef.current, when, candOriginalOffset);
-      if (rawCandTarget < 0) {
-        // Still within the silent lead-in: schedule the real content to
-        // start `-rawCandTarget` seconds after `when`, at buffer-offset 0.
-        candSourceRef.current = playSource(ctx, candBufferRef.current, candGainRef.current, when - rawCandTarget, 0);
-      } else {
-        candSourceRef.current = playSource(ctx, candBufferRef.current, candGainRef.current, when, rawCandTarget);
-      }
+      refSourceRef.current = playSource(ctx, refBufferRef.current, refGainRef.current, when, clipOffset);
+      candOriginalSourceRef.current = playSource(ctx, candOriginalBufferRef.current, candOriginalGainRef.current, when, clipOffset);
+      candSourceRef.current = playSource(ctx, candBufferRef.current, candGainRef.current, when, clipOffset);
       playbackStartRef.current = { contextTime: when, refTime: t };
       setLiveCursor(t);
       return;
@@ -566,9 +530,8 @@ export function TrackPreview({
     stopCursorLoop();
   }
 
-  const diff = viewData?.diff ?? { removed: null, added: null };
-  const removedHighlight: HighlightRegion[] = diff.removed ? [{ start: diff.removed[0], end: diff.removed[1], kind: "removed" }] : [];
-  const addedHighlight: HighlightRegion[] = diff.added ? [{ start: diff.added[0], end: diff.added[1], kind: "added" }] : [];
+  const removedHighlight: HighlightRegion[] = (viewData?.removed ?? []).map((r) => ({ ...r, kind: "removed" }));
+  const addedHighlight: HighlightRegion[] = (viewData?.added ?? []).map((r) => ({ ...r, kind: "added" }));
 
   return (
     <div className="preview">
@@ -598,7 +561,7 @@ export function TrackPreview({
         <span className="preview-offset">molette = zoomer/dézoomer sous le curseur</span>
       </div>
 
-      {(diff.removed || diff.added) && (
+      {(removedHighlight.length > 0 || addedHighlight.length > 0) && (
         <div className="waveform-legend">
           <span>
             <span className="waveform-legend-swatch removed" /> sera supprimé
@@ -729,18 +692,7 @@ export function TrackPreview({
           />
           Résultat final
         </label>
-        <span className="preview-offset">
-          Décalage appliqué : {appliedOffset.toFixed(3)} s (résultat final lu à partir de{" "}
-          {Math.max(0, previewStart + appliedOffset).toFixed(3)} s dans la piste corrigée)
-        </span>
-        {loadedCandidateStart !== null && (
-          <span
-            className="preview-offset"
-            title="Ce que le dernier clic sur Écouter a réellement chargé -- s'il diffère du nombre ci-dessus, l'audio est resté sur un ancien calcul (reclique sur Écouter)."
-          >
-            (dernier chargement réel : {loadedCandidateStart.toFixed(3)} s)
-          </span>
-        )}
+        <span className="preview-offset">Décalage à cette position : {appliedOffset.toFixed(3)} s</span>
         {hasContainerDelay && (
           <span className="preview-offset" title="Le décalage ci-dessus (utilisé pour la lecture et l'export) est mesuré sur la piste brute, sans son délai de conteneur -- ce nombre est juste informatif.">
             (dont {trackStartTime.toFixed(3)} s déjà présents dans le conteneur pour cette piste ; décalage restant dans un lecteur ≈ {presentationOffset.toFixed(3)} s)
