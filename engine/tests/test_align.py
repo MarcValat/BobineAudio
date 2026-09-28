@@ -112,3 +112,11 @@ def test_unrelated_tracks_get_low_confidence() -> None:
     estimate = estimate_offset(env_a, env_b, frame_rate)
 
     assert estimate.confidence < 0.2
+
+
+def test_overlap_counts_match_direct_convolution() -> None:
+    from syncaudio.align import _overlap_counts
+
+    for n_ref, n_cand in [(1, 1), (1, 5), (5, 1), (7, 7), (100, 287), (287, 100)]:
+        expected = np.convolve(np.ones(n_cand), np.ones(n_ref), mode="full")
+        assert np.array_equal(_overlap_counts(n_ref, n_cand), expected)
