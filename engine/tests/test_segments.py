@@ -110,9 +110,7 @@ def test_classify_segments_detects_a_jump() -> None:
 
     refined = refine_segments(ref_env, cand_env, frame_rate, segments)
     assert len(refined) == 2
-    refined_error = abs(refined[0].end_s - jump_time_s)
-    assert refined_error < 5.0
-    assert refined_error <= coarse_error
+    assert abs(refined[0].end_s - jump_time_s) < 0.1
 
 
 def test_classify_segments_ignores_an_isolated_outlier_window() -> None:

@@ -74,6 +74,18 @@ class WindowOffset:
     offset_seconds: float
     confidence: float
     ambiguous: bool
+    # The window's length: its estimate describes its middle, not its start
+    # -- under drift, the offset at the start is already a window's worth of
+    # slope away (0.15s for 1% over 30s).
+    duration_s: float = 0.0
+    # Drift (s/s) already known and compensated for when measuring this
+    # window (see destretched_windows): level changes are looked for on top
+    # of it, not in the ramp itself.
+    drift_rate: float = 0.0
+
+    @property
+    def center_s(self) -> float:
+        return self.time_s + self.duration_s / 2.0
 
 
 def windowed_offsets(
@@ -131,6 +143,7 @@ def windowed_offsets(
                     offset_seconds=true_offset,
                     confidence=estimate.confidence,
                     ambiguous=estimate.ambiguous,
+                    duration_s=window_s,
                 )
             )
         i += hop_frames
@@ -260,7 +273,7 @@ def _segment_confidence(
     if n < 2:
         return sample_factor
 
-    times = np.array([w.time_s for w in group])
+    times = np.array([w.center_s for w in group])
     offsets = np.array([w.offset_seconds for w in group])
     span = end_s - start_s
     slope = (offset_end - offset_start) / span if span > 0 else 0.0
@@ -307,8 +320,8 @@ def _split_small_jumps(group: list[WindowOffset]) -> list[list[WindowOffset]]:
     n = len(group)
     if n < 2 * _SMALL_JUMP_MIN_WINDOWS:
         return [group]
-    times = np.array([w.time_s for w in group])
-    offsets = np.array([w.offset_seconds for w in group])
+    times = np.array([w.center_s for w in group])
+    offsets = np.array([w.offset_seconds - w.drift_rate * w.center_s for w in group])
 
     step_noise = max(_NOISE_FLOOR_S, _robust_scale(np.diff(offsets)) / np.sqrt(2.0))
     slope = _theil_sen_slope(times, offsets)
@@ -405,7 +418,7 @@ def classify_segments(
     if not usable:
         return [Segment(0.0, total_duration_s, 0.0, 0.0, confidence=0.0)]
 
-    times = np.array([w.time_s for w in usable])
+    times = np.array([w.center_s for w in usable])
     offsets = np.array([w.offset_seconds for w in usable])
 
     # Drop individual outlier windows entirely before doing anything else --
@@ -452,14 +465,14 @@ def classify_segments(
 
     segments: list[Segment] = []
     for idx, group in enumerate(groups):
-        seg_start = 0.0 if idx == 0 else (groups[idx - 1][-1].time_s + group[0].time_s) / 2.0
+        seg_start = 0.0 if idx == 0 else (groups[idx - 1][-1].center_s + group[0].center_s) / 2.0
         seg_end = (
             total_duration_s
             if idx == len(groups) - 1
-            else (group[-1].time_s + groups[idx + 1][0].time_s) / 2.0
+            else (group[-1].center_s + groups[idx + 1][0].center_s) / 2.0
         )
         if len(group) >= 2:
-            g_times = np.array([g.time_s for g in group])
+            g_times = np.array([g.center_s for g in group])
             g_offsets = np.array([g.offset_seconds for g in group])
             g_slope, g_intercept = _fit_line_or_constant(g_times, g_offsets)
             offset_start = float(g_intercept + g_slope * seg_start)
@@ -503,7 +516,7 @@ def _local_standardize(x: np.ndarray, width: int) -> np.ndarray:
     return (x - mean) / np.sqrt(var + 1e-12)
 
 
-def _sample_shifted(env: np.ndarray, frames: np.ndarray, offset_frames: float) -> np.ndarray:
+def _sample_shifted(env: np.ndarray, frames: np.ndarray, offset_frames: float | np.ndarray) -> np.ndarray:
     """``env`` read at ``frames + offset_frames`` (linear interpolation, 0 outside)."""
     return np.interp(frames + offset_frames, np.arange(len(env)), env, left=0.0, right=0.0)
 
@@ -526,6 +539,8 @@ def refine_boundary(
     min_time_s: float = 0.0,
     max_time_s: float | None = None,
     energy: EnergyReader | None = None,
+    slope_before: float = 0.0,
+    slope_after: float = 0.0,
 ) -> float:
     """Pinpoint a jump to the envelope frame (~16ms), near ``approx_time_s``.
 
@@ -536,7 +551,9 @@ def refine_boundary(
     candidate is missing content (``offset_after < offset_before``), the
     frames right after the split are the gap to be filled with silence, so
     they count for neither side: the optimum is then exactly where the
-    missing content starts.
+    missing content starts. ``offset_before``/``offset_after`` are each
+    side's offset at ``approx_time_s``; on a drifting side, its
+    ``slope_*`` carries it across the zone.
 
     Where the reference has nothing distinctive (dialogue, quiet passage),
     that score goes flat and many split points are equally plausible. For
@@ -561,10 +578,13 @@ def refine_boundary(
     frames = np.arange(ctx_lo, ctx_hi, dtype=np.float64)
     width = int(_LOCAL_NORM_S * fr)
     zr = _local_standardize(ref_env[ctx_lo:ctx_hi], width)
-    agree_before = (zr * _local_standardize(_sample_shifted(cand_env, frames, offset_before * fr), width))[
+    since = frames / fr - approx_time_s
+    shift_before = (offset_before + slope_before * since) * fr
+    shift_after = (offset_after + slope_after * since) * fr
+    agree_before = (zr * _local_standardize(_sample_shifted(cand_env, frames, shift_before), width))[
         lo - ctx_lo : hi - ctx_lo
     ]
-    agree_after = (zr * _local_standardize(_sample_shifted(cand_env, frames, offset_after * fr), width))[
+    agree_after = (zr * _local_standardize(_sample_shifted(cand_env, frames, shift_after), width))[
         lo - ctx_lo : hi - ctx_lo
     ]
 
@@ -610,20 +630,33 @@ def refine_segments(
     if len(segments) < 2:
         return list(segments)
 
+    def slope(seg: Segment) -> float:
+        span = seg.end_s - seg.start_s
+        return (seg.offset_end - seg.offset_start) / span if span > 0 else 0.0
+
     refined = [segments[0]]
     for cur in segments[1:]:
         prev = refined[-1]
+        prev_slope, cur_slope = slope(prev), slope(cur)
+        approx = prev.end_s
         boundary = refine_boundary(
             ref_env, cand_env, frame_rate,
-            approx_time_s=prev.end_s,
+            approx_time_s=approx,
             offset_before=prev.offset_end,
             offset_after=cur.offset_start,
             min_time_s=prev.start_s,
             max_time_s=cur.end_s,
             energy=energy,
+            slope_before=prev_slope,
+            slope_after=cur_slope,
         )
-        refined[-1] = dataclasses.replace(prev, end_s=boundary)
-        refined.append(dataclasses.replace(cur, start_s=boundary))
+        # Each side keeps its own line through the moved boundary.
+        refined[-1] = dataclasses.replace(
+            prev, end_s=boundary, offset_end=prev.offset_end + prev_slope * (boundary - approx)
+        )
+        refined.append(
+            dataclasses.replace(cur, start_s=boundary, offset_start=cur.offset_start + cur_slope * (boundary - approx))
+        )
     return refined
 
 
@@ -688,6 +721,90 @@ def energy_reader(
     return read
 
 
+def compensate_drift(
+    ref_env: np.ndarray, cand_env: np.ndarray, frame_rate: float, windows: Sequence[WindowOffset], **window_args
+) -> list[WindowOffset]:
+    """Re-measure every drifting stretch of ``windows`` with its drift undone.
+
+    Only stretches free of big jumps are considered (the whole track if one
+    line fits it, else each group between big jumps): a slope fitted across
+    a jump would read the jump itself as drift.
+    """
+    usable = [w for w in windows if not w.ambiguous]
+    if len(usable) < _CONFIDENT_WINDOW_COUNT:
+        return list(windows)
+    times = np.array([w.center_s for w in usable])
+    offsets = np.array([w.offset_seconds for w in usable])
+    raw_slope, raw_intercept = np.polyfit(times, offsets, 1)
+    one_line = np.max(np.abs(offsets - (raw_intercept + raw_slope * times))) <= _RESIDUAL_TOL_S
+    groups = [usable] if one_line else _group_big_jumps(usable, _JUMP_THRESHOLD_S)
+
+    result = list(windows)
+    for group in groups:
+        if len(group) < _CONFIDENT_WINDOW_COUNT:
+            continue
+        g_times = np.array([w.center_s for w in group])
+        slope, _ = _fit_line_or_constant(g_times, np.array([w.offset_seconds for w in group]))
+        if abs(slope) * (g_times[-1] - g_times[0]) <= _DRIFT_EPS_S:
+            continue
+        first, last = group[0].time_s, group[-1].time_s
+
+        def redo(rate: float) -> list[WindowOffset]:
+            return [
+                w
+                for w in destretched_windows(ref_env, cand_env, frame_rate, rate, **window_args)
+                if first <= w.time_s <= last
+            ]
+
+        redone = redo(slope)
+        # The first slope comes from smeared, noisy windows; once they are
+        # sharp, the drift left over is measured again and undone too.
+        residual = _step_slope([w for w in redone if not w.ambiguous], slope)
+        if residual:
+            redone = redo(slope + residual)
+        by_time = {w.time_s: w for w in redone}
+        result = [by_time.get(w.time_s, w) if first <= w.time_s <= last else w for w in result]
+    return result
+
+
+def _step_slope(windows: Sequence[WindowOffset], compensated_rate: float) -> float:
+    """Drift left over on top of ``compensated_rate``, from consecutive windows.
+
+    The median of window-to-window slopes rather than a line through all of
+    them: a small jump only skews the one difference it falls into, while
+    a staircase of them (a dub a few tens of ms off from scene to scene)
+    would tilt any overall fit -- that tilt is enough to hide a jump.
+    """
+    if len(windows) < _CONFIDENT_WINDOW_COUNT:
+        return 0.0
+    times = np.array([w.center_s for w in windows])
+    residuals = np.array([w.offset_seconds for w in windows]) - compensated_rate * times
+    return float(np.median(np.diff(residuals) / np.diff(times)))
+
+
+def destretched_windows(
+    ref_env: np.ndarray, cand_env: np.ndarray, frame_rate: float, slope: float, **window_args
+) -> list[WindowOffset]:
+    """``windowed_offsets`` measured on a candidate with ``slope`` of drift undone.
+
+    Under drift, the candidate's content slides by ``slope * window_s``
+    within each window (0.3s for 1% over 30s), smearing the correlation
+    peak: estimates jump around by a good part of that. Reading the
+    candidate at ``(1 + slope) * t`` first cancels the drift, the peak is
+    sharp again, and each measured offset o' maps back exactly to the real
+    one: the content at reference time t sits at candidate time
+    (1 + slope) * (t + o'), i.e. an offset of slope * t + (1 + slope) * o'.
+    """
+    frames = np.arange(int(len(cand_env) / (1.0 + slope)), dtype=np.float64)
+    destretched = np.interp(frames * (1.0 + slope), np.arange(len(cand_env)), cand_env)
+    return [
+        dataclasses.replace(
+            w, offset_seconds=slope * w.center_s + (1.0 + slope) * w.offset_seconds, drift_rate=slope
+        )
+        for w in windowed_offsets(ref_env, destretched, frame_rate, **window_args)
+    ]
+
+
 def detect_segments(
     reference: AudioTrackSpec,
     candidate: AudioTrackSpec,
@@ -713,7 +830,10 @@ def detect_segments(
     total_duration_s = len(ref_env) / frame_rate
 
     log("[analyse] fenêtres glissantes...")
-    windows = windowed_offsets(ref_env, cand_env, frame_rate, window_s=window_s, hop_s=hop_s, margin_s=margin_s)
+    window_args = {"window_s": window_s, "hop_s": hop_s, "margin_s": margin_s}
+    windows = compensate_drift(
+        ref_env, cand_env, frame_rate, windowed_offsets(ref_env, cand_env, frame_rate, **window_args), **window_args
+    )
     segs = classify_segments(windows, total_duration_s)
     if len(segs) > 1:
         log("[analyse] affinage des frontières...")
