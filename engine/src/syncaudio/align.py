@@ -60,7 +60,7 @@ def estimate_offset(
     n_ref, n_cand = len(ref), len(cand)
 
     raw_corr = fftconvolve(cand, ref[::-1], mode="full")
-    overlap = np.convolve(np.ones(n_cand), np.ones(n_ref), mode="full")
+    overlap = _overlap_counts(n_ref, n_cand)
     norm_corr = raw_corr / np.maximum(overlap, 1.0)
 
     min_overlap = _MIN_OVERLAP_FRACTION * min(n_ref, n_cand)
@@ -78,6 +78,17 @@ def estimate_offset(
         confidence=confidence,
         ambiguous=ambiguous,
     )
+
+
+def _overlap_counts(n_ref: int, n_cand: int) -> np.ndarray:
+    """How many frames overlap at each lag of a "full" correlation.
+
+    Exactly ``np.convolve(ones(n_cand), ones(n_ref), "full")``, whose direct
+    O(n_ref * n_cand) evaluation took ~1s on a 6-minute track and grows
+    quadratically (about a minute for a 45-minute one).
+    """
+    k = np.arange(n_ref + n_cand - 1)
+    return np.minimum(np.minimum(k + 1, n_ref + n_cand - 1 - k), min(n_ref, n_cand)).astype(np.float64)
 
 
 def _parabolic_refine(curve: np.ndarray, peak_idx: int) -> float:

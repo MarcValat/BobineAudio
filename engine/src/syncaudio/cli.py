@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -529,6 +530,14 @@ def serve(host: str, port: int, parent_pid: int | None) -> None:
         from syncaudio.parent_watchdog import exit_when_parent_dies
 
         exit_when_parent_dies(parent_pid)
+
+    # The packaged sidecar is a windowed exe: started without redirected
+    # stdio (anything but the GUI, which pipes it), it has no stdout/stderr
+    # at all, and uvicorn's logging setup crashes on the None stream.
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8")
 
     click.echo(f"SyncAudio sidecar sur http://{host}:{port} (docs : /docs)", err=True)
     # The app object, not the "module:attr" string form -- the string form

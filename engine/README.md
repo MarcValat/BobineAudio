@@ -141,7 +141,7 @@ Sur nos fixtures de test : une dérive de +3.4s en fin de piste retombe à un r�
 
 ### Accélérer sur de gros fichiers
 
-Le temps d'extraction (ffmpeg) et surtout d'analyse spectrale (HPSS) croît avec la durée traitée. Le filtrage médian de cette analyse (l'essentiel du temps) est parallélisé sur tous les cœurs disponibles automatiquement (~7s → ~1.5s sur une piste de 6 min avec 8 cœurs) ; au-delà, comme l'algorithme cherche un décalage **constant**, il n'a pas besoin de toute la piste : un extrait représentatif suffit. `--start` et `--duration` (en secondes) limitent l'extraction/analyse à une fenêtre de chaque piste, ce qui accélère le traitement dans les mêmes proportions :
+Le temps d'extraction (ffmpeg) et surtout d'analyse spectrale (HPSS) croît avec la durée traitée. L'analyse est calculée par blocs temporels en parallèle, avec un filtrage médian exact par réseau de tri qui reste dans le cache CPU (~7s → ~0.8s sur une piste de 6 min, mémoire bornée à quelques dizaines de Mo quelle que soit la durée) ; au-delà, comme l'algorithme cherche un décalage **constant**, il n'a pas besoin de toute la piste : un extrait représentatif suffit. `--start` et `--duration` (en secondes) limitent l'extraction/analyse à une fenêtre de chaque piste, ce qui accélère le traitement dans les mêmes proportions :
 
 ```
 uv run syncaudio align film.mkv@0 vf.wav --start 300 --duration 600
@@ -189,3 +189,14 @@ uv run python packaging/build_sidecar.py
 Fige `syncaudio serve` en exécutable autonome via PyInstaller (`packaging/syncaudio-engine.spec`), puis le copie dans `../app/src-tauri/binaries/` avec le suffixe attendu par le mécanisme "sidecar" de Tauri — voir `app/README.md` pour le processus complet de build/release. Aucune dépendance Python/`uv` requise à l'exécution du binaire produit ; `ffmpeg` reste géré via `imageio-ffmpeg` comme en usage normal (voir plus haut).
 
 `syncaudio serve` construit son app FastAPI en passant l'objet directement à uvicorn plutôt que par le nom du module (`"syncaudio.server:app"`) : cette dernière forme réimporte le module par son nom au runtime, ce qui échoue silencieusement une fois figé par PyInstaller (pas de vrai paquet importable sur disque). Tous les appels à `ffmpeg`/`ffprobe` passent aussi par un wrapper (`ffmpeg_backend._run`) qui force `CREATE_NO_WINDOW` sous Windows — sans ça, chaque appel ouvre et referme une fenêtre de console, invisible en dev (le sidecar tourne déjà dans un vrai terminal) mais visible une fois le binaire empaqueté (pas de console propre).
+
+## Non-régression et performances
+
+`benchmarks/regress.py` fait passer les fixtures de `tests/fixtures/generated` (voir `tests/fixtures/MANIFEST.json`) dans le vrai pipeline (enveloppes, décalage constant, segments) et exige des résultats **identiques au bit près** à un instantané enregistré, en affichant les temps et les gains :
+
+```bash
+uv run python benchmarks/regress.py record   # instantané du code actuel (à faire avant une optimisation)
+uv run python benchmarks/regress.py check    # compare, échoue au moindre écart
+```
+
+`--atol` relâche la comparaison pour un changement volontairement non bit-exact. Les instantanés restent locaux (`benchmarks/.baseline/`, ignoré par git).

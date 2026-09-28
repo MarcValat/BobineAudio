@@ -11,3 +11,6 @@ build/
 *.wav
 *.flac
 engine/tests/fixtures/generated/
+
+# Local non-regression snapshots (see engine/benchmarks/regress.py).
+engine/benchmarks/.baseline/
