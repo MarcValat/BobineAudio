@@ -23,7 +23,28 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    # The engine only imports scipy.fft (see syncaudio/dsp.py), which pulls
+    # in scipy.linalg and scipy.special and nothing else. PyInstaller follows
+    # scipy's lazy imports statically and would bundle the rest of it
+    # (~30MB) for nothing.
+    excludes=[
+        "scipy.cluster",
+        "scipy.constants",
+        "scipy.datasets",
+        "scipy.differentiate",
+        "scipy.integrate",
+        "scipy.interpolate",
+        "scipy.io",
+        "scipy.misc",
+        "scipy.ndimage",
+        "scipy.odr",
+        "scipy.optimize",
+        "scipy.signal",
+        "scipy.sparse",
+        "scipy.spatial",
+        "scipy.stats",
+        "tkinter",
+    ],
     noarchive=False,
     optimize=0,
 )
@@ -32,20 +53,27 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name="syncaudio-engine",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
+    upx=False,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name="syncaudio-engine",
 )
