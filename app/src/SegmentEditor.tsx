@@ -8,6 +8,7 @@ import {
   offsetTicks,
   segmentOffsetLabel,
 } from "./SegmentChart";
+import { InfoTip } from "./InfoTip";
 import { TrackPreview, type TrackPreviewHandle } from "./TrackPreview";
 import "./SegmentEditor.css";
 
@@ -329,7 +330,18 @@ export function SegmentEditor({
     <div className="editor-overlay" role="dialog" aria-modal="true">
       <div className={preview ? "editor-panel editor-panel-wide" : "editor-panel"}>
         <div className="editor-header">
-          <h2>Corriger manuellement les segments</h2>
+          <h2>
+            Corriger manuellement les segments{" "}
+            <InfoTip>
+              <ul>
+                <li>Glisse un segment vers le haut ou le bas pour changer son décalage.</li>
+                <li>Glisse une poignée ● pour déplacer une frontière.</li>
+                <li>Double-clique sur le graphe pour couper un segment à cet endroit.</li>
+                {preview && <li>Clique sur le graphe pour placer la lecture à cet endroit.</li>}
+                <li>Décalage : + = la piste est en retard sur la référence, − = en avance.</li>
+              </ul>
+            </InfoTip>
+          </h2>
           <button className="small-button" onClick={onClose}>
             Annuler
           </button>
@@ -337,12 +349,6 @@ export function SegmentEditor({
 
         <div className="editor-columns">
           <div className="editor-primary">
-            <p className="editor-hint">
-              Glisse un segment vers le haut ou le bas pour changer son décalage, ou une poignée ● pour déplacer une
-              frontière. Double-clique pour couper un segment.
-              {preview && " Clique pour placer la lecture à cet endroit."} Décalage : + = piste en retard sur la
-              référence, − = en avance.
-            </p>
             <svg
               ref={svgRef}
               className={`editor-chart${preview ? " editor-chart-listenable" : ""}${dragging ? " editor-chart-dragging" : ""}`}

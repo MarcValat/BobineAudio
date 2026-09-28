@@ -80,12 +80,6 @@
   pointer-events: none;
 }
 
-.editor-hint {
-  margin: 0 0 0.4em;
-  font-size: 0.85em;
-  color: var(--text-muted);
-}
-
 .editor-chart .zero-line {
   stroke: #888;
   stroke-dasharray: 4 3;

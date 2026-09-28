@@ -1,6 +1,7 @@
 import { useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { fetchClip, fetchCorrectedClip, fetchWaveform, type SegmentOut } from "./api";
 import { candidateSpansIn, planResult, silentRegions, skippedRegions } from "./resultPlan";
+import { InfoTip } from "./InfoTip";
 import { formatOffsetMs, formatTime, segmentOffsetLabel } from "./SegmentChart";
 import { Waveform, type HighlightRegion } from "./Waveform";
 import { WaveformNavigator } from "./WaveformNavigator";
@@ -605,7 +606,9 @@ export function TrackPreview({
         <button className="small-button" onClick={resetZoom}>
           Piste entière
         </button>
-        <span className="preview-offset">molette = zoomer/dézoomer sous le curseur</span>
+        <InfoTip>
+          Molette sur une forme d'onde : zoomer ou dézoomer sous le curseur. Clic : placer la lecture à cet endroit.
+        </InfoTip>
       </div>
 
       {(removedHighlight.length > 0 || addedHighlight.length > 0) && (
