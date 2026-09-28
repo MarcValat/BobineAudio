@@ -130,36 +130,6 @@ def test_probe_missing_file_returns_400() -> None:
     assert resp.status_code == 400
 
 
-def test_align_endpoint_recovers_offset(offset_mkv: tuple[Path, float]) -> None:
-    mkv, offset_s = offset_mkv
-    resp = client.post(
-        "/align",
-        json={"reference": {"path": str(mkv), "index": 0}, "candidates": [{"path": str(mkv), "index": 1}]},
-    )
-    assert resp.status_code == 200
-    body = resp.json()
-    assert len(body["results"]) == 1
-    assert abs(body["results"][0]["offset_seconds"] - offset_s) < 0.1
-
-
-def test_segments_endpoint_returns_a_segment(offset_mkv: tuple[Path, float]) -> None:
-    mkv, offset_s = offset_mkv
-    resp = client.post(
-        "/segments",
-        json={
-            "reference": {"path": str(mkv), "index": 0},
-            "track": {"path": str(mkv), "index": 1},
-            "window_s": 10.0,
-            "hop_s": 5.0,
-            "margin_s": 5.0,
-        },
-    )
-    assert resp.status_code == 200
-    body = resp.json()
-    assert len(body["segments"]) >= 1
-    assert abs(body["segments"][0]["offset_start"] - offset_s) < 0.5
-
-
 def test_clip_endpoint_returns_a_playable_wav(offset_mkv: tuple[Path, float]) -> None:
     mkv, _ = offset_mkv
     resp = client.get("/clip", params={"path": str(mkv), "index": 0, "start": 1.0, "duration": 2.0})
@@ -226,108 +196,6 @@ def test_waveform_endpoint_missing_file_returns_400() -> None:
     assert resp.status_code == 400
 
 
-def test_render_endpoint_writes_a_corrected_file(offset_mkv: tuple[Path, float]) -> None:
-    mkv, offset_s = offset_mkv
-    output_path = str(mkv.with_name("out.synced.mkv"))
-    resp = client.post(
-        "/render",
-        json={
-            "input_path": str(mkv),
-            "reference_index": 0,
-            "track_indices": [1],
-            "output_path": output_path,
-        },
-    )
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["written"] == [output_path]
-    assert Path(output_path).exists()
-    assert len(body["corrections"]) == 1
-    assert abs(body["corrections"][0]["offset_seconds"] - offset_s) < 0.1
-
-
-def test_render_endpoint_segmented(offset_mkv: tuple[Path, float]) -> None:
-    mkv, offset_s = offset_mkv
-    output_path = str(mkv.with_name("out.segmented.mkv"))
-    resp = client.post(
-        "/render",
-        json={
-            "input_path": str(mkv),
-            "reference_index": 0,
-            "track_indices": [1],
-            "output_path": output_path,
-            "segmented": True,
-            "window_s": 10.0,
-            "hop_s": 5.0,
-            "margin_s": 5.0,
-        },
-    )
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["written"] == [output_path]
-    assert body["corrections"][0]["segments"] is not None
-    assert body["corrections"][0]["offset_seconds"] is None
-
-
-def test_render_endpoint_segmented_uses_supplied_segment_override(offset_mkv: tuple[Path, float]) -> None:
-    """A caller that already ran /segments and let the user edit the result
-    (SegmentEditor.tsx) must get exactly those segments rendered, not a
-    fresh, silently-recomputed detect_segments() that discards the edits."""
-    mkv, _offset_s = offset_mkv
-    output_path = str(mkv.with_name("out.override.mkv"))
-    # Deliberately wrong/made-up offset, distinguishable from the real ~3s:
-    # if this shows up in the render instead of the real offset, the
-    # override was honored rather than ignored in favor of auto-detection.
-    fake_offset = 1.0
-    resp = client.post(
-        "/render",
-        json={
-            "input_path": str(mkv),
-            "reference_index": 0,
-            "track_indices": [1],
-            "output_path": output_path,
-            "segmented": True,
-            "segment_overrides": [
-                {
-                    "track": {"path": str(mkv), "index": 1},
-                    "segments": [
-                        {
-                            "start_s": 0.0,
-                            "end_s": 30.0,
-                            "offset_start": fake_offset,
-                            "offset_end": fake_offset,
-                            "is_drift": False,
-                        }
-                    ],
-                }
-            ],
-        },
-    )
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["written"] == [output_path]
-    segs = body["corrections"][0]["segments"]
-    assert segs == [
-        {
-            "start_s": 0.0,
-            "end_s": 30.0,
-            "offset_start": fake_offset,
-            "offset_end": fake_offset,
-            "is_drift": False,
-            "confidence": 1.0,
-        }
-    ]
-
-
-def test_render_endpoint_unknown_track_returns_400(offset_mkv: tuple[Path, float]) -> None:
-    mkv, _ = offset_mkv
-    resp = client.post(
-        "/render",
-        json={"input_path": str(mkv), "reference_index": 0, "track_indices": [7]},
-    )
-    assert resp.status_code == 400
-
-
 def _drain_job_ws(job_id: str) -> list[dict]:
     events = []
     with client.websocket_connect(f"/jobs/{job_id}/ws") as ws:
@@ -339,48 +207,110 @@ def _drain_job_ws(job_id: str) -> list[dict]:
     return events
 
 
-def test_job_align_streams_progress_then_result(offset_mkv: tuple[Path, float]) -> None:
-    mkv, offset_s = offset_mkv
-    resp = client.post(
-        "/jobs/align",
-        json={"reference": {"path": str(mkv), "index": 0}, "candidates": [{"path": str(mkv), "index": 1}]},
-    )
+def _run_job(route: str, payload: dict) -> list[dict]:
+    """Start a job and return every event it streamed, the final done/error last."""
+    resp = client.post(route, json=payload)
     assert resp.status_code == 200
-    job_id = resp.json()["job_id"]
-
-    events = _drain_job_ws(job_id)
-    assert any(e["type"] == "log" for e in events)  # got at least one progress message
-    assert events[-1]["type"] == "done"
-    result = events[-1]["result"]
-    assert abs(result["results"][0]["offset_seconds"] - offset_s) < 0.1
-
-    # Also available via polling, after the fact.
-    status = client.get(f"/jobs/{job_id}").json()
-    assert status["status"] == "done"
-    assert status["messages"]  # the same log lines are kept for late/polling clients
+    return _drain_job_ws(resp.json()["job_id"])
 
 
-def test_job_render_writes_file_and_streams_progress(offset_mkv: tuple[Path, float]) -> None:
+def _logs(events: list[dict]) -> list[str]:
+    return [e["message"] for e in events if e["type"] == "log"]
+
+
+def _segments_payload(mkv: Path) -> dict:
+    return {
+        "reference": {"path": str(mkv), "index": 0},
+        "track": {"path": str(mkv), "index": 1},
+        "window_s": 10.0,
+        "hop_s": 5.0,
+        "margin_s": 5.0,
+    }
+
+
+def test_job_segments_streams_progress_then_segments(offset_mkv: tuple[Path, float]) -> None:
     mkv, offset_s = offset_mkv
-    output_path = str(mkv.with_name("out.job.mkv"))
-    resp = client.post(
-        "/jobs/render",
-        json={
-            "input_path": str(mkv),
-            "reference_index": 0,
-            "track_indices": [1],
-            "output_path": output_path,
-        },
-    )
-    job_id = resp.json()["job_id"]
+    events = _run_job("/jobs/segments", _segments_payload(mkv))
+    assert _logs(events)  # got at least one progress message
+    assert events[-1]["type"] == "done"
+    segments = events[-1]["result"]["segments"]
+    assert len(segments) >= 1
+    assert abs(segments[0]["offset_start"] - offset_s) < 0.5
 
-    events = _drain_job_ws(job_id)
-    assert any(e["type"] == "log" for e in events)
+
+def test_job_render_writes_a_corrected_file(offset_mkv: tuple[Path, float]) -> None:
+    mkv, offset_s = offset_mkv
+    output_path = str(mkv.with_name("out.synced.mkv"))
+    events = _run_job(
+        "/jobs/render",
+        {"input_path": str(mkv), "reference_index": 0, "track_indices": [1], "output_path": output_path},
+    )
+    assert _logs(events)
     assert events[-1]["type"] == "done"
     result = events[-1]["result"]
     assert result["written"] == [output_path]
     assert Path(output_path).exists()
+    assert len(result["corrections"]) == 1
     assert abs(result["corrections"][0]["offset_seconds"] - offset_s) < 0.1
+
+
+def test_job_render_segmented(offset_mkv: tuple[Path, float]) -> None:
+    mkv, _ = offset_mkv
+    output_path = str(mkv.with_name("out.segmented.mkv"))
+    events = _run_job(
+        "/jobs/render",
+        {
+            "input_path": str(mkv),
+            "reference_index": 0,
+            "track_indices": [1],
+            "output_path": output_path,
+            "segmented": True,
+            "window_s": 10.0,
+            "hop_s": 5.0,
+            "margin_s": 5.0,
+        },
+    )
+    assert events[-1]["type"] == "done"
+    result = events[-1]["result"]
+    assert result["written"] == [output_path]
+    assert result["corrections"][0]["segments"] is not None
+    assert result["corrections"][0]["offset_seconds"] is None
+
+
+def test_job_render_segmented_uses_supplied_segment_override(offset_mkv: tuple[Path, float]) -> None:
+    """A caller that already ran /jobs/segments and let the user edit the
+    result (SegmentEditor.tsx) must get exactly those segments rendered, not
+    a fresh, silently-recomputed detect_segments() that discards the edits."""
+    mkv, _offset_s = offset_mkv
+    output_path = str(mkv.with_name("out.override.mkv"))
+    # Deliberately wrong/made-up offset, distinguishable from the real ~3s:
+    # if this shows up in the render instead of the real offset, the
+    # override was honored rather than ignored in favor of auto-detection.
+    fake_offset = 1.0
+    segment = {"start_s": 0.0, "end_s": 30.0, "offset_start": fake_offset, "offset_end": fake_offset, "is_drift": False}
+    events = _run_job(
+        "/jobs/render",
+        {
+            "input_path": str(mkv),
+            "reference_index": 0,
+            "track_indices": [1],
+            "output_path": output_path,
+            "segmented": True,
+            "segment_overrides": [{"track": {"path": str(mkv), "index": 1}, "segments": [segment]}],
+        },
+    )
+    assert events[-1]["type"] == "done"
+    result = events[-1]["result"]
+    assert result["written"] == [output_path]
+    assert result["corrections"][0]["segments"] == [{**segment, "confidence": 1.0}]
+    assert any("segments fournis" in m for m in _logs(events))
+
+
+def test_job_render_unknown_track_reports_a_readable_error(offset_mkv: tuple[Path, float]) -> None:
+    mkv, _ = offset_mkv
+    events = _run_job("/jobs/render", {"input_path": str(mkv), "reference_index": 0, "track_indices": [7]})
+    assert events[-1]["type"] == "error"
+    assert events[-1]["message"].startswith("Index(es) inconnu(s)")  # the detail alone, no "400: " prefix
 
 
 def test_job_ws_unknown_job_id_reports_error() -> None:
@@ -399,27 +329,20 @@ def test_job_error_is_reported_not_left_hanging() -> None:
     assert events[-1]["type"] == "error"
 
 
-def test_prefetch_warms_the_cache_for_a_later_align(offset_mkv: tuple[Path, float]) -> None:
+def test_prefetch_warms_the_cache_for_a_later_detection(offset_mkv: tuple[Path, float]) -> None:
     mkv, offset_s = offset_mkv
 
-    resp = client.post(
-        "/jobs/prefetch",
-        json={"tracks": [{"path": str(mkv), "index": 0}, {"path": str(mkv), "index": 1}]},
-    )
-    events = _drain_job_ws(resp.json()["job_id"])
+    events = _run_job("/jobs/prefetch", {"tracks": [{"path": str(mkv), "index": 0}, {"path": str(mkv), "index": 1}]})
     assert events[-1]["type"] == "done"
     assert events[-1]["result"]["cached"] == 2
     # Both tracks were freshly extracted (no prior cache) -> real work happened.
-    assert any("[extraction]" in e["message"] for e in events if e["type"] == "log")
+    assert any("[extraction]" in m for m in _logs(events))
 
-    # A subsequent align on the very same tracks should be served entirely
-    # from cache -- no further extraction, and the result is unaffected.
-    resp = client.post(
-        "/jobs/align",
-        json={"reference": {"path": str(mkv), "index": 0}, "candidates": [{"path": str(mkv), "index": 1}]},
-    )
-    events = _drain_job_ws(resp.json()["job_id"])
+    # A subsequent detection on the very same tracks should be served
+    # entirely from cache -- no further extraction, and the result is
+    # unaffected.
+    events = _run_job("/jobs/segments", _segments_payload(mkv))
     assert events[-1]["type"] == "done"
-    assert not any("[extraction]" in e["message"] for e in events if e["type"] == "log")
-    assert any("[cache]" in e["message"] for e in events if e["type"] == "log")
-    assert abs(events[-1]["result"]["results"][0]["offset_seconds"] - offset_s) < 0.1
+    assert not any("[extraction]" in m for m in _logs(events))
+    assert any("[cache]" in m for m in _logs(events))
+    assert abs(events[-1]["result"]["segments"][0]["offset_start"] - offset_s) < 0.5

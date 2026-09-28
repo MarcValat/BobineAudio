@@ -4,18 +4,13 @@ Thin layer over the same functions the CLI uses (``render.py``,
 ``segments.py``, ``ffmpeg_backend.py``) -- the CLI remains a perfectly valid
 client on its own; this is an additional one for the future GUI.
 
-Two ways to call align/segments/render:
-- Directly (``GET /probe``, ``POST /align``, ``POST /segments``, ``POST
-  /render``): synchronous, blocks until done. Simple, fine for scripting or
-  quick checks (Starlette runs ``def`` routes in a threadpool, so one
-  in-flight request doesn't block others).
-- As a job (``POST /jobs/align`` etc.): returns a ``job_id`` immediately,
-  runs in a background thread, and ``WS /jobs/{job_id}/ws`` streams the same
-  progress messages the CLI prints ("[analyse] ...") as they happen, ending
-  with the result -- or poll ``GET /jobs/{job_id}`` instead of using the
-  WebSocket. This is what a GUI should use for anything on a real file
-  (tens of seconds), so it can show live progress instead of a frozen
-  spinner.
+Quick requests (probe, clips, waveforms) answer directly. Detection and
+render run as jobs (``POST /jobs/segments``, ``POST /jobs/render``, plus
+``POST /jobs/prefetch``): they return a ``job_id`` immediately, run in a
+background thread, and ``WS /jobs/{job_id}/ws`` streams the same progress
+messages the CLI prints ("[analyse] ...") as they happen, ending with the
+result -- they take tens of seconds on a real file, so the GUI shows live
+progress instead of a frozen spinner.
 """
 
 from __future__ import annotations
@@ -32,7 +27,7 @@ from pydantic import BaseModel
 from syncaudio import analysis_cache, waveform_cache
 from syncaudio.analysis_cache import ANALYSIS_SAMPLE_RATE
 from syncaudio.ffmpeg_backend import FFmpegError, extract_wav_clip, probe_audio_streams, probe_stream_start_time
-from syncaudio.jobs import Job, get_job, start_job
+from syncaudio.jobs import get_job, start_job
 from syncaudio.models import AudioTrackSpec
 from syncaudio.render import (
     SegmentedTrackCorrection,
@@ -77,27 +72,6 @@ def _http_error(exc: FFmpegError) -> HTTPException:
 
 class JobStarted(BaseModel):
     job_id: str
-
-
-class JobStatusResponse(BaseModel):
-    job_id: str
-    status: str
-    messages: list[str]
-    result: dict | None = None
-    error: str | None = None
-
-
-def _job_status_response(job: Job) -> JobStatusResponse:
-    messages, _cursor, status, result, error = job.snapshot()
-    return JobStatusResponse(job_id=job.id, status=status, messages=messages, result=result, error=error)
-
-
-@app.get("/jobs/{job_id}", response_model=JobStatusResponse)
-def job_status(job_id: str) -> JobStatusResponse:
-    job = get_job(job_id)
-    if job is None:
-        raise HTTPException(404, f"Job inconnu : {job_id}")
-    return _job_status_response(job)
 
 
 @app.websocket("/jobs/{job_id}/ws")
@@ -242,63 +216,6 @@ def start_prefetch_job(req: PrefetchRequest) -> JobStarted:
     return JobStarted(job_id=job.id)
 
 
-class AlignRequest(BaseModel):
-    reference: TrackRef
-    candidates: list[TrackRef]
-    start: float = 0.0
-    duration: float | None = None
-
-
-class AlignResult(BaseModel):
-    track: str
-    language: str | None
-    offset_seconds: float
-    confidence: float
-    ambiguous: bool
-
-
-class AlignResponse(BaseModel):
-    reference: str
-    results: list[AlignResult]
-
-
-def _do_align(req: AlignRequest, log: Callable[[str], None] = _NO_LOG) -> AlignResponse:
-    try:
-        corrections = plan_corrections(
-            req.reference.to_spec(),
-            [c.to_spec() for c in req.candidates],
-            start=req.start,
-            duration=req.duration,
-            log=log,
-        )
-    except FFmpegError as exc:
-        raise _http_error(exc) from exc
-    return AlignResponse(
-        reference=req.reference.to_spec().raw,
-        results=[
-            AlignResult(
-                track=c.track.raw,
-                language=c.language,
-                offset_seconds=c.offset_seconds,
-                confidence=c.confidence,
-                ambiguous=c.ambiguous,
-            )
-            for c in corrections
-        ],
-    )
-
-
-@app.post("/align", response_model=AlignResponse)
-def align(req: AlignRequest) -> AlignResponse:
-    return _do_align(req)
-
-
-@app.post("/jobs/align", response_model=JobStarted)
-def start_align_job(req: AlignRequest) -> JobStarted:
-    job = start_job(lambda log: _do_align(req, log).model_dump())
-    return JobStarted(job_id=job.id)
-
-
 class SegmentsRequest(BaseModel):
     reference: TrackRef
     track: TrackRef
@@ -390,11 +307,6 @@ def _do_segments(req: SegmentsRequest, log: Callable[[str], None] = _NO_LOG) -> 
         track=req.track.to_spec().raw,
         segments=[SegmentOut.from_segment(s) for s in segs],
     )
-
-
-@app.post("/segments", response_model=SegmentsResponse)
-def segments_endpoint(req: SegmentsRequest) -> SegmentsResponse:
-    return _do_segments(req)
 
 
 @app.post("/jobs/segments", response_model=JobStarted)
@@ -569,11 +481,6 @@ def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> Rend
         raise _http_error(exc) from exc
 
     return RenderResponse(written=written, corrections=corrections_out)
-
-
-@app.post("/render", response_model=RenderResponse)
-def render_endpoint(req: RenderRequest) -> RenderResponse:
-    return _do_render(req)
 
 
 @app.post("/jobs/render", response_model=JobStarted)
