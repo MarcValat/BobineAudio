@@ -42,7 +42,7 @@ npm run tauri build
 
 `build_sidecar.py` fige `syncaudio serve` avec PyInstaller (voir `engine/packaging/syncaudio-engine.spec`) sous forme de **dossier** (l'exe et ses bibliothèques à côté, rien à décompresser au lancement : le moteur démarre en ~1 s au lieu de ~3 s pour un exe unique) et le copie dans `src-tauri/binaries/syncaudio-engine/`. `tauri.conf.json` l'embarque comme ressource (`bundle.resources`), installée dans `engine\` à côté de l'exe de l'app, d'où `src-tauri/src/lib.rs` le lance. Ce dossier doit exister pour compiler l'app, `tauri dev` compris. `ffmpeg` n'a pas besoin d'être géré séparément : `imageio-ffmpeg` l'embarque déjà (voir `engine/README.md`).
 
-`tauri build` produit un `.msi` et un `.exe` NSIS dans `src-tauri/target/release/bundle/`, plus les signatures de mise à jour (`.sig`) si `TAURI_SIGNING_PRIVATE_KEY` est défini dans l'environnement (voir section suivante) — sans cette variable, les installateurs sont quand même produits, juste sans capacité de mise à jour auto.
+`tauri build` produit un seul installateur, un `.exe` NSIS, dans `src-tauri/target/release/bundle/nsis/` (pas de `.msi` : il n'exécuterait pas les hooks de `windows/installer-hooks.nsh`, qui arrêtent le moteur avant une mise à jour et nettoient son cache à la désinstallation, et la mise à jour automatique n'utilise que le NSIS), plus les signatures de mise à jour (`.sig`) si `TAURI_SIGNING_PRIVATE_KEY` est défini dans l'environnement (voir section suivante) — sans cette variable, les installateurs sont quand même produits, juste sans capacité de mise à jour auto.
 
 N'étant pas signé avec un certificat Authenticode (aucun pour l'instant), l'installateur déclenchera l'avertissement SmartScreen "éditeur inconnu" au premier lancement — c'est attendu.
 
