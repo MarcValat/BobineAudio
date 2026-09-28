@@ -39,9 +39,14 @@ windows-sys = { version = "0.61", features = [
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+#
+# Thin LTO and parallel codegen here, for local `tauri build`s that finish in
+# a fraction of the time. The release workflow overrides both back to the
+# smallest/fastest settings (fat LTO, one codegen unit) through
+# CARGO_PROFILE_RELEASE_* variables (.github/workflows/release.yml), so
+# published installers are built exactly as before.
 [profile.release]
-codegen-units = 1
-lto = true
+lto = "thin"
 opt-level = 3
 panic = "abort"
 strip = true
