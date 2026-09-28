@@ -113,7 +113,14 @@ Affiche un ou plusieurs segments, chacun avec un décalage de début/fin :
 - valeurs différentes → **dérive** progressive sur ce segment (vitesse légèrement différente).
 - plusieurs segments avec un saut net entre eux → montage différent à cet instant.
 
-Quand plusieurs segments sont détectés, chaque frontière est automatiquement raffinée par une seconde passe locale (fenêtre bien plus petite, uniquement autour de la transition) pour la localiser plus précisément que la passe grossière seule.
+Comment c'est mesuré :
+- **Sauts de toute taille.** Les grands sauts (≥ 0,75 s) comme les petits : un doublage est souvent décalé de quelques dizaines de ms d'une scène à l'autre (+47 ms, puis −36 ms, puis −115 ms sur la source de nos fixtures). Un petit saut est retenu à partir de 20 ms, s'il dépasse nettement la dispersion des fenêtres voisines et repose sur au moins 3 fenêtres de chaque côté (une ou deux fenêtres isolées ne suffisent jamais).
+- **Frontières à la trame (~16 ms).** Autour de chaque frontière, chaque trame est comparée aux deux alignements (avant/après le saut) et la coupure retenue est celle qui explique le mieux l'ensemble. Quand la piste doublée a *perdu* du contenu, la coupure tombe exactement au début du passage manquant.
+- **Coupe dans les blancs.** Là où la référence n'a rien de distinctif (dialogue, passage calme), plusieurs coupures restent également plausibles : si l'une d'elles retire de la piste doublée un vrai blanc (silence inséré lors du montage), c'est elle qui est retenue, au ms près. Un contenu en trop qui n'est *pas* un blanc ne dit rien de sa position, et n'est donc pas utilisé ainsi.
+- **Décalage de chaque segment sur toute sa longueur.** Une fois les frontières connues, le décalage de chaque segment constant est remesuré en une seule corrélation sur tout le segment (hors 1 s à chaque bord), plus précise et sans le biais des fenêtres qui chevauchent un saut.
+- **Dérive compensée.** Sous une dérive, le contenu glisse à l'intérieur de chaque fenêtre (0,3 s pour 1 % sur 30 s) et brouille la corrélation : la pente est donc estimée, compensée, puis les fenêtres sont remesurées (pic de corrélation net), en affinant une seconde fois la pente sur les fenêtres ainsi nettoyées.
+
+Précision mesurée par `benchmarks/regress.py score` sur les fixtures à vérité exacte (piste de référence dégradée, voir `tests/fixtures/make_fixtures.py`) : erreur moyenne de 0,1 à 1,3 ms sur toute la timeline pour les sauts (de 50 ms à 4 s, dans les deux sens, y compris un épisode entier de 26 min à 6 sauts), 4 ms pour un saut comblé par du bruit, 0,1 ms pour une dérive de 1 %.
 
 Chaque segment porte aussi un score de confiance (`confidence`, 0 à 1), affiché et exploitable dans le GUI (bouton "Ignorer les segments peu fiables" dans l'éditeur manuel). Contrairement au score de confiance par fenêtre ci-dessus (peu fiable isolément — voir « Limites connues »), celui-ci mesure ce qui est réellement diagnostique pour un *segment* : à quel point ses fenêtres s'accordent entre elles (médiane/MAD, robuste aux fenêtres isolées aberrantes) et sur combien de fenêtres il repose (un segment porté par 1-2 fenêtres est peu probant même si elles concordent parfaitement). Voir `_segment_confidence` dans `segments.py`.
 
@@ -121,9 +128,7 @@ Options : `--window`/`--hop` (taille/pas de la fenêtre glissante, secondes), `-
 
 Pour corriger ce que `segments` a détecté (pas juste le visualiser), voir `render --segmented` ci-dessous.
 
-Limites connues à ce stade :
-- La précision de localisation d'un saut dépend de la richesse en musique/bruitages du contenu *juste autour* de la transition, pas seulement de la taille de fenêtre : sur une zone plutôt silencieuse/dialoguée à cet instant précis, même la passe de raffinement peut rester à plusieurs secondes de l'instant réel (vu sur `jump_single`, un cas par ailleurs propre — la correction finale reste malgré tout très bonne, voir ci-dessous).
-- Une fenêtre (ou deux consécutives) dont l'estimation locale est très aberrante par rapport à ses voisines immédiates est désormais détectée et écartée avant classification, ce qui élimine le segment isolé parasite qui pouvait auparavant apparaître près d'une transition sur des cas avec plusieurs sauts rapprochés (vu sur `jump_multi`).
+Limite connue : un changement de décalage qui dure moins de 3 fenêtres (~30 s avec les réglages par défaut) n'est pas isolé en segment, pour ne jamais confondre une fenêtre aberrante avec un saut.
 
 ## Corriger une dérive ou des sauts (`render --segmented`)
 
@@ -133,9 +138,13 @@ Limites connues à ce stade :
 uv run syncaudio render film.mkv --reference 0 --track 1 --segmented
 ```
 
-Pour chaque segment, la portion correspondante de la piste candidate (son propre intervalle, décalé par l'offset de *ce* segment) est extraite, puis retimée avec `atempo` pour occuper exactement la durée du segment de référence — un facteur de 1 (aucun effet) quand le segment est à décalage constant, un facteur différent de 1 quand c'est une dérive : c'est la même formule dans les deux cas, pas un traitement séparé. Les segments corrigés sont ensuite concaténés bout à bout, ce qui reconstitue exactement la timeline de la référence. Options `--window`/`--hop`/`--margin` comme pour `segments`.
+Pour chaque segment, la portion correspondante de la piste candidate (son propre intervalle, décalé par l'offset de *ce* segment) est extraite, puis retimée pour occuper exactement la durée du segment de référence — un facteur de 1 (aucun effet) quand le segment est à décalage constant, un facteur différent de 1 quand c'est une dérive : c'est la même formule dans les deux cas, pas un traitement séparé. Les segments corrigés sont ensuite concaténés bout à bout, ce qui reconstitue exactement la timeline de la référence. Options `--window`/`--hop`/`--margin` comme pour `segments`.
 
-Sur nos fixtures de test : une dérive de +3.4s en fin de piste retombe à un résidu quasi constant (~0.2s) après correction ; un saut nettement détecté (même avec une frontière imprécise de quelques secondes) redonne un flux parfaitement synchro après correction, l'imprécision de frontière n'affectant qu'une poignée de secondes autour de la transition elle-même.
+- **Rien n'est rejoué.** Quand la piste doublée a perdu du contenu, le segment suivant reprend là où le précédent s'est arrêté et le passage manquant est laissé silencieux (auparavant, ces quelques secondes étaient entendues deux fois). Un contenu en trop est simplement sauté.
+- **Pas de clic.** Un fondu de 3 ms est appliqué de part et d'autre de chaque coupure où l'audio n'est pas continu.
+- **Dérive.** Retimée avec `rubberband` : sous 0,3 % de dérive, en simple changement de vitesse (exact au ms ; la hauteur bouge de moins de ~5 centièmes de ton, inaudible) ; au-delà, en préservant la hauteur (précis à ~1 ms la plupart du temps, quelques passages jusqu'à quelques dizaines de ms). `atempo`, utilisé auparavant, décalait les passages de −5 à +47 ms.
+
+Vérifié de bout en bout sur les fixtures exactes : après rendu, une nouvelle détection entre la référence et la piste corrigée ne trouve plus qu'un seul segment, à 0,2 ms près pour les sauts et 0,9 ms pour une dérive de 1 %.
 
 `--segmented` se combine aussi avec `--subs` : les horodatages de chaque réplique sont individuellement réécrits selon le segment auquel ils appartiennent (pas un simple décalage global comme en mode non-segmenté), donc une réplique après un saut ou en pleine dérive atterrit correctement. Formats de sous-titres supportés : SRT et ASS/SSA (les plus courants) ; un autre format donne une erreur claire plutôt qu'un résultat silencieusement faux.
 
