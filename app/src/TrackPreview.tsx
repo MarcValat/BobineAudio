@@ -11,10 +11,10 @@ const PREVIEW_DURATION_S = 12;
 const WAVEFORM_BUCKETS = 800;
 // Fetched once per track, whole-file, so every zoom/pan afterwards is a pure
 // client-side resample (see resamplePeaks) instead of a network round trip.
-// About 20ms per bucket over 40 minutes: an episode still shows a couple of
-// hundred buckets at the MIN_VIEW_DURATION_S zoom floor (a 2h film, ~80).
-// Costs ~2MB of JSON per track, parsed in tens of ms.
-const FULL_TRACK_BUCKETS = 120000;
+// Kept at this: the navigator redraws all of them on every pan, and 120000
+// made navigation visibly lag. The waveform gets coarse near the
+// MIN_VIEW_DURATION_S zoom floor, an accepted trade-off.
+const FULL_TRACK_BUCKETS = 20000;
 
 /**
  * The reference-time offset applying at `t`, per the current segments

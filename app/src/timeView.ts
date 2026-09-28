@@ -7,8 +7,8 @@ export interface TimeView {
   duration: number;
 }
 
-// Close enough to place a boundary or check a jump by eye; the waveforms'
-// whole-track resolution (TrackPreview's FULL_TRACK_BUCKETS) is sized for it.
+// Close enough to place a boundary or check a jump by eye (the waveforms
+// themselves get coarse this close, see TrackPreview's FULL_TRACK_BUCKETS).
 export const MIN_VIEW_DURATION_S = 5;
 
 export const WHEEL_ZOOM_IN_FACTOR = 0.85;
