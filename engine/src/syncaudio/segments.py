@@ -5,10 +5,10 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.ndimage import median_filter
 
 from syncaudio.align import estimate_offset
 from syncaudio.analysis_cache import ANALYSIS_SAMPLE_RATE, get_envelope
+from syncaudio.dsp import median_filter_nearest
 from syncaudio.ffmpeg_backend import extract_pcm
 from syncaudio.models import AudioTrackSpec
 
@@ -434,7 +434,7 @@ def classify_segments(
     # `ambiguous` window, avoids that regardless of which group would have
     # absorbed it.
     if len(offsets) >= _OUTLIER_FILTER_SIZE:
-        smoothed = median_filter(offsets, size=_OUTLIER_FILTER_SIZE, mode="nearest")
+        smoothed = median_filter_nearest(offsets, _OUTLIER_FILTER_SIZE)
         # Tight enough to catch a 0.2s blip next to a small jump (it would
         # drown that jump in scatter, see _split_small_jumps), loosened where
         # windows are naturally noisy (drift smears the correlation peak).

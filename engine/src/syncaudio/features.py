@@ -5,7 +5,8 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 
 import numpy as np
-from scipy.signal import stft
+
+from syncaudio.dsp import stft_magnitude
 
 DEFAULT_N_FFT = 1024
 DEFAULT_HOP = 256
@@ -21,7 +22,7 @@ _EPS = 1e-10
 # separation and flux fused per block) instead of one whole-track array per
 # stage: a 2h track's spectrogram alone is ~1GB of float32, and the old
 # pipeline held 4-5 of them at once. Blocks run in parallel (numpy ufuncs and
-# scipy's FFT release the GIL); inside one, the median filters work on
+# the FFT release the GIL); inside one, the median filters work on
 # sub-blocks small enough to stay in CPU cache.
 _BLOCK_FRAMES = 512
 _MEDIAN_SUBBLOCK_FRAMES = 64
@@ -130,8 +131,7 @@ def _median_filter(mag: np.ndarray, size: int, axis: int, pad: tuple[int, int] |
 
 
 def _stft_magnitude(signal: np.ndarray, n_fft: int, hop: int) -> np.ndarray:
-    _, _, zxx = stft(signal, window="hann", nperseg=n_fft, noverlap=n_fft - hop)
-    return np.abs(zxx)
+    return stft_magnitude(signal, n_fft, n_fft - hop)
 
 
 def _frame_count(n_samples: int, n_fft: int, hop: int) -> int:
@@ -145,9 +145,7 @@ def _stft_magnitude_frames(signal: np.ndarray, n_fft: int, hop: int, lo: int, hi
     """Frames ``[lo, hi)`` of ``_stft_magnitude(signal)``, bit-identical, without the rest.
 
     Rebuilds exactly the samples those frames see in scipy's zero-extended
-    signal. ``padded=True`` is kept on purpose even though the slice already
-    needs no end padding: that code path is where scipy upcasts to float64
-    before the FFT, so skipping it would change the rounding.
+    signal, without the zero boundary the whole-signal STFT adds.
     """
     start = lo * hop - n_fft // 2
     end = (hi - 1) * hop + n_fft - n_fft // 2
@@ -155,8 +153,7 @@ def _stft_magnitude_frames(signal: np.ndarray, n_fft: int, hop: int, lo: int, hi
     s, e = max(start, 0), min(end, len(signal))
     if e > s:
         chunk[s - start : e - start] = signal[s:e]
-    _, _, zxx = stft(chunk, window="hann", nperseg=n_fft, noverlap=n_fft - hop, boundary=None, padded=True)
-    return np.abs(zxx)
+    return stft_magnitude(chunk, n_fft, n_fft - hop, boundary=False)
 
 
 def _envelope_block(signal: np.ndarray, n_fft: int, hop: int, n_frames: int, a: int, b: int) -> np.ndarray:
