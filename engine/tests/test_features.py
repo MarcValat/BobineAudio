@@ -34,3 +34,28 @@ def test_extract_envelope_is_bit_identical_to_the_whole_array_pipeline(n_samples
     env, frame_rate = extract_envelope(pcm, 16000)
     assert frame_rate == 16000 / 256
     assert np.array_equal(env, _reference_envelope(pcm))
+
+
+# Fingerprint of a fixed signal's envelope, per ENVELOPE_VERSION. Envelopes
+# are cached on disk under that version (see analysis_cache): if this test
+# fails, the computation changed, so bump ENVELOPE_VERSION and add its new
+# fingerprint here -- otherwise users would keep getting stale envelopes.
+_ENVELOPE_FINGERPRINTS = {
+    1: (54.22699395939708, 12.481221590383889, 6702.2528878077865, 0.8052475452423096),
+}
+
+
+def test_envelope_changes_come_with_a_new_cache_version() -> None:
+    from syncaudio.features import ENVELOPE_VERSION
+
+    rng = np.random.default_rng(2026)
+    pcm = (rng.standard_normal(16000 * 4) * 0.1).astype(np.float32)
+    pcm[16000:16400] += np.hanning(400).astype(np.float32)
+    env, _ = extract_envelope(pcm, 16000)
+    k = np.arange(len(env))
+    fingerprint = (env.sum(), (env**2).sum(), (env * k).sum(), env.max())
+
+    assert ENVELOPE_VERSION in _ENVELOPE_FINGERPRINTS, "new ENVELOPE_VERSION: record its fingerprint here"
+    assert np.allclose(fingerprint, _ENVELOPE_FINGERPRINTS[ENVELOPE_VERSION], rtol=1e-5, atol=0), (
+        "envelope computation changed: bump ENVELOPE_VERSION (features.py) and record the new fingerprint"
+    )
