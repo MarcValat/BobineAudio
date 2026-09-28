@@ -215,3 +215,20 @@ def test_probe_and_extract_multi_track_mkv(multi_track_mkv: Path) -> None:
     assert len(pcm_second) > 0
     shortest = min(len(pcm_first), len(pcm_second))
     assert not np.allclose(pcm_first[:shortest], pcm_second[:shortest])
+
+
+def test_single_pass_decode_matches_per_track_extraction(multi_track_mkv: Path, tmp_path: Path) -> None:
+    from syncaudio.ffmpeg_backend import decode_tracks_to_files, load_pcm_file
+
+    files = decode_tracks_to_files(str(multi_track_mkv), [0, 1], 16000, tmp_path)
+    for idx, file in zip([0, 1], files):
+        expected = extract_pcm(AudioTrackSpec(raw="x", path=str(multi_track_mkv), stream_index=idx), sample_rate=16000)
+        assert np.array_equal(load_pcm_file(file), expected)
+
+
+def test_probe_is_redone_when_the_file_changes(tmp_path: Path) -> None:
+    path = tmp_path / "tone.wav"
+    _write_wav(path, sr=44100, freq=440.0, duration_s=1.0)
+    assert probe_audio_streams(str(path))[0].sample_rate == 44100
+    _write_wav(path, sr=22050, freq=440.0, duration_s=1.5)
+    assert probe_audio_streams(str(path))[0].sample_rate == 22050
