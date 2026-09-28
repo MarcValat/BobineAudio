@@ -30,10 +30,20 @@ export interface SegmentOut {
   confidence: number;
 }
 
+/** One analysis window's own offset estimate (at the window's centre),
+ * before any segment is fitted. `reliable` is false for a window the
+ * detection ignored (competing correlation peaks). */
+export interface Measurement {
+  time_s: number;
+  offset: number;
+  reliable: boolean;
+}
+
 export interface SegmentsResponse {
   reference: string;
   track: string;
   segments: SegmentOut[];
+  measurements: Measurement[];
 }
 
 export interface RenderedTrack {

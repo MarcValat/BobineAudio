@@ -648,6 +648,7 @@ export function BatchView({ hidden }: { hidden: boolean }) {
       {editingPairIndex !== null && analyses[editingPairIndex]?.result && (
         <SegmentEditor
           segments={analyses[editingPairIndex].result.segments}
+          measurements={analyses[editingPairIndex].result.measurements}
           onClose={() => setEditingPairIndex(null)}
           onSave={(edited) => {
             const i = editingPairIndex;
