@@ -1,7 +1,7 @@
 import { useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { fetchClip, fetchCorrectedClip, fetchWaveform, type SegmentOut } from "./api";
 import { candidateSpansIn, planResult, silentRegions, skippedRegions } from "./resultPlan";
-import { formatTime } from "./SegmentChart";
+import { formatOffsetMs, formatTime, segmentOffsetLabel } from "./SegmentChart";
 import { Waveform, type HighlightRegion } from "./Waveform";
 import { WaveformNavigator } from "./WaveformNavigator";
 
@@ -588,8 +588,7 @@ export function TrackPreview({
           Aller à :
           {segments.map((seg, i) => (
             <button key={i} className="small-button" onClick={() => goToSegment(seg)}>
-              {formatTime(seg.start_s)}–{formatTime(seg.end_s)} (
-              {((seg.offset_start + seg.offset_end) / 2).toFixed(2)}s)
+              {formatTime(seg.start_s)}–{formatTime(seg.end_s)} ({segmentOffsetLabel(seg)})
             </button>
           ))}
         </div>
@@ -740,10 +739,10 @@ export function TrackPreview({
           />
           Résultat final
         </label>
-        <span className="preview-offset">Décalage à cette position : {appliedOffset.toFixed(3)} s</span>
+        <span className="preview-offset">Décalage à cette position : {formatOffsetMs(appliedOffset)}</span>
         {hasContainerDelay && (
           <span className="preview-offset" title="Le décalage ci-dessus (utilisé pour la lecture et l'export) est mesuré sur la piste brute, sans son délai de conteneur -- ce nombre est juste informatif.">
-            (dont {trackStartTime.toFixed(3)} s déjà présents dans le conteneur pour cette piste ; décalage restant dans un lecteur ≈ {presentationOffset.toFixed(3)} s)
+            (dont {formatOffsetMs(trackStartTime)} déjà présents dans le conteneur pour cette piste ; décalage restant dans un lecteur ≈ {formatOffsetMs(presentationOffset)})
           </span>
         )}
       </div>

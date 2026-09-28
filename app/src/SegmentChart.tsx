@@ -3,7 +3,7 @@ import "./SegmentChart.css";
 
 const WIDTH = 760;
 const HEIGHT = 140;
-const MARGIN = { top: 14, right: 16, bottom: 26, left: 56 };
+const MARGIN = { top: 14, right: 16, bottom: 26, left: 70 };
 const PLOT_W = WIDTH - MARGIN.left - MARGIN.right;
 const PLOT_H = HEIGHT - MARGIN.top - MARGIN.bottom;
 
@@ -18,7 +18,45 @@ const PLOT_H = HEIGHT - MARGIN.top - MARGIN.bottom;
 export const LOW_CONFIDENCE_THRESHOLD = 0.4;
 
 // Offset change at a boundary below which it isn't counted as a jump.
-const JUMP_MIN_S = 0.001;
+export const JUMP_MIN_S = 0.001;
+
+/** An offset in milliseconds, signed: "+1452 ms", "−36 ms", "+0.4 ms". */
+export function formatOffsetMs(seconds: number): string {
+  const ms = seconds * 1000;
+  const abs = Math.abs(ms);
+  const digits = abs < 10 && abs >= 0.05 ? 1 : 0;
+  const text = abs.toFixed(digits);
+  if (Number(text) === 0) return "0 ms";
+  return `${ms < 0 ? "−" : "+"}${text} ms`;
+}
+
+/** What the render does at a boundary where the offset changes by `delta`
+ * (next segment's start minus this one's end): a rise means the track has
+ * extra content there, which is cut; a drop means it's missing some, which
+ * is filled with silence. Null when there's no jump. */
+export function describeJump(delta: number): string | null {
+  if (Math.abs(delta) < JUMP_MIN_S) return null;
+  const amount = formatOffsetMs(Math.abs(delta)).slice(1);
+  return delta > 0 ? `${amount} coupés` : `${amount} de silence`;
+}
+
+/** Round tick values covering [min, max] (seconds), about `target` of them. */
+export function offsetTicks(min: number, max: number, target = 5): number[] {
+  const span = max - min;
+  if (!(span > 0)) return [];
+  const raw = span / target;
+  const magnitude = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 5, 10].map((m) => m * magnitude).find((s) => s >= raw) ?? 10 * magnitude;
+  const ticks = [];
+  for (let v = Math.ceil(min / step) * step; v <= max + step * 1e-9; v += step) ticks.push(Math.abs(v) < step * 1e-9 ? 0 : v);
+  return ticks;
+}
+
+/** A segment's offset label: its value, or both ends for a drift. */
+export function segmentOffsetLabel(seg: SegmentOut): string {
+  if (seg.is_drift) return `${formatOffsetMs(seg.offset_start)} → ${formatOffsetMs(seg.offset_end)}`;
+  return formatOffsetMs((seg.offset_start + seg.offset_end) / 2);
+}
 
 /** "3 segments · 2 sauts · 1 peu fiable", for a track's analysis header. */
 export function describeSegments(segments: SegmentOut[]): string {
@@ -85,11 +123,15 @@ export function SegmentChart({ segments, onEdit }: { segments: SegmentOut[]; onE
         aria-label="Décalage en fonction du temps"
       >
         <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
-          {/* zero-offset reference line */}
-          <line x1={0} y1={y(0)} x2={PLOT_W} y2={y(0)} className="zero-line" />
-          <text x={-8} y={y(0)} className="axis-label" textAnchor="end" dominantBaseline="middle">
-            0s
-          </text>
+          {/* offset scale, with the zero line standing out */}
+          {offsetTicks(minOffset, maxOffset, 3).map((v) => (
+            <g key={v}>
+              <line x1={0} y1={y(v)} x2={PLOT_W} y2={y(v)} className={v === 0 ? "zero-line" : "grid-line"} />
+              <text x={-8} y={y(v)} className="axis-label" textAnchor="end" dominantBaseline="middle">
+                {formatOffsetMs(v)}
+              </text>
+            </g>
+          ))}
 
           {/* segment boundaries + time axis */}
           {timeTickValues.map((t) => (
@@ -127,7 +169,7 @@ export function SegmentChart({ segments, onEdit }: { segments: SegmentOut[]; onE
                   className="segment-label"
                   textAnchor="middle"
                 >
-                  {seg.is_drift ? `${seg.offset_start.toFixed(2)}s → ${seg.offset_end.toFixed(2)}s` : `${flatOffset.toFixed(2)}s`}
+                  {segmentOffsetLabel(seg)}
                 </text>
               </g>
             );

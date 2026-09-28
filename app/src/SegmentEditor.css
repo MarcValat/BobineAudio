@@ -119,6 +119,40 @@
   font-size: 11px;
   fill: currentColor;
   opacity: 0.85;
+  pointer-events: none;
+}
+
+.editor-chart .segment-label.dragged {
+  font-weight: 700;
+  opacity: 1;
+}
+
+/* The grab area over each segment line (see SegmentEditor's segment-hit). */
+.editor-chart .segment-hit {
+  stroke: transparent;
+  stroke-width: 14;
+  cursor: ns-resize;
+  pointer-events: stroke;
+}
+
+.editor-chart .jump-label {
+  font-size: 10px;
+  fill: currentColor;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* No text selection from dragging or double-clicking on the chart (same
+   concern as WaveformNavigator's drag handle), and the drag's cursor kept
+   even when the pointer outruns the grabbed line. */
+.editor-chart {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.editor-chart-dragging,
+.editor-chart-dragging * {
+  cursor: grabbing !important;
 }
 
 .boundary-handle {
