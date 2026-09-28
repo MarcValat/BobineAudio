@@ -2,22 +2,14 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "opener:default",
     "dialog:default",
     "updater:default",
-    "process:default",
-    {
-      "identifier": "shell:allow-execute",
-      "allow": [
-        {
-          "name": "binaries/syncaudio-engine",
-          "sidecar": true,
-          "args": ["serve", "--port", "8756", "--parent-pid", { "validator": "\\d+" }]
-        }
-      ]
-    }
+    "process:default"
   ]
 }

@@ -15,6 +15,10 @@
 !macro NSIS_HOOK_PREINSTALL
   nsExec::Exec 'taskkill /F /T /IM syncaudio-engine.exe'
   Pop $0
+  ; Versions up to 1.0.x shipped the engine as a single exe at the install
+  ; root; it now lives in engine\. An update would otherwise leave the old
+  ; ~90MB file behind for good.
+  Delete "$INSTDIR\syncaudio-engine.exe"
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL

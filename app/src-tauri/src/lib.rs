@@ -1,29 +1,14 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Child, Command};
 use std::sync::Mutex;
+use tauri::path::BaseDirectory;
 use tauri::Manager;
-use tauri_plugin_shell::process::CommandChild;
-use tauri_plugin_shell::ShellExt;
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
-/// Either a dev-time `uv run` child (live Python source) or a packaged
-/// build's frozen sidecar binary -- see `spawn_sidecar` for why both exist.
-enum SidecarChild {
-    Dev(std::process::Child),
-    Packaged(CommandChild),
-}
-
-impl SidecarChild {
-    fn pid(&self) -> u32 {
-        match self {
-            SidecarChild::Dev(c) => c.id(),
-            SidecarChild::Packaged(c) => c.pid(),
-        }
-    }
-}
-
-struct SidecarState(Mutex<Option<SidecarChild>>);
+/// The running engine: a dev-time `uv run` child (live Python source) or a
+/// packaged build's frozen engine -- see `spawn_sidecar` for why both exist.
+struct SidecarState(Mutex<Option<Child>>);
 
 /// Ties the sidecar's lifetime to this process at the OS level, whatever
 /// way this process ends.
@@ -36,8 +21,8 @@ struct SidecarState(Mutex<Option<SidecarChild>>);
 /// A Job Object with KILL_ON_JOB_CLOSE fixes that at the source: the OS
 /// closes this process's handle to the job however it exits, and closing the
 /// last handle kills every process in the job. Processes the sidecar itself
-/// spawns afterwards (the PyInstaller bootloader's real interpreter child,
-/// `uv run`'s python.exe in dev) join the job automatically.
+/// spawns afterwards (its ffmpeg runs, `uv run`'s python.exe in dev) join
+/// the job automatically.
 ///
 /// Only the sidecar is put in the job, never this process itself: otherwise
 /// everything *we* spawn would be in it too -- including the updater's
@@ -127,7 +112,7 @@ fn greet(name: &str) -> String {
 fn stop_sidecar(state: tauri::State<SidecarState>) {
     let mut guard = state.0.lock().unwrap();
     if let Some(child) = guard.take() {
-        kill_process_tree(child.pid());
+        kill_process_tree(child.id());
     }
 }
 
@@ -144,14 +129,11 @@ fn engine_dir() -> PathBuf {
 /// Kill a process and its whole descendant tree.
 ///
 /// A single `.kill()` on the handle we hold only terminates that one
-/// process. Both spawn paths below are actually two-hop on Windows: `uv
-/// run` spawns the real `python.exe` as a child of `uv.exe` (doesn't
-/// `exec`-replace itself the way Unix does), and the packaged PyInstaller
-/// "onefile" binary's bootloader likewise unpacks itself and execs the
-/// actual interpreter as a *child* process (confirmed by inspecting the
-/// real process tree, not assumed) -- either way, killing just the handle
-/// we hold leaves the actual FastAPI server (still bound to the port)
-/// orphaned. `taskkill /T` kills the whole tree instead.
+/// process. In dev, `uv run` spawns the real `python.exe` as a child of
+/// `uv.exe` (it doesn't `exec`-replace itself the way Unix does), so killing
+/// just the handle we hold would leave the actual FastAPI server (still
+/// bound to the port) orphaned; the packaged engine runs in one process but
+/// may have ffmpeg children at work. `taskkill /T` kills the whole tree.
 fn kill_process_tree(pid: u32) {
     #[cfg(target_os = "windows")]
     {
@@ -182,16 +164,17 @@ fn kill_process_tree(pid: u32) {
 ///   before -- the engine's Python is edited constantly in this project,
 ///   and re-freezing an ~85MB PyInstaller binary (tens of seconds) on every
 ///   change would make that iteration loop unusably slow.
-/// - In a real build, run the bundled sidecar binary instead (see
-///   engine/packaging/, which freezes `syncaudio serve` via PyInstaller into
-///   `app/src-tauri/binaries/syncaudio-engine-<target-triple>[.exe]`,
-///   referenced by `bundle.externalBin` in tauri.conf.json) -- an installed
-///   copy of the app has no Python/`uv` to shell out to at all.
+/// - In a real build, run the bundled engine instead: engine/packaging/
+///   freezes `syncaudio serve` with PyInstaller into a folder (exe plus its
+///   libraries, nothing to unpack at launch, so it starts in about a second
+///   instead of three), shipped as the `engine/` resource next to the app's
+///   exe (`bundle.resources` in tauri.conf.json) -- an installed copy of the
+///   app has no Python/`uv` to shell out to at all.
 ///
 /// A failure here (e.g. `uv` missing in dev, or the binary wasn't built for
 /// a release) is logged, not fatal: the GUI window still opens, it just
 /// can't reach the engine until fixed and restarted.
-fn spawn_sidecar(app: &tauri::AppHandle) -> Option<SidecarChild> {
+fn spawn_sidecar(app: &tauri::AppHandle) -> Option<Child> {
     // Second, independent safety net next to the Job Object (see
     // KillOnCloseJob): the engine watches this PID itself and exits once
     // it's gone. Covers dev mode's `uv run` hop and any gap between spawning
@@ -206,7 +189,7 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Option<SidecarChild> {
         {
             Ok(child) => {
                 println!("[sidecar] démarré (uv run syncaudio serve) dans {:?}", dir);
-                Some(SidecarChild::Dev(child))
+                Some(child)
             }
             Err(err) => {
                 eprintln!("[sidecar] échec du démarrage dans {:?} : {}", dir, err);
@@ -214,20 +197,23 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Option<SidecarChild> {
             }
         }
     } else {
-        let sidecar = match app.shell().sidecar("syncaudio-engine") {
-            Ok(cmd) => cmd,
+        let exe = match app.path().resolve("engine/syncaudio-engine.exe", BaseDirectory::Resource) {
+            Ok(path) => path,
             Err(err) => {
-                eprintln!("[sidecar] binaire introuvable : {}", err);
+                eprintln!("[sidecar] moteur introuvable : {}", err);
                 return None;
             }
         };
-        match sidecar.args(["serve", "--port", "8756", "--parent-pid", &parent_pid]).spawn() {
-            Ok((_rx, child)) => {
-                println!("[sidecar] démarré (pid {})", child.pid());
-                Some(SidecarChild::Packaged(child))
+        match Command::new(&exe)
+            .args(["serve", "--port", "8756", "--parent-pid", &parent_pid])
+            .spawn()
+        {
+            Ok(child) => {
+                println!("[sidecar] démarré (pid {})", child.id());
+                Some(child)
             }
             Err(err) => {
-                eprintln!("[sidecar] échec du démarrage : {}", err);
+                eprintln!("[sidecar] échec du démarrage de {:?} : {}", exe, err);
                 None
             }
         }
@@ -239,7 +225,6 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         // Restores the main window's size, position and maximized state as
@@ -256,12 +241,13 @@ pub fn run() {
             let child = spawn_sidecar(&handle);
             #[cfg(windows)]
             {
-                // Right after spawning: the PyInstaller bootloader unpacks
-                // its archive (tens of MB) before starting its child, so the
-                // child is born inside the job and inherits it. The engine's
-                // own --parent-pid watchdog covers the case where it isn't.
+                // Right after spawning, before the engine has had time to
+                // start any child of its own (`uv run`'s python.exe in dev),
+                // so those are born inside the job and inherit it. The
+                // engine's own --parent-pid watchdog covers the case where
+                // one isn't.
                 if let (Some(job), Some(child)) = (&job, &child) {
-                    if !job.assign(child.pid()) {
+                    if !job.assign(child.id()) {
                         eprintln!("[sidecar] impossible de rattacher le moteur au job de l'UI");
                     }
                 }
@@ -280,7 +266,7 @@ pub fn run() {
                 let state = app_handle.state::<SidecarState>();
                 let mut guard = state.0.lock().unwrap();
                 if let Some(child) = guard.take() {
-                    kill_process_tree(child.pid());
+                    kill_process_tree(child.id());
                 }
             }
         });

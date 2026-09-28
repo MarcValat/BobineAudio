@@ -33,7 +33,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": ["binaries/syncaudio-engine"],
+    "resources": {
+      "binaries/syncaudio-engine/": "engine/"
+    },
     "createUpdaterArtifacts": true,
     "windows": {
       "nsis": {
