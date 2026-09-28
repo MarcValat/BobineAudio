@@ -183,6 +183,25 @@ def test_clip_endpoint_missing_file_returns_400() -> None:
     assert resp.status_code == 400
 
 
+def test_corrected_clip_endpoint_returns_a_playable_wav(offset_mkv: tuple[Path, float]) -> None:
+    mkv, _ = offset_mkv
+    segments = [
+        {"start_s": 0.0, "end_s": 2.0, "offset_start": 0.0, "offset_end": 0.0, "is_drift": False},
+        {"start_s": 2.0, "end_s": 4.0, "offset_start": 0.5, "offset_end": 0.5, "is_drift": False},
+    ]
+    resp = client.post(
+        "/corrected-clip", json={"path": str(mkv), "index": 1, "segments": segments, "start": 1.0, "duration": 2.0}
+    )
+    assert resp.status_code == 200
+    assert resp.content[:4] == b"RIFF"
+
+
+def test_corrected_clip_endpoint_without_segments_returns_400(offset_mkv: tuple[Path, float]) -> None:
+    mkv, _ = offset_mkv
+    resp = client.post("/corrected-clip", json={"path": str(mkv), "index": 1, "segments": [], "start": 0.0})
+    assert resp.status_code == 400
+
+
 def test_waveform_endpoint_returns_bucketed_peaks(offset_mkv: tuple[Path, float]) -> None:
     mkv, _ = offset_mkv
     resp = client.get("/waveform", params={"path": str(mkv), "index": 0, "buckets": 40})

@@ -37,6 +37,7 @@ from syncaudio.models import AudioTrackSpec
 from syncaudio.render import (
     SegmentedTrackCorrection,
     TrackCorrection,
+    corrected_clip,
     plan_corrections,
     plan_segmented_correction,
     render as render_tracks,
@@ -338,6 +339,36 @@ class SegmentsResponse(BaseModel):
     reference: str
     track: str
     segments: list[SegmentOut]
+
+
+class CorrectedClipRequest(BaseModel):
+    path: str
+    index: int
+    segments: list[SegmentOut]
+    start: float = 0.0
+    duration: float = 12.0
+
+
+@app.post("/corrected-clip")
+def corrected_clip_endpoint(req: CorrectedClipRequest) -> Response:
+    """The GUI's "Résultat final" preview: a short WAV of exactly what the
+    render will produce for this track over [start, start + duration) of the
+    reference, given the segments as currently edited -- same filter as the
+    render itself (see render.corrected_clip), so jumps, blanks and drift
+    are heard the way they'll end up in the file."""
+    spec = AudioTrackSpec(raw=f"{req.path}@{req.index}", path=req.path, stream_index=req.index)
+    try:
+        wav_bytes = corrected_clip(
+            spec,
+            [s.to_segment() for s in req.segments],
+            start=max(0.0, req.start),
+            duration=min(req.duration, _MAX_CLIP_DURATION_S),
+        )
+    except FFmpegError as exc:
+        raise _http_error(exc) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return Response(content=wav_bytes, media_type="audio/wav")
 
 
 def _do_segments(req: SegmentsRequest, log: Callable[[str], None] = _NO_LOG) -> SegmentsResponse:
