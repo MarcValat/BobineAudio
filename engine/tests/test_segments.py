@@ -359,3 +359,35 @@ def test_a_blank_inserted_in_a_dialogue_stretch_is_cut_exactly() -> None:
     # points remove near-identical silence, give or take a frame's edge).
     removed = candidate[int(round(cut * SAMPLE_RATE)) : int(round((cut + delta_s) * SAMPLE_RATE))]
     assert np.sqrt(np.mean(removed**2)) < 0.01 * np.sqrt(np.mean(candidate**2))
+
+
+def _windows(offsets: list[float], hop_s: float = 10.0) -> list[WindowOffset]:
+    return [WindowOffset(time_s=i * hop_s, offset_seconds=o, confidence=0.5, ambiguous=False) for i, o in enumerate(offsets)]
+
+
+def test_small_jumps_of_tens_of_ms_are_segments_of_their_own() -> None:
+    """Real dubs drift by a few tens of ms from scene to scene (the
+    fixtures' source: +47ms, then -36ms, then -115ms)."""
+    rng = np.random.default_rng(3)
+    levels = [0.047] * 8 + [-0.036] * 8 + [-0.115] * 6
+    windows = _windows([o + rng.normal(0, 0.001) for o in levels])
+
+    segments = classify_segments(windows, total_duration_s=len(levels) * 10.0)
+
+    assert [round(s.mean_offset, 3) for s in segments] == [0.047, -0.036, -0.115]
+
+
+def test_a_blip_next_to_a_small_jump_does_not_hide_it() -> None:
+    """Also from the fixtures' source: two stray windows 0.2s off, right
+    before the +47 -> -36ms change."""
+    levels = [0.047] * 10 + [0.253, 0.259] + [0.047] * 3 + [-0.036] * 10
+    segments = classify_segments(_windows(levels), total_duration_s=len(levels) * 10.0)
+
+    assert len(segments) == 2
+    assert abs(segments[0].mean_offset - 0.047) < 0.002
+    assert abs(segments[1].mean_offset - -0.036) < 0.002
+
+
+def test_a_small_jump_needs_several_windows_on_each_side() -> None:
+    levels = [0.0] * 12 + [0.05, 0.05] + [0.0] * 12
+    assert len(classify_segments(_windows(levels), total_duration_s=len(levels) * 10.0)) == 1
