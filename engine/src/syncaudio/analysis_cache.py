@@ -3,8 +3,8 @@
 Measured on a real 6-minute track: ffmpeg extraction (decode to PCM) takes
 ~0.3-0.4s, negligible; the envelope computation (STFT + harmonic/percussive
 median-filter separation, in ``features.py``) took ~7s single-threaded,
-~1.5s now that the median filters run across all cores (8 here) -- still
-most of the total, and pure CPU-bound numpy/scipy work with no I/O to
+~0.8s since it runs in parallel cache-sized blocks -- still most of the
+total, and pure CPU-bound numpy/scipy work with no I/O to
 speed up (so e.g. ``mkvextract`` wouldn't help: it only demuxes, and
 decoding was never the bottleneck). ``align``/``segments``/``render`` each
 re-extract and re-analyze their reference (and every candidate) from
