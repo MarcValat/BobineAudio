@@ -2,16 +2,13 @@ import { useEffect, useImperativeHandle, useMemo, useRef, useState } from "react
 import { fetchClip, fetchCorrectedClip, fetchWaveform, type SegmentOut } from "./api";
 import { candidateSpansIn, planResult, silentRegions, skippedRegions } from "./resultPlan";
 import { InfoTip } from "./InfoTip";
+import { MIN_VIEW_DURATION_S, type TimeView, zoomView } from "./timeView";
 import { formatOffsetMs, formatTime, segmentOffsetLabel } from "./SegmentChart";
 import { Waveform, type HighlightRegion } from "./Waveform";
 import { WaveformNavigator } from "./WaveformNavigator";
 
 const PREVIEW_DURATION_S = 12;
 const WAVEFORM_BUCKETS = 800;
-// Below this, there's nothing more to see: the panel isn't wide enough for
-// finer detail to matter, and the diff highlight is computed analytically
-// anyway, not read off the waveform pixel by pixel.
-const MIN_VIEW_DURATION_S = 20;
 // Fetched once per track, whole-file, so every zoom/pan afterwards is a pure
 // client-side resample (see resamplePeaks) instead of a network round trip.
 // At this bucket count a typical (5-45min) episode stays comfortably sharp
@@ -174,6 +171,10 @@ interface TrackPreviewProps {
   /** The playback marker's reference time, as it moves -- for a parent to
    * draw the same marker elsewhere. */
   onCursorChange?: (t: number) => void;
+  /** With both, the visible stretch is the parent's (null: not set yet),
+   * shared with its own chart, instead of this component's own. */
+  view?: TimeView | null;
+  onViewChange?: (view: TimeView) => void;
 }
 
 export interface TrackPreviewHandle {
@@ -207,6 +208,8 @@ export function TrackPreview({
   trackStartTime,
   controller,
   onCursorChange,
+  view: sharedView,
+  onViewChange,
 }: TrackPreviewProps) {
   const [previewStart, setPreviewStart] = useState(() => (segments.length ? segments[0].start_s : 0));
   const [loading, setLoading] = useState(false);
@@ -226,8 +229,14 @@ export function TrackPreview({
 
   const [refDuration, setRefDuration] = useState<number | null>(null);
   const [candDuration, setCandDuration] = useState<number | null>(null);
-  const [viewStart, setViewStart] = useState(0);
-  const [viewDuration, setViewDuration] = useState<number | null>(null);
+  const [ownView, setOwnView] = useState<TimeView | null>(null);
+  const currentView = sharedView !== undefined ? sharedView : ownView;
+  const viewStart = currentView?.start ?? 0;
+  const viewDuration = currentView?.duration ?? null;
+  function setView(next: TimeView) {
+    setOwnView(next);
+    onViewChange?.(next);
+  }
   // Whole-track peaks, fetched once (see the prefetch effect below) -- every
   // zoom/pan re-derives its view from these via resamplePeaks, no refetch.
   const [refFullPeaks, setRefFullPeaks] = useState<FullPeaks | null>(null);
@@ -336,8 +345,7 @@ export function TrackPreview({
         setCandDuration(candWave.duration);
         setRefFullPeaks({ min: refWave.peaks_min, max: refWave.peaks_max });
         setCandFullPeaks({ min: candWave.peaks_min, max: candWave.peaks_max });
-        setViewStart(0);
-        setViewDuration(refWave.duration);
+        setView({ start: 0, duration: refWave.duration });
       } catch (err) {
         if (!cancelled) setWaveformError(err instanceof Error ? err.message : String(err));
       } finally {
@@ -403,18 +411,12 @@ export function TrackPreview({
    * under the cursor instead of recentering the whole view. */
   function zoomAt(factor: number, centerTime: number) {
     if (viewDuration === null || refDuration === null) return;
-    const newDuration = Math.max(MIN_VIEW_DURATION_S, Math.min(refDuration, viewDuration * factor));
-    const frac = viewDuration > 0 ? (centerTime - viewStart) / viewDuration : 0.5;
-    let newStart = centerTime - frac * newDuration;
-    newStart = Math.max(0, Math.min(Math.max(0, refDuration - newDuration), newStart));
-    setViewStart(newStart);
-    setViewDuration(newDuration);
+    setView(zoomView({ start: viewStart, duration: viewDuration }, factor, centerTime, refDuration));
   }
 
   function resetZoom() {
     if (refDuration === null) return;
-    setViewStart(0);
-    setViewDuration(refDuration);
+    setView({ start: 0, duration: refDuration });
   }
 
   function stopCursorLoop() {
@@ -567,8 +569,7 @@ export function TrackPreview({
    * land inside the right segment. */
   function goToSegment(seg: SegmentOut) {
     setPreviewStart(Math.round(((seg.start_s + seg.end_s) / 2) * 10) / 10);
-    setViewStart(seg.start_s);
-    setViewDuration(Math.max(MIN_VIEW_DURATION_S, seg.end_s - seg.start_s));
+    setView({ start: seg.start_s, duration: Math.max(MIN_VIEW_DURATION_S, seg.end_s - seg.start_s) });
   }
 
   function stop() {
@@ -679,7 +680,7 @@ export function TrackPreview({
           viewDuration={viewDuration}
           peaksMin={refFullPeaks.min}
           peaksMax={refFullPeaks.max}
-          onNavigate={setViewStart}
+          onNavigate={(start) => setView({ start, duration: viewDuration })}
         />
       )}
 

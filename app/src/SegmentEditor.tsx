@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { SegmentOut } from "./api";
 import {
   LOW_CONFIDENCE_THRESHOLD,
@@ -9,6 +9,7 @@ import {
   segmentOffsetLabel,
 } from "./SegmentChart";
 import { InfoTip } from "./InfoTip";
+import { type TimeView, WHEEL_ZOOM_IN_FACTOR, WHEEL_ZOOM_OUT_FACTOR, useWheel, zoomView } from "./timeView";
 import { TrackPreview, type TrackPreviewHandle } from "./TrackPreview";
 import "./SegmentEditor.css";
 
@@ -159,6 +160,8 @@ export function SegmentEditor({
   const [state, setState] = useState<EditorState>(() => toEditorState(segments));
   const [dragging, setDragging] = useState<Drag | null>(null);
   const [frozenRange, setFrozenRange] = useState<[number, number] | null>(null);
+  // The stretch of the timeline on screen, shared with the waveforms (null: whole track).
+  const [view, setView] = useState<TimeView | null>(null);
   // Set once a drag actually moves, so the click ending it isn't also taken
   // as "move the playback position here".
   const movedRef = useRef(false);
@@ -211,8 +214,15 @@ export function SegmentEditor({
   // dragged segment run away from it.
   if (frozenRange) [minOffset, maxOffset] = frozenRange;
 
-  const x = (t: number) => (totalDuration > 0 ? (t / totalDuration) * PLOT_W : 0);
-  const xInv = (px: number) => (totalDuration > 0 ? (px / PLOT_W) * totalDuration : 0);
+  // The stretch on screen, the same as the waveforms' (see TrackPreview's
+  // `view`): zooming or panning one moves the other.
+  const viewStart = view?.start ?? 0;
+  const viewDuration = view?.duration ?? totalDuration;
+  const x = (t: number) => (viewDuration > 0 ? ((t - viewStart) / viewDuration) * PLOT_W : 0);
+  const xInv = (px: number) => (viewDuration > 0 ? viewStart + (px / PLOT_W) * viewDuration : 0);
+  const inView = (px: number) => px >= 0 && px <= PLOT_W;
+  // A segment's label sits in the middle of its visible part.
+  const labelX = (seg: SegmentOut) => (Math.max(0, x(seg.start_s)) + Math.min(PLOT_W, x(seg.end_s))) / 2;
   const y = (offset: number) => PLOT_H - ((offset - minOffset) / (maxOffset - minOffset)) * PLOT_H;
 
   function timeFromClientX(clientX: number): number {
@@ -306,6 +316,13 @@ export function SegmentEditor({
 
   const previewRef = useRef<TrackPreviewHandle>(null);
   const [cursor, setCursor] = useState<number | null>(null);
+  const clipId = useId();
+
+  useWheel(svgRef, (e) => {
+    const t = timeFromClientX(e.clientX);
+    const factor = e.deltaY < 0 ? WHEEL_ZOOM_IN_FACTOR : WHEEL_ZOOM_OUT_FACTOR;
+    setView(zoomView({ start: viewStart, duration: viewDuration }, factor, t, totalDuration));
+  });
 
   /** Click on the chart (not on a boundary handle): move the playback
    * position there, as a click on a waveform does. */
@@ -357,6 +374,12 @@ export function SegmentEditor({
               onClick={handleChartClick}
               onDoubleClick={handleChartDoubleClick}
             >
+              <defs>
+                {/* Room above the plot for the boundary handles' circles. */}
+                <clipPath id={clipId}>
+                  <rect x={0} y={-12} width={PLOT_W} height={PLOT_H + 24} />
+                </clipPath>
+              </defs>
               <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
                 {offsetTicks(minOffset, maxOffset).map((v) => (
                   <g key={v}>
@@ -367,7 +390,7 @@ export function SegmentEditor({
                   </g>
                 ))}
 
-                {Array.from({ length: 6 }, (_, i) => (totalDuration * i) / 5).map((t) => (
+                {Array.from({ length: 6 }, (_, i) => viewStart + (viewDuration * i) / 5).map((t) => (
                   <g key={t}>
                     <line x1={x(t)} y1={0} x2={x(t)} y2={PLOT_H} className="grid-line" />
                     <text x={x(t)} y={PLOT_H + 18} className="axis-label" textAnchor="middle">
@@ -376,6 +399,7 @@ export function SegmentEditor({
                   </g>
                 ))}
 
+                <g clipPath={`url(#${clipId})`}>
                 {segmentsPreview.map((seg, i) => {
                   const flat = (seg.offset_start + seg.offset_end) / 2;
                   const yStart = seg.is_drift ? y(seg.offset_start) : y(flat);
@@ -408,8 +432,8 @@ export function SegmentEditor({
                         }
                       />
                       <text
-                        x={(x(seg.start_s) + x(seg.end_s)) / 2}
-                        y={(yStart + yEnd) / 2 - 10}
+                        x={labelX(seg)}
+                        y={yStart + (yEnd - yStart) * ((labelX(seg) - x(seg.start_s)) / (x(seg.end_s) - x(seg.start_s) || 1)) - 10}
                         className={isDragged ? "segment-label dragged" : "segment-label"}
                         textAnchor="middle"
                       >
@@ -432,14 +456,16 @@ export function SegmentEditor({
                   );
                 })}
 
-                {preview && cursor !== null && cursor >= 0 && cursor <= totalDuration && (
+                {preview && cursor !== null && inView(x(cursor)) && (
                   <line x1={x(cursor)} y1={0} x2={x(cursor)} y2={PLOT_H} className="playback-cursor" />
                 )}
+                </g>
 
                 {/* Draggable handles on every *internal* boundary only -- the
                     first (0) and last (total duration) are fixed. */}
                 {state.times.slice(1, -1).map((t, idx) => {
                   const i = idx + 1;
+                  if (!inView(x(t))) return null;
                   return (
                     <g key={i} className="boundary-handle" onPointerDown={(e) => startDrag(e, { kind: "boundary", index: i })}>
                       <line x1={x(t)} y1={-4} x2={x(t)} y2={PLOT_H + 4} className="boundary-line" />
@@ -541,6 +567,8 @@ export function SegmentEditor({
                 trackStartTime={preview.trackStartTime ?? 0}
                 controller={previewRef}
                 onCursorChange={setCursor}
+                view={view}
+                onViewChange={setView}
               />
             </div>
           )}

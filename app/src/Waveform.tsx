@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { formatTime } from "./SegmentChart";
+import { WHEEL_ZOOM_IN_FACTOR, WHEEL_ZOOM_OUT_FACTOR, useWheel } from "./timeView";
 import "./Waveform.css";
 
 const WIDTH = 860;
@@ -35,8 +36,6 @@ interface WaveformProps {
 // In viewBox units, about as many pixels at the waveform's usual size.
 const MIN_HIGHLIGHT_W = 3;
 
-const WHEEL_ZOOM_IN_FACTOR = 0.85;
-const WHEEL_ZOOM_OUT_FACTOR = 1 / WHEEL_ZOOM_IN_FACTOR;
 
 /** Exported for WaveformNavigator.tsx's mini overview waveform -- same peak
  * data, just drawn over the whole-track axis instead of the current
@@ -86,16 +85,14 @@ export function Waveform({
   }
 
   /** Scroll up zooms in, scroll down zooms out, anchored under the cursor
-   * (the same convention as a map) -- preventDefault so the scroll doesn't
-   * also bubble up to the surrounding scrollable panel. */
-  function handleWheel(e: React.WheelEvent<SVGSVGElement>) {
+   * (the same convention as a map), without scrolling the surrounding panel. */
+  useWheel(svgRef, (e) => {
     if (!svgRef.current || viewDuration <= 0) return;
-    e.preventDefault();
     const rect = svgRef.current.getBoundingClientRect();
     const frac = (e.clientX - rect.left) / rect.width;
     const centerTime = viewStart + Math.max(0, Math.min(1, frac)) * viewDuration;
     onZoom(e.deltaY < 0 ? WHEEL_ZOOM_IN_FACTOR : WHEEL_ZOOM_OUT_FACTOR, centerTime);
-  }
+  });
 
   const dataX0 = Math.max(0, timeToX(dataStart));
   const dataX1 = Math.min(WIDTH, timeToX(dataEnd));
@@ -134,7 +131,6 @@ export function Waveform({
         preserveAspectRatio="none"
         className="waveform-svg"
         onClick={handleClick}
-        onWheel={handleWheel}
         role="img"
         aria-label={`Forme d'onde -- ${label}`}
       >
