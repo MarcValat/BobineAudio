@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
 import {
   probe,
   startSegmentsJob,
@@ -11,10 +10,10 @@ import {
 } from "./api";
 import { SegmentEditor } from "./SegmentEditor";
 import { LogPanel } from "./LogPanel";
+import { pickMediaFiles } from "./mediaDialog";
 import { basename } from "./paths";
 import "./BatchView.css";
 
-const MEDIA_FILTERS = [{ name: "Vidéo/Audio", extensions: ["mkv", "mp4", "wav", "flac", "aac", "mp3"] }];
 
 function moved<T>(arr: T[], from: number, to: number): T[] {
   if (to < 0 || to >= arr.length) return arr;
@@ -410,9 +409,9 @@ export function BatchView({ hidden }: { hidden: boolean }) {
   }, [candidateProbe.tracks]);
 
   async function pickFiles(setFiles: (files: string[]) => void) {
-    const selected = await open({ multiple: true, filters: MEDIA_FILTERS });
+    const selected = await pickMediaFiles(true);
     if (!selected) return;
-    setFiles(Array.isArray(selected) ? selected : [selected]);
+    setFiles(selected);
   }
 
   /** `analyses` is indexed by pairing position, so moving or removing a

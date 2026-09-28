@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
 import {
   checkHealth,
   probe,
@@ -18,6 +17,7 @@ import { SegmentEditor } from "./SegmentEditor";
 import { TrackPreview } from "./TrackPreview";
 import { BatchView } from "./BatchView";
 import { UpdateBanner } from "./UpdateBanner";
+import { pickMediaFiles } from "./mediaDialog";
 import { basename } from "./paths";
 import "./App.css";
 
@@ -88,11 +88,8 @@ function App() {
   useEffect(() => pollHealth(), [pollHealth]);
 
   async function handleOpenFile() {
-    const selected = await open({
-      multiple: false,
-      filters: [{ name: "Vidéo/Audio", extensions: ["mkv", "mp4", "wav", "flac", "aac", "mp3"] }],
-    });
-    if (!selected || Array.isArray(selected)) return;
+    const selected = await pickMediaFiles(false);
+    if (!selected) return;
 
     setFilePath(selected);
     setTracks(null);
