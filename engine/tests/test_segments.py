@@ -389,3 +389,28 @@ def test_a_blip_next_to_a_small_jump_does_not_hide_it() -> None:
 def test_a_small_jump_needs_several_windows_on_each_side() -> None:
     levels = [0.0] * 12 + [0.05, 0.05] + [0.0] * 12
     assert len(classify_segments(_windows(levels), total_duration_s=len(levels) * 10.0)) == 1
+
+
+def test_drift_is_measured_precisely_once_compensated() -> None:
+    """Under 1% drift a 30s window's content slides 0.3s: uncompensated
+    estimates scatter by a good part of that."""
+    from syncaudio.segments import compensate_drift
+
+    duration_s, factor = 180.0, 1.01
+    bed = _make_bed(duration_s * factor, SAMPLE_RATE, seed=30)
+    reference = bed[: int(duration_s * SAMPLE_RATE)] + _make_dialogue(duration_s, SAMPLE_RATE, seed=31)
+    candidate = _time_stretch(bed[: int(duration_s * SAMPLE_RATE)], factor) + _make_dialogue(
+        duration_s * factor, SAMPLE_RATE, seed=32
+    )[: int(round(duration_s * SAMPLE_RATE * factor))]
+
+    ref_env, frame_rate = extract_envelope(reference, SAMPLE_RATE)
+    cand_env, _ = extract_envelope(candidate, SAMPLE_RATE)
+    args = {"window_s": 30.0, "hop_s": 10.0, "margin_s": 8.0}
+    windows = compensate_drift(ref_env, cand_env, frame_rate, windowed_offsets(ref_env, cand_env, frame_rate, **args), **args)
+    usable = [w for w in windows if not w.ambiguous]
+
+    errors = [abs(w.offset_seconds - (factor - 1.0) * w.center_s) for w in usable]
+    assert np.median(errors) < 0.01
+    segments = classify_segments(windows, duration_s)
+    assert len(segments) == 1 and segments[0].is_drift
+    assert abs(segments[0].offset_end - (factor - 1.0) * duration_s) < 0.03
