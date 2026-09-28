@@ -9,20 +9,17 @@ from scipy.ndimage import median_filter
 
 from syncaudio.align import estimate_offset
 from syncaudio.analysis_cache import ANALYSIS_SAMPLE_RATE, get_envelope
+from syncaudio.ffmpeg_backend import extract_pcm
 from syncaudio.models import AudioTrackSpec
 
 DEFAULT_WINDOW_S = 30.0
 DEFAULT_HOP_S = 10.0
 DEFAULT_MARGIN_S = 8.0
 
-# Boundary refinement pass (see refine_segments): a small window/hop, applied
-# only in a zoomed-in neighbourhood of each coarse boundary, localizes a jump
-# far more precisely than the coarse pass alone -- a coarse window straddles
-# up to a whole DEFAULT_WINDOW_S of mixed before/after content near the true
-# jump, which is what limits the coarse pass's boundary precision.
+# How far around a coarse boundary refine_boundary searches: a coarse window
+# straddles up to a whole DEFAULT_WINDOW_S of mixed before/after content
+# near the true jump, which is what limits the coarse pass's precision.
 _REFINE_ZOOM_S = 45.0
-_REFINE_WINDOW_S = 8.0
-_REFINE_HOP_S = 2.0
 
 # A jump between consecutive windows bigger than this (and sustained, not a
 # one-window blip) starts a new segment.
@@ -396,6 +393,49 @@ def classify_segments(
     return segments
 
 
+# Boundary localization (see refine_boundary): each frame's agreement is
+# measured on envelopes standardized over this sliding span, so a loud and a
+# quiet passage weigh alike.
+_LOCAL_NORM_S = 4.0
+# How far (in noise standard deviations, scaled by sqrt(distance)) a split
+# point's score may trail the best one and still count as equally plausible
+# -- the set inside which audio energy picks the cut (see refine_boundary).
+# Where the content says nothing, the score between two split points is a
+# random walk, whose excursions this has to cover.
+_BOUNDARY_TOLERANCE_SIGMAS = 3.0
+# A stretch of candidate audio counts as a blank (see refine_boundary) when
+# its RMS is below this fraction of the surrounding audio's mean RMS.
+_BLANK_RMS_RATIO = 0.05
+
+# (role, start_s, duration_s) -> per-frame RMS of that span, role being
+# "ref" or "cand", at the envelope frame rate, starting at start_s.
+EnergyReader = Callable[[str, float, float], np.ndarray]
+
+
+def _moving_mean(x: np.ndarray, width: int) -> np.ndarray:
+    width = max(1, min(width, len(x)))
+    c = np.concatenate(([0.0], np.cumsum(x, dtype=np.float64)))
+    lo = np.clip(np.arange(len(x)) - width // 2, 0, len(x) - width)
+    return (c[lo + width] - c[lo]) / width
+
+
+def _local_standardize(x: np.ndarray, width: int) -> np.ndarray:
+    mean = _moving_mean(x, width)
+    var = np.maximum(_moving_mean(x * x, width) - mean * mean, 0.0)
+    return (x - mean) / np.sqrt(var + 1e-12)
+
+
+def _sample_shifted(env: np.ndarray, frames: np.ndarray, offset_frames: float) -> np.ndarray:
+    """``env`` read at ``frames + offset_frames`` (linear interpolation, 0 outside)."""
+    return np.interp(frames + offset_frames, np.arange(len(env)), env, left=0.0, right=0.0)
+
+
+def _interval_means(cumsum: np.ndarray, starts: np.ndarray, length: int) -> np.ndarray:
+    starts = np.clip(starts, 0, len(cumsum) - 1)
+    ends = np.clip(starts + max(1, length), 0, len(cumsum) - 1)
+    return (cumsum[ends] - cumsum[starts]) / np.maximum(ends - starts, 1)
+
+
 def refine_boundary(
     ref_env: np.ndarray,
     cand_env: np.ndarray,
@@ -405,58 +445,80 @@ def refine_boundary(
     offset_after: float,
     *,
     zoom_s: float = _REFINE_ZOOM_S,
-    window_s: float = _REFINE_WINDOW_S,
-    hop_s: float = _REFINE_HOP_S,
+    min_time_s: float = 0.0,
+    max_time_s: float | None = None,
+    energy: EnergyReader | None = None,
 ) -> float:
-    """Pinpoint a jump more precisely than the coarse windowed pass did.
+    """Pinpoint a jump to the envelope frame (~16ms), near ``approx_time_s``.
 
-    Re-runs the windowed search with a much smaller window/hop, but only in
-    a zone around ``approx_time_s``: cheap, because it only touches a small
-    neighbourhood, and more precise there, because a small window straddles
-    far less of the actual transition than the coarse ``DEFAULT_WINDOW_S``
-    one did (that straddling -- mixed before/after content in one window --
-    is what limits the coarse pass's boundary precision to roughly its
-    window size).
+    Every frame of the zone is scored against both alignments -- how well
+    the reference matches the candidate read ``offset_before`` vs.
+    ``offset_after`` later -- and the split point maximizing "before-offset
+    agreement up to it + after-offset agreement from it on" wins. When the
+    candidate is missing content (``offset_after < offset_before``), the
+    frames right after the split are the gap to be filled with silence, so
+    they count for neither side: the optimum is then exactly where the
+    missing content starts.
 
-    Individual fine windows can still be noisy right at the transition
-    (mixed content briefly confuses the correlation), so rather than trust
-    the first window that crosses to the other side -- fragile, a single
-    stray reading can fake a crossing -- this picks the split point that
-    minimizes the *total* variance on each side across every fine window in
-    the zone, a fit anchored on the whole picture rather than one sample.
+    Where the reference has nothing distinctive (dialogue, quiet passage),
+    that score goes flat and many split points are equally plausible. For
+    extra candidate content, the audio then decides when ``energy`` is
+    given: if one of those split points removes a genuine blank (see
+    ``_BLANK_RMS_RATIO``), that is where the dub was padded, and it is found
+    exactly. Only a real blank is trusted -- extra content that isn't one
+    says nothing about where it sits, and neither does the loudness of
+    content the candidate is missing.
     """
-    margin_s = abs(offset_after - offset_before) / 2.0 + 3.0
-    start = max(0.0, approx_time_s - zoom_s)
-    end = approx_time_s + zoom_s
-    fine = windowed_offsets(
-        ref_env,
-        cand_env,
-        frame_rate,
-        window_s=window_s,
-        hop_s=hop_s,
-        margin_s=margin_s,
-        search_start_s=start,
-        search_end_s=end,
-    )
-    usable = [w for w in fine if not w.ambiguous]
-    if len(usable) < 4:
+    fr = frame_rate
+    lo_s = max(min_time_s, approx_time_s - zoom_s)
+    hi_s = approx_time_s + zoom_s
+    if max_time_s is not None:
+        hi_s = min(hi_s, max_time_s)
+    lo, hi = int(round(lo_s * fr)), min(len(ref_env), int(round(hi_s * fr)))
+    if hi - lo < 4:
         return approx_time_s
 
-    times = np.array([w.time_s for w in usable])
-    offsets = np.array([w.offset_seconds for w in usable])
+    pad = int(_LOCAL_NORM_S * fr)
+    ctx_lo, ctx_hi = max(0, lo - pad), min(len(ref_env), hi + pad)
+    frames = np.arange(ctx_lo, ctx_hi, dtype=np.float64)
+    width = int(_LOCAL_NORM_S * fr)
+    zr = _local_standardize(ref_env[ctx_lo:ctx_hi], width)
+    agree_before = (zr * _local_standardize(_sample_shifted(cand_env, frames, offset_before * fr), width))[
+        lo - ctx_lo : hi - ctx_lo
+    ]
+    agree_after = (zr * _local_standardize(_sample_shifted(cand_env, frames, offset_after * fr), width))[
+        lo - ctx_lo : hi - ctx_lo
+    ]
 
-    best_cost = None
-    best_m = None
-    for m in range(2, len(usable) - 1):
-        left, right = offsets[:m], offsets[m:]
-        cost = float(np.sum((left - left.mean()) ** 2) + np.sum((right - right.mean()) ** 2))
-        if best_cost is None or cost < best_cost:
-            best_cost, best_m = cost, m
-    if best_m is None:
-        return approx_time_s
+    n = hi - lo
+    gap = int(round(max(0.0, offset_before - offset_after) * fr))
+    cum_before = np.concatenate(([0.0], np.cumsum(agree_before)))
+    cum_after = np.concatenate(([0.0], np.cumsum(agree_after)))
+    k = np.arange(n + 1)
+    score = cum_before[k] + cum_after[n] - cum_after[np.minimum(n, k + gap)]
+    best = int(np.argmax(score))
 
-    boundary = (times[best_m - 1] + times[best_m]) / 2.0
-    return float(np.clip(boundary, start, end))
+    sigma = float(np.std(agree_before - agree_after))
+    plausible = score[best] - score <= _BOUNDARY_TOLERANCE_SIGMAS * sigma * np.sqrt(np.abs(k - best))
+    candidates = np.flatnonzero(plausible)
+    first, last = int(candidates[0]), int(candidates[-1])
+
+    if energy is not None and len(candidates) > 1 and offset_after > offset_before:
+        span = offset_after - offset_before
+        span_frames = max(1, int(round(span * fr)))
+        read_start = (lo + first) / fr + offset_before
+        rms = energy("cand", read_start - span, (last - first) / fr + 3 * span)
+        # rms[i] is the frame at read_start - span + i/fr; the chunk a split
+        # at candidate c removes starts at frame (c - first) + span_frames.
+        if len(rms) >= span_frames:
+            cum = np.concatenate(([0.0], np.cumsum(rms)))
+            cost = _interval_means(cum, candidates - first + span_frames, span_frames)
+            surroundings = float(np.mean(rms))
+            quietest = int(np.argmin(cost + 1e-9 * np.abs(candidates - best)))
+            if surroundings > 0 and cost[quietest] < _BLANK_RMS_RATIO * surroundings:
+                best = int(candidates[quietest])
+
+    return (lo + best) / fr
 
 
 def refine_segments(
@@ -464,6 +526,7 @@ def refine_segments(
     cand_env: np.ndarray,
     frame_rate: float,
     segments: Sequence[Segment],
+    energy: EnergyReader | None = None,
 ) -> list[Segment]:
     """Refine every internal boundary of ``segments`` with ``refine_boundary``."""
     if len(segments) < 2:
@@ -472,23 +535,40 @@ def refine_segments(
     refined = [segments[0]]
     for cur in segments[1:]:
         prev = refined[-1]
-        original_boundary = prev.end_s
         boundary = refine_boundary(
             ref_env, cand_env, frame_rate,
-            approx_time_s=original_boundary,
+            approx_time_s=prev.end_s,
             offset_before=prev.offset_end,
             offset_after=cur.offset_start,
+            min_time_s=prev.start_s,
+            max_time_s=cur.end_s,
+            energy=energy,
         )
-        # Refinement only searches a local zoom window, but a noisy/spurious
-        # coarse segment (e.g. a one-window outlier) can still send the fine
-        # crossing search off to a nonsensical point -- never let a boundary
-        # cross into a neighbouring segment's own span, and fall back to the
-        # coarse estimate rather than emit an invalid (non-monotonic) range.
-        if not (prev.start_s < boundary < cur.end_s):
-            boundary = original_boundary
         refined[-1] = dataclasses.replace(prev, end_s=boundary)
         refined.append(dataclasses.replace(cur, start_s=boundary))
     return refined
+
+
+def energy_reader(
+    reference: AudioTrackSpec, candidate: AudioTrackSpec, frame_rate: float, analysis_start_s: float = 0.0
+) -> EnergyReader:
+    """An ``EnergyReader`` decoding just the requested spans of both tracks."""
+    hop = int(round(ANALYSIS_SAMPLE_RATE / frame_rate))
+
+    def read(role: str, start_s: float, duration_s: float) -> np.ndarray:
+        spec = reference if role == "ref" else candidate
+        n_frames = max(0, int(np.ceil(duration_s * frame_rate)))
+        lead = max(0, int(round(-start_s * frame_rate)))  # before the track: silence
+        begin = analysis_start_s + max(0.0, start_s)
+        pcm = extract_pcm(spec, ANALYSIS_SAMPLE_RATE, start=begin or None, duration=max(0.0, duration_s) + 1.0)
+        usable = len(pcm) // hop
+        rms = np.sqrt(np.mean(pcm[: usable * hop].reshape(usable, hop).astype(np.float64) ** 2, axis=1))
+        out = np.zeros(n_frames)
+        count = max(0, min(n_frames - lead, len(rms)))
+        out[lead : lead + count] = rms[:count]
+        return out
+
+    return read
 
 
 def detect_segments(
@@ -520,5 +600,7 @@ def detect_segments(
     segs = classify_segments(windows, total_duration_s)
     if len(segs) > 1:
         log("[analyse] affinage des frontières...")
-        segs = refine_segments(ref_env, cand_env, frame_rate, segs)
+        segs = refine_segments(
+            ref_env, cand_env, frame_rate, segs, energy=energy_reader(reference, candidate, frame_rate, start)
+        )
     return segs

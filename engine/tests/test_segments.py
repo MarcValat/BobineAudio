@@ -314,3 +314,48 @@ def test_confidence_is_high_despite_low_raw_window_confidence_when_windows_agree
 
     assert len(segments) == 1
     assert segments[0].confidence > 0.7
+
+
+def _energy_from(reference: np.ndarray, candidate: np.ndarray, frame_rate: float):
+    hop = int(round(SAMPLE_RATE / frame_rate))
+
+    def read(role: str, start_s: float, duration_s: float) -> np.ndarray:
+        pcm = reference if role == "ref" else candidate
+        first = int(round(start_s * frame_rate))
+        out = np.zeros(int(np.ceil(duration_s * frame_rate)))
+        for i in range(len(out)):
+            a = (first + i) * hop
+            if 0 <= a and a + hop <= len(pcm):
+                out[i] = np.sqrt(np.mean(pcm[a : a + hop] ** 2))
+        return out
+
+    return read
+
+
+def test_a_blank_inserted_in_a_dialogue_stretch_is_cut_exactly() -> None:
+    """Around the jump the shared bed goes quiet (dialogue only, which
+    differs between the tracks): correlation alone can't place the split
+    there, the inserted blank in the candidate can."""
+    duration_s, jump_s, delta_s = 120.0, 60.0, 3.0
+    bed = _make_bed(duration_s + delta_s, SAMPLE_RATE, seed=20)
+    quiet = slice(int((jump_s - 6) * SAMPLE_RATE), int((jump_s + 6) * SAMPLE_RATE))
+    bed[quiet] = 0.0
+    reference = bed[: int(duration_s * SAMPLE_RATE)] + _make_dialogue(duration_s, SAMPLE_RATE, seed=21)
+    cand_bed = bed + _make_dialogue(duration_s + delta_s, SAMPLE_RATE, seed=22)
+    candidate = _apply_jump(cand_bed, SAMPLE_RATE, jump_s, delta_s)[: int(duration_s * SAMPLE_RATE)]
+
+    ref_env, frame_rate = extract_envelope(reference, SAMPLE_RATE)
+    cand_env, _ = extract_envelope(candidate, SAMPLE_RATE)
+    segments = classify_segments(windowed_offsets(ref_env, cand_env, frame_rate), duration_s)
+    assert len(segments) == 2
+
+    refined = refine_segments(
+        ref_env, cand_env, frame_rate, segments, energy=_energy_from(reference, candidate, frame_rate)
+    )
+    cut = refined[0].end_s
+    assert abs(cut - jump_s) < 0.5
+    # Wherever it lands exactly, what it removes from the candidate must be
+    # the blank (the synthetic content has natural silent gaps, so a few cut
+    # points remove near-identical silence, give or take a frame's edge).
+    removed = candidate[int(round(cut * SAMPLE_RATE)) : int(round((cut + delta_s) * SAMPLE_RATE))]
+    assert np.sqrt(np.mean(removed**2)) < 0.01 * np.sqrt(np.mean(candidate**2))
