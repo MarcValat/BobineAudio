@@ -25,3 +25,14 @@
   nsExec::Exec 'taskkill /F /T /IM syncaudio-engine.exe'
   Pop $0
 !macroend
+
+; The engine's analysis cache (engine/src/syncaudio/analysis_cache.py:
+; %LOCALAPPDATA%\SyncAudio\cache, up to ~512MB) is written at run time, so
+; the uninstaller doesn't know about it and would leave it behind -- along
+; with the SyncAudio folder it sits in, which is also the default install
+; folder. It's only a cache, rebuilt on demand: always removed. RMDir
+; without /r only removes the folder if nothing else is left in it.
+!macro NSIS_HOOK_POSTUNINSTALL
+  RMDir /r "$LOCALAPPDATA\SyncAudio\cache"
+  RMDir "$LOCALAPPDATA\SyncAudio"
+!macroend
