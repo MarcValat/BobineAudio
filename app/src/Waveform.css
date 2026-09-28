@@ -69,6 +69,11 @@
   opacity: 0.25;
 }
 
+/* Over the waveform, so it must stand out from it rather than tint it. */
+.waveform-highlight-marker {
+  opacity: 0.75;
+}
+
 .waveform-highlight.removed {
   fill: var(--danger, #d33);
 }

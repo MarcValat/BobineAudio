@@ -32,6 +32,9 @@ interface WaveformProps {
   className?: string;
 }
 
+// In viewBox units, about as many pixels at the waveform's usual size.
+const MIN_HIGHLIGHT_W = 3;
+
 const WHEEL_ZOOM_IN_FACTOR = 0.85;
 const WHEEL_ZOOM_OUT_FACTOR = 1 / WHEEL_ZOOM_IN_FACTOR;
 
@@ -98,6 +101,24 @@ export function Waveform({
   const dataX1 = Math.min(WIDTH, timeToX(dataEnd));
   const path = peaksMin && peaksMax ? peaksToPath(peaksMin, peaksMax, dataX0, dataX1, HEIGHT) : "";
 
+  // A cut or inserted silence of tens of ms is a fraction of a pixel on a
+  // whole-episode view: too thin to see, and hidden under the waveform.
+  // Those get a minimum width, centred on the real spot, drawn over the
+  // waveform, so every change stays visible at any zoom.
+  const wideHighlights: { x0: number; x1: number; kind: HighlightRegion["kind"] }[] = [];
+  const markers: { x0: number; x1: number; kind: HighlightRegion["kind"] }[] = [];
+  for (const h of highlights ?? []) {
+    const x0 = timeToX(h.start);
+    const x1 = timeToX(h.end);
+    if (x1 < 0 || x0 > WIDTH) continue;
+    if (x1 - x0 >= MIN_HIGHLIGHT_W) {
+      wideHighlights.push({ x0: Math.max(0, x0), x1: Math.min(WIDTH, x1), kind: h.kind });
+    } else {
+      const mid = (x0 + x1) / 2;
+      markers.push({ x0: mid - MIN_HIGHLIGHT_W / 2, x1: mid + MIN_HIGHLIGHT_W / 2, kind: h.kind });
+    }
+  }
+
   const cursorX = cursor !== null ? timeToX(cursor) : null;
   const showCursor = cursorX !== null && cursorX >= 0 && cursorX <= WIDTH;
 
@@ -118,13 +139,20 @@ export function Waveform({
         aria-label={`Forme d'onde -- ${label}`}
       >
         <line x1={0} y1={HEIGHT / 2} x2={WIDTH} y2={HEIGHT / 2} className="waveform-zero" />
-        {highlights?.map((h, i) => {
-          const x0 = Math.max(0, timeToX(h.start));
-          const x1 = Math.min(WIDTH, timeToX(h.end));
-          if (x1 <= x0) return null;
-          return <rect key={i} x={x0} y={0} width={x1 - x0} height={HEIGHT} className={`waveform-highlight ${h.kind}`} />;
-        })}
+        {wideHighlights.map((h, i) => (
+          <rect key={i} x={h.x0} y={0} width={h.x1 - h.x0} height={HEIGHT} className={`waveform-highlight ${h.kind}`} />
+        ))}
         {path && <path d={path} className="waveform-path" />}
+        {markers.map((h, i) => (
+          <rect
+            key={i}
+            x={h.x0}
+            y={0}
+            width={h.x1 - h.x0}
+            height={HEIGHT}
+            className={`waveform-highlight waveform-highlight-marker ${h.kind}`}
+          />
+        ))}
         {showCursor && <line x1={cursorX} y1={0} x2={cursorX} y2={HEIGHT} className="waveform-cursor" />}
       </svg>
       <div className="waveform-ticks">
