@@ -118,7 +118,7 @@ export function SegmentEditor({
    * edited segments (segmentsPreview), not the original `segments` prop, so
    * dragging a boundary or retyping an offset updates "Résultat final"
    * immediately, before Enregistrer is even clicked -- and clicking the
-   * chart plays from there, with the playback marker drawn on the chart. */
+   * chart moves the playback position, with its marker drawn on the chart. */
   preview?: PreviewSource;
 }) {
   const [state, setState] = useState<EditorState>(() => toEditorState(segments));
@@ -226,12 +226,13 @@ export function SegmentEditor({
   const previewRef = useRef<TrackPreviewHandle>(null);
   const [cursor, setCursor] = useState<number | null>(null);
 
-  /** Click on the chart (not on a boundary handle): listen from there. */
+  /** Click on the chart (not on a boundary handle): move the playback
+   * position there, as a click on a waveform does. */
   function handleChartClick(e: React.MouseEvent<SVGSVGElement>) {
     if (!preview || (e.target as Element).closest(".boundary-handle")) return;
     const t = timeFromClientX(e.clientX);
     if (t < 0 || t > totalDuration) return;
-    previewRef.current?.playFrom(t);
+    previewRef.current?.seekTo(t);
   }
 
   return (
@@ -246,7 +247,7 @@ export function SegmentEditor({
 
         <div className="editor-columns">
           <div className="editor-primary">
-            {preview && <p className="editor-hint">Clique sur le graphe pour écouter à cet endroit.</p>}
+            {preview && <p className="editor-hint">Clique sur le graphe pour placer la lecture à cet endroit.</p>}
             <svg
               ref={svgRef}
               className={preview ? "editor-chart editor-chart-listenable" : "editor-chart"}

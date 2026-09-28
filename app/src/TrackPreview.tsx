@@ -167,8 +167,8 @@ interface TrackPreviewProps {
    * _seek_args), so no playback/waveform math uses these values. */
   referenceStartTime: number;
   trackStartTime: number;
-  /** Lets a parent start playback at a given time (the segment editor's
-   * chart: click to listen there). */
+  /** Lets a parent move the playback position (the segment editor's chart,
+   * clicked like a waveform). */
   controller?: React.Ref<TrackPreviewHandle>;
   /** The playback marker's reference time, as it moves -- for a parent to
    * draw the same marker elsewhere. */
@@ -176,7 +176,7 @@ interface TrackPreviewProps {
 }
 
 export interface TrackPreviewHandle {
-  playFrom(t: number): void;
+  seekTo(t: number): void;
 }
 
 // After the segments change while playing, the loaded "Résultat final" clip
@@ -285,7 +285,7 @@ export function TrackPreview({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segmentsKey]);
 
-  useImperativeHandle(controller, () => ({ playFrom: (t: number) => seek(t, true) }));
+  useImperativeHandle(controller, () => ({ seekTo: handleWaveformSeek }));
   // Informational only (see TrackPreviewProps' comment): the offset above is
   // measured on each track's own timeline, container delay excluded, so a
   // normal player (which applies that delay) would see this residual instead.
@@ -518,9 +518,8 @@ export function TrackPreview({
    * round trip); otherwise, if something was playing, reload a fresh clip
    * starting there so listening continues uninterrupted instead of silently
    * going stale. Either way, the position field (and thus the always-visible
-   * marker) follows the click. With `play`, playback starts there even if
-   * nothing was playing. */
-  function seek(t: number, play: boolean) {
+   * marker) follows the click. */
+  function handleWaveformSeek(t: number) {
     const rounded = Math.round(t * 10) / 10;
     const ctx = audioCtxRef.current;
     const wasPlaying = playbackStartRef.current !== null && ctx !== null;
@@ -557,13 +556,9 @@ export function TrackPreview({
       return;
     }
 
-    if (wasPlaying || play) {
+    if (wasPlaying) {
       loadAndPlay(rounded);
     }
-  }
-
-  function handleWaveformSeek(t: number) {
-    seek(t, false);
   }
 
   /** Jump the position (and zoom the view) to segment `seg` -- avoids the
