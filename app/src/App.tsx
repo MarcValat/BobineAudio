@@ -495,7 +495,6 @@ function App() {
       {mode === "single" && editingTrack !== null && editingEntry?.result && (
         <SegmentEditor
           segments={editingEntry.result.segments}
-          measurements={editingEntry.result.measurements}
           preview={
             filePath
               ? {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Measurement, SegmentOut } from "./api";
+import type { SegmentOut } from "./api";
 import { LOW_CONFIDENCE_THRESHOLD, formatTime } from "./SegmentChart";
 import { TrackPreview, type TrackPreviewHandle } from "./TrackPreview";
 import "./SegmentEditor.css";
@@ -106,15 +106,11 @@ interface PreviewSource {
 
 export function SegmentEditor({
   segments,
-  measurements = [],
   onSave,
   onClose,
   preview,
 }: {
   segments: SegmentOut[];
-  /** Every analysis window's own estimate, drawn behind the segments so
-   * their fit (and where a boundary really is) can be judged by eye. */
-  measurements?: Measurement[];
   onSave: (segments: SegmentOut[]) => void;
   onClose: () => void;
   /** When given, renders the same always-visible waveform comparison as the
@@ -251,15 +247,7 @@ export function SegmentEditor({
 
         <div className="editor-columns">
           <div className="editor-primary">
-            <p className="editor-hint">
-              {measurements.length > 0 && (
-                <>
-                  <span className="measurement-swatch" /> mesure par fenêtre d'analyse{" "}
-                  <span className="measurement-swatch unreliable" /> mesure ignorée (ambiguë).{" "}
-                </>
-              )}
-              {preview && "Clique sur le graphe pour placer la lecture à cet endroit."}
-            </p>
+            {preview && <p className="editor-hint">Clique sur le graphe pour placer la lecture à cet endroit.</p>}
             <svg
               ref={svgRef}
               className={preview ? "editor-chart editor-chart-listenable" : "editor-chart"}
@@ -281,22 +269,6 @@ export function SegmentEditor({
                     </text>
                   </g>
                 ))}
-
-                {/* The scale stays the segments' own: one far-off window would
-                    otherwise squash them flat. Off-scale ones sit on the edge. */}
-                {measurements.map((m, i) => {
-                  const cy = y(m.offset);
-                  const offScale = cy < 0 || cy > PLOT_H;
-                  return (
-                    <circle
-                      key={i}
-                      cx={x(m.time_s)}
-                      cy={Math.min(PLOT_H, Math.max(0, cy))}
-                      r={2.5}
-                      className={`measurement${m.reliable ? "" : " unreliable"}${offScale ? " off-scale" : ""}`}
-                    />
-                  );
-                })}
 
                 {segmentsPreview.map((seg, i) => {
                   const flat = (seg.offset_start + seg.offset_end) / 2;
