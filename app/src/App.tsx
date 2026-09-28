@@ -415,7 +415,9 @@ function App() {
                   </div>
                   {entry.result && (
                     <div className="segments-result">
-                      {filePath && (
+                      {/* Not while this track is being edited: the editor has its
+                          own preview, and two playing at once would overlap. */}
+                      {filePath && editingTrack !== t.index && (
                         <TrackPreview
                           referenceFilePath={filePath}
                           candidateFilePath={filePath}
@@ -493,6 +495,18 @@ function App() {
       {mode === "single" && editingTrack !== null && editingEntry?.result && (
         <SegmentEditor
           segments={editingEntry.result.segments}
+          preview={
+            filePath
+              ? {
+                  referenceFilePath: filePath,
+                  candidateFilePath: filePath,
+                  referenceIndex: editingEntry.referenceIndex,
+                  trackIndex: editingTrack,
+                  referenceStartTime: tracks?.find((tr) => tr.index === editingEntry.referenceIndex)?.start_time ?? 0,
+                  trackStartTime: tracks?.find((tr) => tr.index === editingTrack)?.start_time ?? 0,
+                }
+              : undefined
+          }
           onClose={() => setEditingTrack(null)}
           onSave={(edited) =>
             updateAnalysis(editingTrack, (e) => ({ result: e.result ? { ...e.result, segments: edited } : e.result }))

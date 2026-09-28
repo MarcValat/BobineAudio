@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { SegmentOut } from "./api";
 import { LOW_CONFIDENCE_THRESHOLD, formatTime } from "./SegmentChart";
-import { TrackPreview } from "./TrackPreview";
+import { TrackPreview, type TrackPreviewHandle } from "./TrackPreview";
 import "./SegmentEditor.css";
 
 const WIDTH = 900;
@@ -117,10 +117,8 @@ export function SegmentEditor({
    * main analysis view, below the offset chart/table -- fed the *live*
    * edited segments (segmentsPreview), not the original `segments` prop, so
    * dragging a boundary or retyping an offset updates "Résultat final"
-   * immediately, before Enregistrer is even clicked. Optional: single-file
-   * mode already shows this inline outside the modal, so it only passes
-   * this in from batch mode, where the compact per-pair table has nowhere
-   * else to put it. */
+   * immediately, before Enregistrer is even clicked -- and clicking the
+   * chart plays from there, with the playback marker drawn on the chart. */
   preview?: PreviewSource;
 }) {
   const [state, setState] = useState<EditorState>(() => toEditorState(segments));
@@ -223,7 +221,18 @@ export function SegmentEditor({
     });
   }
 
-  const segmentsPreview = toSegments(state);
+  const segmentsPreview = useMemo(() => toSegments(state), [state]);
+
+  const previewRef = useRef<TrackPreviewHandle>(null);
+  const [cursor, setCursor] = useState<number | null>(null);
+
+  /** Click on the chart (not on a boundary handle): listen from there. */
+  function handleChartClick(e: React.MouseEvent<SVGSVGElement>) {
+    if (!preview || (e.target as Element).closest(".boundary-handle")) return;
+    const t = timeFromClientX(e.clientX);
+    if (t < 0 || t > totalDuration) return;
+    previewRef.current?.playFrom(t);
+  }
 
   return (
     <div className="editor-overlay" role="dialog" aria-modal="true">
@@ -237,7 +246,14 @@ export function SegmentEditor({
 
         <div className="editor-columns">
           <div className="editor-primary">
-            <svg ref={svgRef} className="editor-chart" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img">
+            {preview && <p className="editor-hint">Clique sur le graphe pour écouter à cet endroit.</p>}
+            <svg
+              ref={svgRef}
+              className={preview ? "editor-chart editor-chart-listenable" : "editor-chart"}
+              viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+              role="img"
+              onClick={handleChartClick}
+            >
               <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
                 <line x1={0} y1={y(0)} x2={PLOT_W} y2={y(0)} className="zero-line" />
                 <text x={-8} y={y(0)} className="axis-label" textAnchor="end" dominantBaseline="middle">
@@ -278,6 +294,10 @@ export function SegmentEditor({
                     </g>
                   );
                 })}
+
+                {preview && cursor !== null && cursor >= 0 && cursor <= totalDuration && (
+                  <line x1={x(cursor)} y1={0} x2={x(cursor)} y2={PLOT_H} className="playback-cursor" />
+                )}
 
                 {/* Draggable handles on every *internal* boundary only -- the
                     first (0) and last (total duration) are fixed. */}
@@ -393,6 +413,8 @@ export function SegmentEditor({
                 segments={segmentsPreview}
                 referenceStartTime={preview.referenceStartTime ?? 0}
                 trackStartTime={preview.trackStartTime ?? 0}
+                controller={previewRef}
+                onCursorChange={setCursor}
               />
             </div>
           )}

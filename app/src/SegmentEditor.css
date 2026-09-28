@@ -69,6 +69,23 @@
   box-sizing: border-box;
 }
 
+.editor-chart-listenable {
+  cursor: pointer;
+}
+
+/* Same red marker as the waveforms' (Waveform.css). */
+.editor-chart .playback-cursor {
+  stroke: var(--danger, #d33);
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.editor-hint {
+  margin: 0 0 0.4em;
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
 .editor-chart .zero-line {
   stroke: #888;
   stroke-dasharray: 4 3;

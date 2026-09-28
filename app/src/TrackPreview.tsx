@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { fetchClip, fetchCorrectedClip, fetchWaveform, type SegmentOut } from "./api";
 import { candidateSpansIn, planResult, silentRegions, skippedRegions } from "./resultPlan";
 import { formatTime } from "./SegmentChart";
@@ -167,7 +167,21 @@ interface TrackPreviewProps {
    * _seek_args), so no playback/waveform math uses these values. */
   referenceStartTime: number;
   trackStartTime: number;
+  /** Lets a parent start playback at a given time (the segment editor's
+   * chart: click to listen there). */
+  controller?: React.Ref<TrackPreviewHandle>;
+  /** The playback marker's reference time, as it moves -- for a parent to
+   * draw the same marker elsewhere. */
+  onCursorChange?: (t: number) => void;
 }
+
+export interface TrackPreviewHandle {
+  playFrom(t: number): void;
+}
+
+// After the segments change while playing, the loaded "Résultat final" clip
+// no longer matches them: it's reloaded once edits pause for this long.
+const RELOAD_AFTER_EDIT_MS = 400;
 
 /** Compare the reference and a candidate track together -- always-visible,
  * zoomable waveforms (reference / candidate as-is / corrected result, the
@@ -190,6 +204,8 @@ export function TrackPreview({
   segments,
   referenceStartTime,
   trackStartTime,
+  controller,
+  onCursorChange,
 }: TrackPreviewProps) {
   const [previewStart, setPreviewStart] = useState(() => (segments.length ? segments[0].start_s : 0));
   const [loading, setLoading] = useState(false);
@@ -240,9 +256,36 @@ export function TrackPreview({
   // superseded by a newer one (e.g. a rapid re-seek) and ignore its own
   // late-arriving fetch/decode results instead of clobbering a newer load.
   const loadGenerationRef = useRef(0);
+  // The live playback position, readable from timers (state would be stale there).
+  const cursorRef = useRef<number | null>(null);
 
   const appliedOffset = offsetAt(segments, previewStart);
   const displayCursor = liveCursor ?? previewStart;
+
+  useEffect(() => {
+    onCursorChange?.(displayCursor);
+  }, [displayCursor, onCursorChange]);
+
+  // Compared by content: a parent editing segments may hand a new array with
+  // the same values on every render.
+  const segmentsKey = JSON.stringify(segments);
+  const lastSegmentsKeyRef = useRef(segmentsKey);
+  useEffect(() => {
+    if (segmentsKey === lastSegmentsKeyRef.current) return;
+    lastSegmentsKeyRef.current = segmentsKey;
+    // The decoded "Résultat final" was built from the old segments: never
+    // reuse it for an in-clip seek.
+    setLoadedClipStart(null);
+    if (playbackStartRef.current === null) return;
+    const timer = setTimeout(() => {
+      const at = cursorRef.current;
+      if (at !== null && playbackStartRef.current !== null) loadAndPlay(Math.round(at * 10) / 10);
+    }, RELOAD_AFTER_EDIT_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [segmentsKey]);
+
+  useImperativeHandle(controller, () => ({ playFrom: (t: number) => seek(t, true) }));
   // Informational only (see TrackPreviewProps' comment): the offset above is
   // measured on each track's own timeline, container delay excluded, so a
   // normal player (which applies that delay) would see this residual instead.
@@ -378,6 +421,7 @@ export function TrackPreview({
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
+    cursorRef.current = null;
     setLiveCursor(null);
   }
 
@@ -393,7 +437,10 @@ export function TrackPreview({
         // handleWaveformSeek) -- keep looping without moving the marker yet,
         // don't treat "hasn't started" the same as "finished".
         if (elapsed <= refBuffer.duration) {
-          if (elapsed >= 0) setLiveCursor(start.refTime + elapsed);
+          if (elapsed >= 0) {
+            cursorRef.current = start.refTime + elapsed;
+            setLiveCursor(cursorRef.current);
+          }
           rafRef.current = requestAnimationFrame(tick);
           return;
         }
@@ -471,8 +518,9 @@ export function TrackPreview({
    * round trip); otherwise, if something was playing, reload a fresh clip
    * starting there so listening continues uninterrupted instead of silently
    * going stale. Either way, the position field (and thus the always-visible
-   * marker) follows the click. */
-  function handleWaveformSeek(t: number) {
+   * marker) follows the click. With `play`, playback starts there even if
+   * nothing was playing. */
+  function seek(t: number, play: boolean) {
     const rounded = Math.round(t * 10) / 10;
     const ctx = audioCtxRef.current;
     const wasPlaying = playbackStartRef.current !== null && ctx !== null;
@@ -504,13 +552,18 @@ export function TrackPreview({
       candOriginalSourceRef.current = playSource(ctx, candOriginalBufferRef.current, candOriginalGainRef.current, when, clipOffset);
       candSourceRef.current = playSource(ctx, candBufferRef.current, candGainRef.current, when, clipOffset);
       playbackStartRef.current = { contextTime: when, refTime: t };
+      cursorRef.current = t;
       setLiveCursor(t);
       return;
     }
 
-    if (wasPlaying) {
+    if (wasPlaying || play) {
       loadAndPlay(rounded);
     }
+  }
+
+  function handleWaveformSeek(t: number) {
+    seek(t, false);
   }
 
   /** Jump the position (and zoom the view) to segment `seg` -- avoids the
@@ -647,7 +700,7 @@ export function TrackPreview({
         <button className="small-button" onClick={() => loadAndPlay()} disabled={loading}>
           {loading ? "Chargement..." : "Écouter"}
         </button>
-        <button className="small-button" onClick={stop} disabled={loadedClipStart === null}>
+        <button className="small-button" onClick={stop} disabled={loadedClipStart === null && liveCursor === null}>
           Arrêter
         </button>
         <label>
