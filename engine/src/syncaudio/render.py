@@ -153,25 +153,29 @@ def correction_filter(offset_seconds: float) -> str | None:
     return f"adelay={delay_ms:.3f}:all=1,apad"
 
 
-def _atempo_chain(factor: float) -> str:
-    """Chain of one or more ``atempo`` filters reaching ``factor`` overall.
+# Below this much drift, a stretch changes pitch by under ~5 cents (about
+# the smallest audible difference), so it is done as a plain speed change:
+# exact timing. Above it, pitch is preserved, at the cost of the stretcher
+# placing some passages a few ms (at worst tens of ms) off. Measured on a
+# 1% drift over 6 minutes: speed change within 0.3ms throughout; pitch-
+# preserving rubberband within 1ms mostly, up to 28ms in places; atempo
+# (used before) anywhere from -5 to +47ms.
+_PITCH_PRESERVING_MIN_DRIFT = 0.003
 
-    A single ``atempo`` instance only accepts [0.5, 2.0] (ffmpeg errors
-    outside that); realistic drift factors are always well inside it, but
-    this stays correct at any factor by chaining multiple instances.
-    """
+
+def _stretch_filter(factor: float) -> str:
+    """Play ``factor`` times faster (rubberband, see ``_PITCH_PRESERVING_MIN_DRIFT``)."""
     if factor <= 0:
-        raise ValueError(f"Facteur atempo invalide : {factor}")
-    steps = []
-    remaining = factor
-    while remaining > 2.0:
-        steps.append(2.0)
-        remaining /= 2.0
-    while remaining < 0.5:
-        steps.append(0.5)
-        remaining /= 0.5
-    steps.append(remaining)
-    return ",".join(f"atempo={s:.6f}" for s in steps)
+        raise ValueError(f"Facteur d'étirement invalide : {factor}")
+    if abs(factor - 1.0) < _PITCH_PRESERVING_MIN_DRIFT:
+        return f"rubberband=tempo={factor:.9f}:pitch={factor:.9f}"
+    return f"rubberband=tempo={factor:.9f}"
+
+
+# Fade applied on each side of a cut between segments whose candidate audio
+# isn't contiguous: removes the click of a hard waveform discontinuity,
+# far too short to be heard as a dip.
+_SEAM_FADE_S = 0.003
 
 
 def segment_correction_filter(segments: Sequence[Segment], input_label: str, output_label: str) -> str:
@@ -179,13 +183,20 @@ def segment_correction_filter(segments: Sequence[Segment], input_label: str, out
 
     For each segment, extracts the candidate-time span that corresponds to
     that segment's reference-time span -- ``[start_s + offset_start, end_s +
-    offset_end]`` -- and time-stretches it (``atempo``) to fit exactly into
+    offset_end]`` -- and time-stretches it (see ``_stretch_filter``) to fit exactly into
     ``end_s - start_s``. When a segment is a constant shift (``offset_start
     == offset_end``), the extracted span is already the right length and the
     stretch factor is 1 (no-op) -- this is the drift case's formula
     degenerating into the same result as a plain shift, so one code path
     covers both instead of two. The segments are then concatenated in order,
     reproducing the reference's timeline exactly.
+
+    Candidate audio is never played twice: where the candidate is missing
+    content (its offset drops at a boundary), the next segment's span starts
+    before the previous one's ended, and replaying that overlap would repeat
+    it audibly. It resumes where the previous segment stopped instead, the
+    missing stretch left silent. Content the candidate has in excess (offset
+    rising) is simply skipped between the two spans.
 
     ``apad=whole_dur`` guarantees each segment's pre-stretch extraction is
     exactly the expected length even where the real candidate audio runs out
@@ -197,6 +208,7 @@ def segment_correction_filter(segments: Sequence[Segment], input_label: str, out
 
     chains = []
     seg_labels = []
+    played_until = 0.0
     for i, seg in enumerate(segments):
         duration = seg.end_s - seg.start_s
         cand_start = seg.start_s + seg.offset_start
@@ -204,12 +216,18 @@ def segment_correction_filter(segments: Sequence[Segment], input_label: str, out
         span = cand_end - cand_start
         factor = span / duration if duration > 1e-6 else 1.0
 
-        parts = [f"atrim=start={max(0.0, cand_start):.6f}:end={max(0.0, cand_end):.6f}", "asetpts=PTS-STARTPTS"]
-        if cand_start < 0:
-            parts.append(f"adelay={-cand_start * 1000:.3f}:all=1")
+        read_from = max(cand_start, played_until, 0.0)
+        parts = [f"atrim=start={read_from:.6f}:end={max(read_from, cand_end):.6f}", "asetpts=PTS-STARTPTS"]
+        if read_from > cand_start:
+            parts.append(f"adelay={(read_from - cand_start) * 1000:.3f}:all=1")
         parts.append(f"apad=whole_dur={max(span, 0.0):.6f}")
         if abs(factor - 1.0) > 1e-4:
-            parts.append(_atempo_chain(factor))
+            parts.append(_stretch_filter(factor))
+        if i > 0 and abs(cand_start - played_until) > 1e-3:
+            parts.append(f"afade=t=in:d={_SEAM_FADE_S}")
+        if i + 1 < len(segments) and abs(segments[i + 1].start_s + segments[i + 1].offset_start - cand_end) > 1e-3:
+            parts.append(f"afade=t=out:st={max(0.0, duration - _SEAM_FADE_S):.6f}:d={_SEAM_FADE_S}")
+        played_until = max(played_until, cand_end)
 
         seg_label = f"{output_label}_{i}"
         chains.append(f"[{input_label}]{','.join(parts)}[{seg_label}]")
