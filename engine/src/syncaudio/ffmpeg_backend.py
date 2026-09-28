@@ -58,6 +58,37 @@ def resolve_ffmpeg() -> str:
         ) from exc
 
 
+def _file_identity(path: str) -> tuple[str, int, int] | None:
+    """What a cached probe of ``path`` is only valid for: the same file, unchanged."""
+    try:
+        st = Path(path).stat()
+    except OSError:
+        return None
+    return str(Path(path).resolve()), st.st_size, st.st_mtime_ns
+
+
+@lru_cache(maxsize=64)
+def _ffmpeg_info_cached(path: str, identity: tuple[str, int, int]) -> str:
+    return _ffmpeg_info_uncached(path)
+
+
+def _ffmpeg_info_uncached(path: str) -> str:
+    proc = _run([resolve_ffmpeg(), "-hide_banner", "-i", path], capture_output=True)
+    return proc.stderr.decode("utf-8", errors="replace")
+
+
+def _ffmpeg_info(path: str) -> str:
+    """``ffmpeg -i path``'s report (stderr), decoded as UTF-8.
+
+    Every probe below parses this same report, and a single open/render
+    asks for it many times over: it's read once per unchanged file instead.
+    UTF-8 explicitly, as ffmpeg writes tags that way (the platform default,
+    cp1252 on Windows, would mangle accented titles).
+    """
+    identity = _file_identity(path)
+    return _ffmpeg_info_uncached(path) if identity is None else _ffmpeg_info_cached(path, identity)
+
+
 def parse_track_spec(raw: str) -> AudioTrackSpec:
     """Parse a CLI track argument: ``path`` or ``path@INDEX``.
 
@@ -82,13 +113,7 @@ def probe_audio_streams(path: str) -> list[AudioStreamInfo]:
     The returned ``index`` is 0-based among *audio* streams only (matching
     ffmpeg's ``-map 0:a:N`` selector), not the container's global stream index.
     """
-    ffmpeg = resolve_ffmpeg()
-    proc = _run(
-        [ffmpeg, "-hide_banner", "-i", path],
-        capture_output=True,
-        text=True,
-    )
-    stderr = proc.stderr
+    stderr = _ffmpeg_info(path)
     if "Invalid data found" in stderr or "No such file or directory" in stderr:
         raise FFmpegError(f"Impossible de lire {path!r} :\n{stderr}")
 
@@ -117,19 +142,12 @@ def probe_audio_streams(path: str) -> list[AudioStreamInfo]:
 
 def probe_duration(path: str) -> float:
     """Return the container's total duration in seconds, as reported by ffmpeg."""
-    ffmpeg = resolve_ffmpeg()
-    proc = _run(
-        [ffmpeg, "-hide_banner", "-i", path],
-        capture_output=True,
-        text=True,
-    )
-    match = _DURATION_RE.search(proc.stderr)
+    match = _DURATION_RE.search(_ffmpeg_info(path))
     if not match:
         raise FFmpegError(f"Impossible de déterminer la durée de {path!r}.")
     return int(match["h"]) * 3600 + int(match["m"]) * 60 + float(match["s"])
 
 
-@lru_cache(maxsize=256)
 def probe_stream_start_time(path: str, stream_index: int) -> float:
     """Container-level presentation delay of one audio stream (0.0 if none).
 
@@ -156,6 +174,11 @@ def probe_stream_start_time(path: str, stream_index: int) -> float:
     returns 0.0 on any failure rather than raising, since this must never
     break the actual detection/render pipeline it's decoupled from.
     """
+    return _probe_stream_start_time(path, stream_index, _file_identity(path))
+
+
+@lru_cache(maxsize=256)
+def _probe_stream_start_time(path: str, stream_index: int, identity: tuple[str, int, int] | None) -> float:
     ffmpeg = resolve_ffmpeg()
     with tempfile.TemporaryDirectory(prefix="syncaudio-starttime-") as tmp_dir:
         tmp_path = str(Path(tmp_dir) / "probe.mka")
@@ -189,21 +212,13 @@ def _seek_args(spec: AudioTrackSpec, start: float) -> list[str]:
     return ["-ss", f"{start + delay:.6f}"]
 
 
-@lru_cache(maxsize=256)
 def _probe_format_start_time(path: str) -> float:
-    probe = _run([resolve_ffmpeg(), "-hide_banner", "-i", path], capture_output=True, text=True)
-    match = _DURATION_START_RE.search(probe.stderr)
+    match = _DURATION_START_RE.search(_ffmpeg_info(path))
     return float(match["start"]) if match else 0.0
 
 
 def _list_subtitle_streams(path: str) -> list[re.Match[str]]:
-    ffmpeg = resolve_ffmpeg()
-    proc = _run(
-        [ffmpeg, "-hide_banner", "-i", path],
-        capture_output=True,
-        text=True,
-    )
-    return [m for line in proc.stderr.splitlines() if (m := _SUBTITLE_STREAM_RE.match(line))]
+    return [m for line in _ffmpeg_info(path).splitlines() if (m := _SUBTITLE_STREAM_RE.match(line))]
 
 
 def probe_subtitle_codec(path: str, index: int) -> str:
@@ -220,16 +235,10 @@ _TITLE_TAG_RE = re.compile(r"^\s+title\s*: (?P<title>.*)$")
 
 def probe_stream_tags(path: str, kind: str) -> list[dict[str, str]]:
     """``language``/``title`` tags of every ``kind`` stream (``"Audio"``,
-    ``"Subtitle"``...), indexed like ffmpeg's ``0:a:N``/``0:s:N`` selectors.
-
-    Decodes ffmpeg's output as UTF-8 explicitly: it writes tags as UTF-8
-    bytes, and the platform default (cp1252 on Windows) would mangle any
-    accented title.
-    """
-    proc = _run([resolve_ffmpeg(), "-hide_banner", "-i", path], capture_output=True)
+    ``"Subtitle"``...), indexed like ffmpeg's ``0:a:N``/``0:s:N`` selectors."""
     tags: list[dict[str, str]] = []
     current: dict[str, str] | None = None
-    for line in proc.stderr.decode("utf-8", errors="replace").splitlines():
+    for line in _ffmpeg_info(path).splitlines():
         if stream := _ANY_STREAM_RE.match(line):
             current = None
             if stream["kind"] == kind:
@@ -295,8 +304,38 @@ def extract_pcm(
             f"Échec de l'extraction audio pour {spec.raw!r} :\n"
             f"{proc.stderr.decode(errors='replace')}"
         )
-    pcm = np.frombuffer(proc.stdout, dtype="<i2")
-    return pcm.astype(np.float32) / 32768.0
+    return _pcm_from_s16le(np.frombuffer(proc.stdout, dtype="<i2"))
+
+
+def _pcm_from_s16le(samples: np.ndarray) -> np.ndarray:
+    return samples.astype(np.float32) / 32768.0
+
+
+def decode_tracks_to_files(path: str, stream_indices: list[int], sample_rate: int, out_dir: Path) -> list[Path]:
+    """Decode several whole audio tracks of one file in a single ffmpeg pass.
+
+    Same samples as one ``extract_pcm(..., start=None, duration=None)`` per
+    track (verified bit for bit), but the file is read and demuxed once
+    instead of once per track -- for a multi-GB remux with several dubs,
+    that read is most of the decoding time. Outputs go to raw s16le files
+    (load them with ``load_pcm_file``) rather than pipes, so the caller can
+    hold one track in memory at a time.
+    """
+    cmd = [resolve_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-i", path]
+    outputs = []
+    for idx in stream_indices:
+        out = out_dir / f"track{idx}.s16le"
+        cmd += ["-map", f"0:a:{idx}", "-ac", "1", "-ar", str(sample_rate), "-f", "s16le", "-acodec", "pcm_s16le", str(out)]
+        outputs.append(out)
+    proc = _run(cmd, capture_output=True)
+    if proc.returncode != 0:
+        raise FFmpegError(f"Échec de l'extraction audio pour {path!r} :\n{proc.stderr.decode(errors='replace')}")
+    return outputs
+
+
+def load_pcm_file(path: Path) -> np.ndarray:
+    """Load a ``decode_tracks_to_files`` output exactly as ``extract_pcm`` returns it."""
+    return _pcm_from_s16le(np.fromfile(path, dtype="<i2"))
 
 
 _PEAKS_SAMPLE_RATE = 22050

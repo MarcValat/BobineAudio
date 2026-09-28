@@ -9,6 +9,9 @@ from scipy.signal import stft
 
 DEFAULT_N_FFT = 1024
 DEFAULT_HOP = 256
+# Part of the on-disk analysis cache key (see analysis_cache): bump it
+# whenever a change alters envelope values, so no stale entry is reused.
+ENVELOPE_VERSION = 1
 
 _HARM_WIN = 17
 _PERC_WIN = 17

@@ -170,7 +170,7 @@ Endpoints synchrones complémentaires, pensés pour le GUI :
 - `GET /probe?path=...` : liste les pistes audio (codec, langue, canaux, sample rate, délai de conteneur éventuel) — voir `probe` ci-dessus.
 - `GET /waveform?path=...&index=...&start=...&duration=...&buckets=...` : enveloppe d'amplitude (min/max) sous-échantillonnée d'une fenêtre de piste, pour dessiner une forme d'onde sans envoyer l'audio brut (`duration` omis = piste entière).
 - `GET /clip?path=...&index=...&start=...&duration=...` : court extrait audio jouable (WAV), pour une écoute avant/après correction — distinct de l'extraction d'analyse (mono 16 kHz), celui-ci garde le nombre de canaux et un sample rate normal.
-- `POST /jobs/prefetch` : lance en arrière-plan, pour une liste de pistes, le calcul coûteux (extraction + spectrogramme/enveloppe) que `segments`/`render` referaient sinon à chaque appel — un résultat déjà en cache (même fichier, piste, fenêtre) est réutilisé tel quel. À appeler juste après `/probe` pour que le premier `segments`/`render` sur ces pistes soit quasi instantané.
+- `POST /jobs/prefetch` : lance en arrière-plan, pour une liste de pistes, le calcul coûteux (extraction + spectrogramme/enveloppe) que `segments`/`render` referaient sinon à chaque appel — un résultat déjà en cache (même fichier, piste, fenêtre) est réutilisé tel quel. Les pistes entières d'un même fichier sont décodées en **une seule passe** ffmpeg (le fichier n'est lu qu'une fois, quel que soit le nombre de pistes). À appeler juste après `/probe` pour que le premier `segments`/`render` sur ces pistes soit quasi instantané.
 
 ## Développement
 
@@ -200,3 +200,12 @@ uv run python benchmarks/regress.py check    # compare, échoue au moindre écar
 ```
 
 `--atol` relâche la comparaison pour un changement volontairement non bit-exact. Les instantanés restent locaux (`benchmarks/.baseline/`, ignoré par git).
+
+## Cache d'analyse
+
+Les enveloppes calculées sont gardées en mémoire et **sur disque** : rouvrir un fichier déjà analysé, même après redémarrage de l'app, saute entièrement l'analyse (~15 ms au lieu de ~1,5 s pour deux pistes de 6 min). Une entrée est liée à l'identité du fichier (chemin, taille, date de modification) : un fichier modifié ou remplacé est toujours réanalysé.
+
+- Emplacement : `%LOCALAPPDATA%\SyncAudio\cache\envelopes` sous Windows, `~/.cache/syncaudio/envelopes` ailleurs (~0,5 Mo par heure d'audio). Le dossier peut être supprimé à tout moment.
+- Taille bornée à 512 Mo, les entrées les moins récemment utilisées sont supprimées en premier.
+- `SYNCAUDIO_CACHE_DIR` change l'emplacement ; vide (`SYNCAUDIO_CACHE_DIR=`), il désactive le cache disque (c'est le cas dans les tests et `benchmarks/regress.py`).
+- `ENVELOPE_VERSION` (`features.py`) fait partie de la clé : à incrémenter si un changement modifie les valeurs d'enveloppe.

@@ -1,35 +1,40 @@
-"""In-memory cache for the expensive part of track analysis.
+"""Cache for the expensive part of track analysis, in memory and on disk.
 
 Measured on a real 6-minute track: ffmpeg extraction (decode to PCM) takes
-~0.3-0.4s, negligible; the envelope computation (STFT + harmonic/percussive
+~0.3-0.4s; the envelope computation (STFT + harmonic/percussive
 median-filter separation, in ``features.py``) took ~7s single-threaded,
 ~0.8s since it runs in parallel cache-sized blocks -- still most of the
-total, and pure CPU-bound numpy/scipy work with no I/O to
-speed up (so e.g. ``mkvextract`` wouldn't help: it only demuxes, and
-decoding was never the bottleneck). ``align``/``segments``/``render`` each
-re-extract and re-analyze their reference (and every candidate) from
-scratch, even across separate calls on the exact same track -- this cache
-lets a second request for the same (file, track, analysis window) skip
-straight to the correlation math instead of redoing that work.
+total. ``align``/``segments``/``render`` each ask for their reference (and
+every candidate) envelope from scratch, even across separate calls on the
+exact same track -- this cache lets a second request for the same (file,
+track, analysis window) skip straight to the correlation math.
+
+Entries are keyed on the file's identity (resolved path, size, mtime), so a
+file replaced on disk is never answered from a stale analysis. They are
+also persisted on disk (a few MB per hour of audio), so reopening a file
+analyzed in an earlier session skips the analysis altogether.
 
 Concurrent requests for the *same* key (e.g. a background prefetch and a
 user-triggered detection racing each other) are coalesced: only the first
 caller actually extracts/analyzes, every other caller for that key blocks
-on it and reuses its result instead of redundantly repeating the same ~7s
-of work in parallel.
+on it and reuses its result.
 """
 
 from __future__ import annotations
 
+import hashlib
+import os
+import sys
+import tempfile
 import threading
 from collections import OrderedDict
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import numpy as np
 
-from syncaudio.features import extract_envelope
-from syncaudio.ffmpeg_backend import extract_pcm
+from syncaudio.features import DEFAULT_HOP, DEFAULT_N_FFT, ENVELOPE_VERSION, extract_envelope
+from syncaudio.ffmpeg_backend import _file_identity, decode_tracks_to_files, extract_pcm, load_pcm_file
 from syncaudio.models import AudioTrackSpec
 
 # The one sample rate every analysis path (align, segments, render) uses --
@@ -38,16 +43,135 @@ from syncaudio.models import AudioTrackSpec
 ANALYSIS_SAMPLE_RATE = 16000
 
 _MAX_ENTRIES = 64
-_CacheKey = tuple[str, int, int, float, float | None]
+# Least recently used disk entries are dropped past this: ~150h of audio.
+_MAX_DISK_BYTES = 512 * 1024 * 1024
 
-_cache: OrderedDict[_CacheKey, tuple[np.ndarray, float]] = OrderedDict()
+_CacheKey = tuple
+_Result = tuple[np.ndarray, float]
+
+_cache: OrderedDict[_CacheKey, _Result] = OrderedDict()
 _inflight: dict[_CacheKey, threading.Event] = {}
 _lock = threading.Lock()
 
 
-def _key(spec: AudioTrackSpec, sample_rate: int, start: float, duration: float | None) -> _CacheKey:
-    idx = spec.stream_index if spec.stream_index is not None else 0
-    return (str(Path(spec.path).resolve()), idx, sample_rate, start, duration)
+def _stream_index(spec: AudioTrackSpec) -> int:
+    return spec.stream_index if spec.stream_index is not None else 0
+
+
+def _key(spec: AudioTrackSpec, sample_rate: int, start: float, duration: float | None) -> _CacheKey | None:
+    identity = _file_identity(spec.path)
+    if identity is None:
+        return None  # unreadable: extraction raises its usual error, uncached
+    return (*identity, _stream_index(spec), sample_rate, start, duration)
+
+
+def cache_dir() -> Path | None:
+    """Where envelopes persist across sessions; ``SYNCAUDIO_CACHE_DIR=""`` disables it."""
+    override = os.environ.get("SYNCAUDIO_CACHE_DIR")
+    if override is not None:
+        return Path(override) if override else None
+    if sys.platform == "win32":
+        base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "SyncAudio" / "cache"
+    else:
+        base = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "syncaudio"
+    return base / "envelopes"
+
+
+def _disk_path(key: _CacheKey) -> Path | None:
+    directory = cache_dir()
+    if directory is None:
+        return None
+    digest = hashlib.sha256(repr((ENVELOPE_VERSION, DEFAULT_N_FFT, DEFAULT_HOP, key)).encode()).hexdigest()
+    return directory / f"{digest[:32]}.npy"
+
+
+def _disk_load(key: _CacheKey, sample_rate: int) -> _Result | None:
+    path = _disk_path(key)
+    if path is None:
+        return None
+    try:
+        env = np.load(path, allow_pickle=False)
+        os.utime(path)  # recently used: pruned last
+    except (OSError, ValueError):
+        return None
+    return env, sample_rate / DEFAULT_HOP
+
+
+def _disk_store(key: _CacheKey, env: np.ndarray) -> None:
+    """Best effort: a full disk or read-only profile must never fail an analysis."""
+    path = _disk_path(key)
+    if path is None:
+        return
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f"{path.stem}.{os.getpid()}.{threading.get_ident()}.tmp")
+        with open(tmp, "wb") as f:
+            np.save(f, env, allow_pickle=False)
+        os.replace(tmp, path)
+        _prune_disk(path.parent)
+    except OSError:
+        pass
+
+
+def _prune_disk(directory: Path) -> None:
+    entries = []
+    for p in directory.glob("*.npy"):
+        try:
+            st = p.stat()
+        except OSError:
+            continue
+        entries.append((st.st_mtime, st.st_size, p))
+    total = sum(size for _, size, _ in entries)
+    for _, size, p in sorted(entries):
+        if total <= _MAX_DISK_BYTES:
+            break
+        try:
+            p.unlink()
+            total -= size
+        except OSError:
+            pass
+
+
+def _remember(key: _CacheKey, result: _Result) -> None:
+    _cache[key] = result
+    _cache.move_to_end(key)
+    while len(_cache) > _MAX_ENTRIES:
+        _cache.popitem(last=False)
+
+
+def _claim(key: _CacheKey, sample_rate: int) -> _Result | threading.Event | None:
+    """The cached result, or an Event to wait on (someone else is computing
+    it), or None: the caller now owns the key and must ``_release`` it."""
+    with _lock:
+        cached = _cache.get(key)
+        if cached is not None:
+            _cache.move_to_end(key)
+            return cached
+        event = _inflight.get(key)
+        if event is not None:
+            return event
+        cached = _disk_load(key, sample_rate)
+        if cached is not None:
+            _remember(key, cached)
+            return cached
+        _inflight[key] = threading.Event()
+        return None
+
+
+def _release(key: _CacheKey, result: _Result | None) -> None:
+    if result is not None:
+        _disk_store(key, result[0])
+    with _lock:
+        if result is not None:
+            _remember(key, result)
+        event = _inflight.pop(key, None)
+    if event is not None:
+        event.set()
+
+
+def _analyze(spec: AudioTrackSpec, pcm: np.ndarray, sample_rate: int, log: Callable[[str], None]) -> _Result:
+    log(f"[analyse] {spec.raw} : calcul du spectrogramme et de l'enveloppe...")
+    return extract_envelope(pcm, sample_rate)
 
 
 def get_envelope(
@@ -56,55 +180,79 @@ def get_envelope(
     start: float = 0.0,
     duration: float | None = None,
     log: Callable[[str], None] = lambda msg: None,
-) -> tuple[np.ndarray, float]:
+) -> _Result:
     """Return ``(envelope, frame_rate)`` for ``spec``, computing it only on a cache miss."""
     key = _key(spec, sample_rate, start, duration)
-
-    while True:
-        with _lock:
-            cached = _cache.get(key)
-            if cached is not None:
-                _cache.move_to_end(key)
-                log(f"[cache] {spec.raw} déjà analysée, réutilisation")
-                return cached
-
-            event = _inflight.get(key)
-            if event is None:
-                # We're first for this key: claim it, everyone else waits on us.
-                event = threading.Event()
-                _inflight[key] = event
-                is_owner = True
-            else:
-                is_owner = False
-
-        if is_owner:
+    while key is not None:
+        claim = _claim(key, sample_rate)
+        if claim is None:
             break
+        if isinstance(claim, threading.Event):
+            log(f"[cache] {spec.raw} : analyse déjà en cours ailleurs, attente...")
+            claim.wait()
+            # Loop back around: the owner either populated the cache (common
+            # case) or failed (rare), in which case we become the new owner.
+            continue
+        log(f"[cache] {spec.raw} déjà analysée, réutilisation")
+        return claim
 
-        log(f"[cache] {spec.raw} : analyse déjà en cours ailleurs, attente...")
-        event.wait()
-        # Loop back around: the owner either populated the cache (common
-        # case, we'll hit it above) or failed (rare), in which case we
-        # retry the whole thing and become the new owner ourselves.
-
+    result = None
     try:
         log(f"[extraction] {spec.raw} ...")
         pcm = extract_pcm(spec, sample_rate=sample_rate, start=start or None, duration=duration)
-        log(f"[analyse] {spec.raw} : calcul du spectrogramme et de l'enveloppe...")
-        result = extract_envelope(pcm, sample_rate)
-        with _lock:
-            _cache[key] = result
-            _cache.move_to_end(key)
-            while len(_cache) > _MAX_ENTRIES:
-                _cache.popitem(last=False)
+        result = _analyze(spec, pcm, sample_rate, log)
         return result
     finally:
-        with _lock:
-            _inflight.pop(key, None)
-        event.set()
+        if key is not None:
+            _release(key, result)
+
+
+def prefetch(
+    specs: Sequence[AudioTrackSpec],
+    sample_rate: int = ANALYSIS_SAMPLE_RATE,
+    start: float = 0.0,
+    duration: float | None = None,
+    log: Callable[[str], None] = lambda msg: None,
+) -> None:
+    """Warm the cache for all of ``specs``, decoding each file's tracks in one pass.
+
+    Only whole-track analysis is batched: a windowed one seeks per track, and
+    each track's seek point depends on its own container delay (see
+    ``ffmpeg_backend._seek_args``). Anything not batched, or whose batch
+    failed, then goes through ``get_envelope`` one by one as before.
+    """
+    owned: dict[str, list[tuple[AudioTrackSpec, _CacheKey]]] = {}
+    if not start and duration is None:
+        for spec in specs:
+            key = _key(spec, sample_rate, start, duration)
+            if key is not None and _claim(key, sample_rate) is None:
+                owned.setdefault(spec.path, []).append((spec, key))
+
+    for path, group in owned.items():
+        pending = {key for _, key in group}
+        try:
+            with tempfile.TemporaryDirectory(prefix="syncaudio-decode-") as tmp:
+                log(f"[extraction] {path} : {len(group)} piste(s) en une seule passe...")
+                files = decode_tracks_to_files(path, [_stream_index(s) for s, _ in group], sample_rate, Path(tmp))
+                for (spec, key), file in zip(group, files):
+                    pending.discard(key)
+                    result = None
+                    try:
+                        result = _analyze(spec, load_pcm_file(file), sample_rate, log)
+                    finally:
+                        _release(key, result)
+        except Exception as exc:
+            log(f"[extraction] passe groupée impossible, pistes une par une ({exc})")
+        finally:
+            for key in pending:
+                _release(key, None)
+
+    for spec in specs:
+        get_envelope(spec, sample_rate, start, duration, log=log)
 
 
 def clear() -> None:
-    """Drop every cached entry (mainly for tests, to avoid cross-test leakage)."""
+    """Drop every in-memory entry (mainly for tests, to avoid cross-test leakage)."""
     with _lock:
         _cache.clear()
         _inflight.clear()

@@ -13,11 +13,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
 
 import numpy as np
+
+# Measure the real computation, never a previous run's persisted analysis.
+os.environ["SYNCAUDIO_CACHE_DIR"] = ""
 
 from syncaudio import analysis_cache
 from syncaudio.align import estimate_offset
@@ -40,6 +44,7 @@ def _run_fixture(path: Path) -> tuple[dict[str, np.ndarray], dict, dict[str, flo
     timings: dict[str, float] = {}
 
     t = time.perf_counter()
+    analysis_cache.prefetch([ref, cand], ANALYSIS_SAMPLE_RATE)
     ref_env, frame_rate = get_envelope(ref, ANALYSIS_SAMPLE_RATE)
     cand_env, _ = get_envelope(cand, ANALYSIS_SAMPLE_RATE)
     timings["envelopes"] = time.perf_counter() - t
