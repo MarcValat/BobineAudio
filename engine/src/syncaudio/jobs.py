@@ -65,7 +65,8 @@ def start_job(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Job:
             result = fn(*args, log=job.log, **kwargs)
             job.finish(result)
         except Exception as exc:  # noqa: BLE001 - a background thread has no other way to surface a failure
-            job.fail(str(exc))
+            # An HTTPException's str() is "400: <detail>"; the user only needs the detail.
+            job.fail(str(getattr(exc, "detail", None) or exc))
 
     threading.Thread(target=runner, daemon=True).start()
     return job

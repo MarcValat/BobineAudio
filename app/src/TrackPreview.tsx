@@ -1,20 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { fetchClip, fetchCorrectedClip, fetchWaveform, type SegmentOut } from "./api";
 import { candidateSpansIn, planResult, silentRegions, skippedRegions } from "./resultPlan";
-import { formatTime } from "./SegmentChart";
+import { InfoTip } from "./InfoTip";
+import { MIN_VIEW_DURATION_S, type TimeView, zoomView } from "./timeView";
+import { formatOffsetMs, formatTime, segmentOffsetLabel } from "./SegmentChart";
 import { Waveform, type HighlightRegion } from "./Waveform";
 import { WaveformNavigator } from "./WaveformNavigator";
 
 const PREVIEW_DURATION_S = 12;
 const WAVEFORM_BUCKETS = 800;
-// Below this, there's nothing more to see: the panel isn't wide enough for
-// finer detail to matter, and the diff highlight is computed analytically
-// anyway, not read off the waveform pixel by pixel.
-const MIN_VIEW_DURATION_S = 20;
 // Fetched once per track, whole-file, so every zoom/pan afterwards is a pure
 // client-side resample (see resamplePeaks) instead of a network round trip.
-// At this bucket count a typical (5-45min) episode stays comfortably sharp
-// down to the MIN_VIEW_DURATION_S floor above.
+// Kept at this: the navigator redraws all of them on every pan, and 120000
+// made navigation visibly lag. The waveform gets coarse near the
+// MIN_VIEW_DURATION_S zoom floor, an accepted trade-off.
 const FULL_TRACK_BUCKETS = 20000;
 
 /**
@@ -167,7 +166,25 @@ interface TrackPreviewProps {
    * _seek_args), so no playback/waveform math uses these values. */
   referenceStartTime: number;
   trackStartTime: number;
+  /** Lets a parent move the playback position (the segment editor's chart,
+   * clicked like a waveform). */
+  controller?: React.Ref<TrackPreviewHandle>;
+  /** The playback marker's reference time, as it moves -- for a parent to
+   * draw the same marker elsewhere. */
+  onCursorChange?: (t: number) => void;
+  /** With both, the visible stretch is the parent's (null: not set yet),
+   * shared with its own chart, instead of this component's own. */
+  view?: TimeView | null;
+  onViewChange?: (view: TimeView) => void;
 }
+
+export interface TrackPreviewHandle {
+  seekTo(t: number): void;
+}
+
+// After the segments change while playing, the loaded "Résultat final" clip
+// no longer matches them: it's reloaded once edits pause for this long.
+const RELOAD_AFTER_EDIT_MS = 400;
 
 /** Compare the reference and a candidate track together -- always-visible,
  * zoomable waveforms (reference / candidate as-is / corrected result, the
@@ -190,6 +207,10 @@ export function TrackPreview({
   segments,
   referenceStartTime,
   trackStartTime,
+  controller,
+  onCursorChange,
+  view: sharedView,
+  onViewChange,
 }: TrackPreviewProps) {
   const [previewStart, setPreviewStart] = useState(() => (segments.length ? segments[0].start_s : 0));
   const [loading, setLoading] = useState(false);
@@ -209,8 +230,14 @@ export function TrackPreview({
 
   const [refDuration, setRefDuration] = useState<number | null>(null);
   const [candDuration, setCandDuration] = useState<number | null>(null);
-  const [viewStart, setViewStart] = useState(0);
-  const [viewDuration, setViewDuration] = useState<number | null>(null);
+  const [ownView, setOwnView] = useState<TimeView | null>(null);
+  const currentView = sharedView !== undefined ? sharedView : ownView;
+  const viewStart = currentView?.start ?? 0;
+  const viewDuration = currentView?.duration ?? null;
+  function setView(next: TimeView) {
+    setOwnView(next);
+    onViewChange?.(next);
+  }
   // Whole-track peaks, fetched once (see the prefetch effect below) -- every
   // zoom/pan re-derives its view from these via resamplePeaks, no refetch.
   const [refFullPeaks, setRefFullPeaks] = useState<FullPeaks | null>(null);
@@ -240,9 +267,36 @@ export function TrackPreview({
   // superseded by a newer one (e.g. a rapid re-seek) and ignore its own
   // late-arriving fetch/decode results instead of clobbering a newer load.
   const loadGenerationRef = useRef(0);
+  // The live playback position, readable from timers (state would be stale there).
+  const cursorRef = useRef<number | null>(null);
 
   const appliedOffset = offsetAt(segments, previewStart);
   const displayCursor = liveCursor ?? previewStart;
+
+  useEffect(() => {
+    onCursorChange?.(displayCursor);
+  }, [displayCursor, onCursorChange]);
+
+  // Compared by content: a parent editing segments may hand a new array with
+  // the same values on every render.
+  const segmentsKey = JSON.stringify(segments);
+  const lastSegmentsKeyRef = useRef(segmentsKey);
+  useEffect(() => {
+    if (segmentsKey === lastSegmentsKeyRef.current) return;
+    lastSegmentsKeyRef.current = segmentsKey;
+    // The decoded "Résultat final" was built from the old segments: never
+    // reuse it for an in-clip seek.
+    setLoadedClipStart(null);
+    if (playbackStartRef.current === null) return;
+    const timer = setTimeout(() => {
+      const at = cursorRef.current;
+      if (at !== null && playbackStartRef.current !== null) loadAndPlay(Math.round(at * 10) / 10);
+    }, RELOAD_AFTER_EDIT_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [segmentsKey]);
+
+  useImperativeHandle(controller, () => ({ seekTo: handleWaveformSeek }));
   // Informational only (see TrackPreviewProps' comment): the offset above is
   // measured on each track's own timeline, container delay excluded, so a
   // normal player (which applies that delay) would see this residual instead.
@@ -292,8 +346,7 @@ export function TrackPreview({
         setCandDuration(candWave.duration);
         setRefFullPeaks({ min: refWave.peaks_min, max: refWave.peaks_max });
         setCandFullPeaks({ min: candWave.peaks_min, max: candWave.peaks_max });
-        setViewStart(0);
-        setViewDuration(refWave.duration);
+        setView({ start: 0, duration: refWave.duration });
       } catch (err) {
         if (!cancelled) setWaveformError(err instanceof Error ? err.message : String(err));
       } finally {
@@ -359,18 +412,12 @@ export function TrackPreview({
    * under the cursor instead of recentering the whole view. */
   function zoomAt(factor: number, centerTime: number) {
     if (viewDuration === null || refDuration === null) return;
-    const newDuration = Math.max(MIN_VIEW_DURATION_S, Math.min(refDuration, viewDuration * factor));
-    const frac = viewDuration > 0 ? (centerTime - viewStart) / viewDuration : 0.5;
-    let newStart = centerTime - frac * newDuration;
-    newStart = Math.max(0, Math.min(Math.max(0, refDuration - newDuration), newStart));
-    setViewStart(newStart);
-    setViewDuration(newDuration);
+    setView(zoomView({ start: viewStart, duration: viewDuration }, factor, centerTime, refDuration));
   }
 
   function resetZoom() {
     if (refDuration === null) return;
-    setViewStart(0);
-    setViewDuration(refDuration);
+    setView({ start: 0, duration: refDuration });
   }
 
   function stopCursorLoop() {
@@ -378,6 +425,7 @@ export function TrackPreview({
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
+    cursorRef.current = null;
     setLiveCursor(null);
   }
 
@@ -393,7 +441,10 @@ export function TrackPreview({
         // handleWaveformSeek) -- keep looping without moving the marker yet,
         // don't treat "hasn't started" the same as "finished".
         if (elapsed <= refBuffer.duration) {
-          if (elapsed >= 0) setLiveCursor(start.refTime + elapsed);
+          if (elapsed >= 0) {
+            cursorRef.current = start.refTime + elapsed;
+            setLiveCursor(cursorRef.current);
+          }
           rafRef.current = requestAnimationFrame(tick);
           return;
         }
@@ -504,6 +555,7 @@ export function TrackPreview({
       candOriginalSourceRef.current = playSource(ctx, candOriginalBufferRef.current, candOriginalGainRef.current, when, clipOffset);
       candSourceRef.current = playSource(ctx, candBufferRef.current, candGainRef.current, when, clipOffset);
       playbackStartRef.current = { contextTime: when, refTime: t };
+      cursorRef.current = t;
       setLiveCursor(t);
       return;
     }
@@ -518,8 +570,7 @@ export function TrackPreview({
    * land inside the right segment. */
   function goToSegment(seg: SegmentOut) {
     setPreviewStart(Math.round(((seg.start_s + seg.end_s) / 2) * 10) / 10);
-    setViewStart(seg.start_s);
-    setViewDuration(Math.max(MIN_VIEW_DURATION_S, seg.end_s - seg.start_s));
+    setView({ start: seg.start_s, duration: Math.max(MIN_VIEW_DURATION_S, seg.end_s - seg.start_s) });
   }
 
   function stop() {
@@ -540,8 +591,7 @@ export function TrackPreview({
           Aller à :
           {segments.map((seg, i) => (
             <button key={i} className="small-button" onClick={() => goToSegment(seg)}>
-              {formatTime(seg.start_s)}–{formatTime(seg.end_s)} (
-              {((seg.offset_start + seg.offset_end) / 2).toFixed(2)}s)
+              {formatTime(seg.start_s)}–{formatTime(seg.end_s)} ({segmentOffsetLabel(seg)})
             </button>
           ))}
         </div>
@@ -558,7 +608,9 @@ export function TrackPreview({
         <button className="small-button" onClick={resetZoom}>
           Piste entière
         </button>
-        <span className="preview-offset">molette = zoomer/dézoomer sous le curseur</span>
+        <InfoTip>
+          Molette sur une forme d'onde : zoomer ou dézoomer sous le curseur. Clic : placer la lecture à cet endroit.
+        </InfoTip>
       </div>
 
       {(removedHighlight.length > 0 || addedHighlight.length > 0) && (
@@ -629,7 +681,7 @@ export function TrackPreview({
           viewDuration={viewDuration}
           peaksMin={refFullPeaks.min}
           peaksMax={refFullPeaks.max}
-          onNavigate={setViewStart}
+          onNavigate={(start) => setView({ start, duration: viewDuration })}
         />
       )}
 
@@ -647,7 +699,7 @@ export function TrackPreview({
         <button className="small-button" onClick={() => loadAndPlay()} disabled={loading}>
           {loading ? "Chargement..." : "Écouter"}
         </button>
-        <button className="small-button" onClick={stop} disabled={loadedClipStart === null}>
+        <button className="small-button" onClick={stop} disabled={loadedClipStart === null && liveCursor === null}>
           Arrêter
         </button>
         <label>
@@ -692,10 +744,10 @@ export function TrackPreview({
           />
           Résultat final
         </label>
-        <span className="preview-offset">Décalage à cette position : {appliedOffset.toFixed(3)} s</span>
+        <span className="preview-offset">Décalage à cette position : {formatOffsetMs(appliedOffset)}</span>
         {hasContainerDelay && (
           <span className="preview-offset" title="Le décalage ci-dessus (utilisé pour la lecture et l'export) est mesuré sur la piste brute, sans son délai de conteneur -- ce nombre est juste informatif.">
-            (dont {trackStartTime.toFixed(3)} s déjà présents dans le conteneur pour cette piste ; décalage restant dans un lecteur ≈ {presentationOffset.toFixed(3)} s)
+            (dont {formatOffsetMs(trackStartTime)} déjà présents dans le conteneur pour cette piste ; décalage restant dans un lecteur ≈ {formatOffsetMs(presentationOffset)})
           </span>
         )}
       </div>

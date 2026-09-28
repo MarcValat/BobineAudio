@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.signal import fftconvolve
+
+from syncaudio.dsp import fftconvolve_full
 
 # Two peaks within this many seconds of each other are treated as "the same"
 # peak rather than a competing, ambiguous match.
@@ -59,7 +60,7 @@ def estimate_offset(
     cand = _standardize(candidate_envelope)
     n_ref, n_cand = len(ref), len(cand)
 
-    raw_corr = fftconvolve(cand, ref[::-1], mode="full")
+    raw_corr = fftconvolve_full(cand, ref[::-1])
     overlap = _overlap_counts(n_ref, n_cand)
     norm_corr = raw_corr / np.maximum(overlap, 1.0)
 

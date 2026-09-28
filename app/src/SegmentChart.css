@@ -43,17 +43,28 @@
   stroke: #d38a39;
 }
 
+/* Dashed: the detection itself isn't sure of this one (confidence ⚠). */
+.segment-line.low-confidence {
+  stroke-dasharray: 7 5;
+}
+
 .segment-label {
   font-size: 11px;
   fill: currentColor;
   opacity: 0.85;
 }
 
+.segment-chart-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+  margin-top: 0.25em;
+}
+
 .segment-chart-legend {
   display: flex;
-  justify-content: center;
   gap: 1.5em;
-  margin-top: 0.25em;
   font-size: 0.85em;
 }
 
@@ -76,4 +87,9 @@
 
 .legend-swatch.drift {
   background: #d38a39;
+}
+
+.legend-swatch.low-confidence {
+  background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px);
+  opacity: 0.7;
 }

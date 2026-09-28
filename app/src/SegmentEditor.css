@@ -69,6 +69,17 @@
   box-sizing: border-box;
 }
 
+.editor-chart-listenable {
+  cursor: pointer;
+}
+
+/* Same red marker as the waveforms' (Waveform.css). */
+.editor-chart .playback-cursor {
+  stroke: var(--danger, #d33);
+  stroke-width: 2;
+  pointer-events: none;
+}
+
 .editor-chart .zero-line {
   stroke: #888;
   stroke-dasharray: 4 3;
@@ -98,10 +109,48 @@
   stroke: #d38a39;
 }
 
+.editor-chart .segment-line.low-confidence {
+  stroke-dasharray: 7 5;
+}
+
 .editor-chart .segment-label {
   font-size: 11px;
   fill: currentColor;
   opacity: 0.85;
+  pointer-events: none;
+}
+
+.editor-chart .segment-label.dragged {
+  font-weight: 700;
+  opacity: 1;
+}
+
+/* The grab area over each segment line (see SegmentEditor's segment-hit). */
+.editor-chart .segment-hit {
+  stroke: transparent;
+  stroke-width: 14;
+  cursor: ns-resize;
+  pointer-events: stroke;
+}
+
+.editor-chart .jump-label {
+  font-size: 10px;
+  fill: currentColor;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* No text selection from dragging or double-clicking on the chart (same
+   concern as WaveformNavigator's drag handle), and the drag's cursor kept
+   even when the pointer outruns the grabbed line. */
+.editor-chart {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.editor-chart-dragging,
+.editor-chart-dragging * {
+  cursor: grabbing !important;
 }
 
 .boundary-handle {
@@ -202,4 +251,11 @@
   display: flex;
   justify-content: center;
   gap: 0.8em;
+}
+
+/* Undo/redo/reset, apart on the left: they act on the edits, not on the result. */
+.editor-history {
+  display: flex;
+  gap: 0.4em;
+  margin-right: auto;
 }

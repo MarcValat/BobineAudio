@@ -1,7 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { SegmentOut } from "./api";
-import { formatTime } from "./SegmentChart";
-import { TrackPreview } from "./TrackPreview";
+import {
+  LOW_CONFIDENCE_THRESHOLD,
+  describeJump,
+  formatOffsetMs,
+  formatTime,
+  offsetTicks,
+  segmentOffsetLabel,
+} from "./SegmentChart";
+import { InfoTip } from "./InfoTip";
+import { type TimeView, WHEEL_ZOOM_IN_FACTOR, WHEEL_ZOOM_OUT_FACTOR, useWheel, zoomView } from "./timeView";
+import { TrackPreview, type TrackPreviewHandle } from "./TrackPreview";
 import "./SegmentEditor.css";
 
 const WIDTH = 900;
@@ -16,15 +25,6 @@ const PLOT_H = HEIGHT - MARGIN.top - MARGIN.bottom;
 // segment the backend classified as constant the moment it's opened for
 // editing -- exactly the bug this comment replaced.
 const DRIFT_EPS_S = 0.2;
-// A segment below this is flagged in the UI and eligible for "Ignorer les
-// segments peu fiables" -- see engine/segments.py's _segment_confidence,
-// which discounts a segment whose supporting windows don't agree with each
-// other and/or a segment built from too few of them. Picked as "clearly
-// more discounted than trusted" rather than a statistically derived cutoff
-// (confidence itself is a heuristic score, not a calibrated probability):
-// a segment scoring under this has already lost at least half its
-// agreement and/or sample-size factor.
-const LOW_CONFIDENCE_THRESHOLD = 0.4;
 
 /** The editable form of a segment list: N+1 boundary times (shared between
  * consecutive segments, so dragging or typing one can never open a gap or
@@ -87,6 +87,40 @@ function mergeSegment(state: EditorState, i: number): EditorState {
   };
 }
 
+// A cut closer than this to a segment's edge would leave a sliver no
+// detection could support.
+const MIN_SPLIT_GAP_S = 0.5;
+
+/** Cut segment `i` in two at time `t`, each half keeping its part of the
+ * original line (so a drift stays the same drift). */
+function splitSegment(state: EditorState, i: number, t: number): EditorState {
+  const t0 = state.times[i];
+  const t1 = state.times[i + 1];
+  const o0 = state.offsetStarts[i];
+  const o1 = state.offsetEnds[i];
+  const at = o0 + ((o1 - o0) * (t - t0)) / (t1 - t0);
+  const insert = <T,>(arr: T[], index: number, value: T) => [...arr.slice(0, index), value, ...arr.slice(index)];
+  return {
+    times: insert(state.times, i + 1, t),
+    offsetStarts: insert(state.offsetStarts, i + 1, at),
+    offsetEnds: insert(state.offsetEnds, i, at),
+    confidences: insert(state.confidences, i + 1, state.confidences[i]),
+  };
+}
+
+// Plenty for an editing session, without growing unbounded.
+const MAX_HISTORY = 200;
+
+function sameState(a: EditorState, b: EditorState): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** What the pointer is currently dragging on the chart. */
+type Drag =
+  | { kind: "boundary"; index: number }
+  // A whole segment, up or down: both its ends move together, so a drift keeps its slope.
+  | { kind: "segment"; index: number; grabOffset: number; offsetStart: number; offsetEnd: number };
+
 /** "Ignorer les segments peu fiables": repeatedly merges away the first
  * remaining segment under LOW_CONFIDENCE_THRESHOLD (same merge -- absorb
  * into the next segment, or the previous one if it's the last -- a manual
@@ -126,15 +160,90 @@ export function SegmentEditor({
    * main analysis view, below the offset chart/table -- fed the *live*
    * edited segments (segmentsPreview), not the original `segments` prop, so
    * dragging a boundary or retyping an offset updates "Résultat final"
-   * immediately, before Enregistrer is even clicked. Optional: single-file
-   * mode already shows this inline outside the modal, so it only passes
-   * this in from batch mode, where the compact per-pair table has nowhere
-   * else to put it. */
+   * immediately, before Enregistrer is even clicked -- and clicking the
+   * chart moves the playback position, with its marker drawn on the chart. */
   preview?: PreviewSource;
 }) {
   const [state, setState] = useState<EditorState>(() => toEditorState(segments));
-  const [dragging, setDragging] = useState<number | null>(null);
+  // What the editor opened with, for "Réinitialiser".
+  const [initialState] = useState(state);
+  // Undo history: states before each edit, and the ones undone since.
+  const [past, setPast] = useState<EditorState[]>([]);
+  const [future, setFuture] = useState<EditorState[]>([]);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  // The table cell whose current typing session is already in the history,
+  // so typing a value is one undo step, not one per keystroke.
+  const historyCellRef = useRef<string | null>(null);
+  const [dragging, setDragging] = useState<Drag | null>(null);
+  const [frozenRange, setFrozenRange] = useState<[number, number] | null>(null);
+  // The stretch of the timeline on screen, shared with the waveforms (null: whole track).
+  const [view, setView] = useState<TimeView | null>(null);
+  // Set once a drag actually moves, so the click ending it isn't also taken
+  // as "move the playback position here".
+  const movedRef = useRef(false);
   const svgRef = useRef<SVGSVGElement>(null);
+
+  /** Record the current state as the one to come back to on undo. */
+  function remember() {
+    setPast((p) => [...p.slice(-(MAX_HISTORY - 1)), stateRef.current]);
+    setFuture([]);
+  }
+
+  function applyEdit(update: (s: EditorState) => EditorState) {
+    remember();
+    setState(update);
+  }
+
+  function restore(next: EditorState) {
+    setState(next);
+    setDrafts({});
+    historyCellRef.current = null;
+  }
+
+  function undo() {
+    const remaining = [...past];
+    let previous = remaining.pop();
+    // A drag that never moved left an entry identical to now: skip it.
+    while (previous && sameState(previous, state)) previous = remaining.pop();
+    setPast(remaining);
+    if (!previous) return;
+    setFuture((f) => [...f, state]);
+    restore(previous);
+  }
+
+  function redo() {
+    const remaining = [...future];
+    const next = remaining.pop();
+    if (!next) return;
+    setFuture(remaining);
+    setPast((p) => [...p, state]);
+    restore(next);
+  }
+
+  function reset() {
+    if (sameState(state, initialState)) return;
+    remember();
+    restore(initialState);
+  }
+
+  // Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z), in the table's cells too: their own
+  // native undo can't follow values the editor rewrites.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const key = e.key.toLowerCase();
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (key === "y" || (key === "z" && e.shiftKey)) {
+        e.preventDefault();
+        redo();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   // Raw text currently being typed into a numeric cell, keyed by e.g.
   // "offsetStart-2" -- kept separate from `state` (the committed numbers)
@@ -146,17 +255,25 @@ export function SegmentEditor({
   // the field then shows the committed, normalized value.
   const [drafts, setDrafts] = useState<Record<string, string>>({});
 
-  function cellValue(key: string, committed: number): string {
-    return key in drafts ? drafts[key] : committed.toFixed(2);
+  // Times in seconds to the millisecond, offsets in milliseconds to a tenth.
+  function cellValue(key: string, committed: string): string {
+    return key in drafts ? drafts[key] : committed;
   }
+  const secondsText = (t: number) => t.toFixed(3);
+  const msText = (offset: number) => (offset * 1000).toFixed(1);
 
   function handleCellChange(key: string, raw: string, commit: (n: number) => void) {
+    if (historyCellRef.current !== key) {
+      remember();
+      historyCellRef.current = key;
+    }
     setDrafts((d) => ({ ...d, [key]: raw }));
     const n = parseFloat(raw);
     if (Number.isFinite(n)) commit(n);
   }
 
   function handleCellBlur(key: string) {
+    historyCellRef.current = null;
     setDrafts((d) => {
       if (!(key in d)) return d;
       const next = { ...d };
@@ -176,9 +293,19 @@ export function SegmentEditor({
   const pad = (maxOffset - minOffset) * 0.15;
   minOffset -= pad;
   maxOffset += pad;
+  // Held still while dragging: rescaling under the pointer would make the
+  // dragged segment run away from it.
+  if (frozenRange) [minOffset, maxOffset] = frozenRange;
 
-  const x = (t: number) => (totalDuration > 0 ? (t / totalDuration) * PLOT_W : 0);
-  const xInv = (px: number) => (totalDuration > 0 ? (px / PLOT_W) * totalDuration : 0);
+  // The stretch on screen, the same as the waveforms' (see TrackPreview's
+  // `view`): zooming or panning one moves the other.
+  const viewStart = view?.start ?? 0;
+  const viewDuration = view?.duration ?? totalDuration;
+  const x = (t: number) => (viewDuration > 0 ? ((t - viewStart) / viewDuration) * PLOT_W : 0);
+  const xInv = (px: number) => (viewDuration > 0 ? viewStart + (px / PLOT_W) * viewDuration : 0);
+  const inView = (px: number) => px >= 0 && px <= PLOT_W;
+  // A segment's label sits in the middle of its visible part.
+  const labelX = (seg: SegmentOut) => (Math.max(0, x(seg.start_s)) + Math.min(PLOT_W, x(seg.end_s))) / 2;
   const y = (offset: number) => PLOT_H - ((offset - minOffset) / (maxOffset - minOffset)) * PLOT_H;
 
   function timeFromClientX(clientX: number): number {
@@ -187,21 +314,58 @@ export function SegmentEditor({
     return xInv(svgX - MARGIN.left);
   }
 
+  function offsetFromClientY(clientY: number): number {
+    const rect = svgRef.current!.getBoundingClientRect();
+    const svgY = ((clientY - rect.top) / rect.height) * HEIGHT - MARGIN.top;
+    return minOffset + ((PLOT_H - svgY) / PLOT_H) * (maxOffset - minOffset);
+  }
+
+  function startDrag(e: React.PointerEvent, next: Drag) {
+    // Same fix as WaveformNavigator's drag handle: without this, dragging
+    // while the pointer passes over surrounding page text triggers the
+    // browser's native text-selection gesture.
+    e.preventDefault();
+    remember(); // the whole drag is one undo step
+    movedRef.current = false;
+    setFrozenRange([minOffset, maxOffset]);
+    setDragging(next);
+  }
+
   useEffect(() => {
     if (dragging === null) return;
-    const minBound = state.times[dragging - 1] + 0.1;
-    const maxBound = state.times[dragging + 1] - 0.1;
+    const drag = dragging;
+    const minBound = drag.kind === "boundary" ? state.times[drag.index - 1] + 0.1 : 0;
+    const maxBound = drag.kind === "boundary" ? state.times[drag.index + 1] - 0.1 : 0;
 
     function onMove(ev: PointerEvent) {
-      const t = Math.min(maxBound, Math.max(minBound, timeFromClientX(ev.clientX)));
+      movedRef.current = true;
+      if (drag.kind === "boundary") {
+        const t = Math.min(maxBound, Math.max(minBound, timeFromClientX(ev.clientX)));
+        setState((s) => {
+          const times = [...s.times];
+          times[drag.index] = t;
+          return { ...s, times };
+        });
+        return;
+      }
+      // Whole milliseconds: finer than anyone can place by hand anyway.
+      const delta = Math.round((offsetFromClientY(ev.clientY) - drag.grabOffset) * 1000) / 1000;
       setState((s) => {
-        const times = [...s.times];
-        times[dragging!] = t;
-        return { ...s, times };
+        const offsetStarts = [...s.offsetStarts];
+        const offsetEnds = [...s.offsetEnds];
+        offsetStarts[drag.index] = drag.offsetStart + delta;
+        offsetEnds[drag.index] = drag.offsetEnd + delta;
+        return { ...s, offsetStarts, offsetEnds };
       });
     }
     function onUp() {
       setDragging(null);
+      setFrozenRange(null);
+      // After the click this pointerup may produce (only if it ends on the
+      // chart): a drag ending elsewhere must not swallow the next real click.
+      setTimeout(() => {
+        movedRef.current = false;
+      }, 0);
     }
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -232,13 +396,56 @@ export function SegmentEditor({
     });
   }
 
-  const segmentsPreview = toSegments(state);
+  const segmentsPreview = useMemo(() => toSegments(state), [state]);
+
+  const previewRef = useRef<TrackPreviewHandle>(null);
+  const [cursor, setCursor] = useState<number | null>(null);
+  const clipId = useId();
+
+  useWheel(svgRef, (e) => {
+    const t = timeFromClientX(e.clientX);
+    const factor = e.deltaY < 0 ? WHEEL_ZOOM_IN_FACTOR : WHEEL_ZOOM_OUT_FACTOR;
+    setView(zoomView({ start: viewStart, duration: viewDuration }, factor, t, totalDuration));
+  });
+
+  /** Click on the chart (not on a boundary handle): move the playback
+   * position there, as a click on a waveform does. */
+  function handleChartClick(e: React.MouseEvent<SVGSVGElement>) {
+    if (movedRef.current) return;
+    if (!preview || (e.target as Element).closest(".boundary-handle")) return;
+    const t = timeFromClientX(e.clientX);
+    if (t < 0 || t > totalDuration) return;
+    previewRef.current?.seekTo(t);
+  }
+
+  /** Double-click: cut the segment under the pointer at that time. */
+  function handleChartDoubleClick(e: React.MouseEvent<SVGSVGElement>) {
+    if ((e.target as Element).closest(".boundary-handle")) return;
+    const t = timeFromClientX(e.clientX);
+    const i = state.times.findIndex((start, k) => k < state.times.length - 1 && start < t && t < state.times[k + 1]);
+    if (i === -1 || t - state.times[i] < MIN_SPLIT_GAP_S || state.times[i + 1] - t < MIN_SPLIT_GAP_S) return;
+    applyEdit((s) => splitSegment(s, i, Math.round(t * 1000) / 1000));
+  }
 
   return (
     <div className="editor-overlay" role="dialog" aria-modal="true">
       <div className={preview ? "editor-panel editor-panel-wide" : "editor-panel"}>
         <div className="editor-header">
-          <h2>Corriger manuellement les segments</h2>
+          <h2>
+            Corriger manuellement les segments{" "}
+            <InfoTip>
+              <ul>
+                <li>Glisse un segment vers le haut ou le bas pour changer son décalage.</li>
+                <li>Glisse une poignée ● pour déplacer une frontière.</li>
+                <li>Double-clique sur le graphe pour couper un segment à cet endroit.</li>
+                <li>Molette : zoomer ou dézoomer, en même temps que les formes d'onde.</li>
+                <li>Un segment en pointillés (⚠) est peu fiable : à vérifier à l'écoute.</li>
+                <li>Ctrl+Z / Ctrl+Y : défaire / refaire.</li>
+                {preview && <li>Clique sur le graphe pour placer la lecture à cet endroit.</li>}
+                <li>Décalage : + = la piste est en retard sur la référence, − = en avance.</li>
+              </ul>
+            </InfoTip>
+          </h2>
           <button className="small-button" onClick={onClose}>
             Annuler
           </button>
@@ -246,14 +453,31 @@ export function SegmentEditor({
 
         <div className="editor-columns">
           <div className="editor-primary">
-            <svg ref={svgRef} className="editor-chart" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img">
+            <svg
+              ref={svgRef}
+              className={`editor-chart${preview ? " editor-chart-listenable" : ""}${dragging ? " editor-chart-dragging" : ""}`}
+              viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+              role="img"
+              onClick={handleChartClick}
+              onDoubleClick={handleChartDoubleClick}
+            >
+              <defs>
+                {/* Room above the plot for the boundary handles' circles. */}
+                <clipPath id={clipId}>
+                  <rect x={0} y={-12} width={PLOT_W} height={PLOT_H + 24} />
+                </clipPath>
+              </defs>
               <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
-                <line x1={0} y1={y(0)} x2={PLOT_W} y2={y(0)} className="zero-line" />
-                <text x={-8} y={y(0)} className="axis-label" textAnchor="end" dominantBaseline="middle">
-                  0s
-                </text>
+                {offsetTicks(minOffset, maxOffset).map((v) => (
+                  <g key={v}>
+                    <line x1={0} y1={y(v)} x2={PLOT_W} y2={y(v)} className={v === 0 ? "zero-line" : "grid-line"} />
+                    <text x={-8} y={y(v)} className="axis-label" textAnchor="end" dominantBaseline="middle">
+                      {formatOffsetMs(v)}
+                    </text>
+                  </g>
+                ))}
 
-                {Array.from({ length: 6 }, (_, i) => (totalDuration * i) / 5).map((t) => (
+                {Array.from({ length: 6 }, (_, i) => viewStart + (viewDuration * i) / 5).map((t) => (
                   <g key={t}>
                     <line x1={x(t)} y1={0} x2={x(t)} y2={PLOT_H} className="grid-line" />
                     <text x={x(t)} y={PLOT_H + 18} className="axis-label" textAnchor="middle">
@@ -262,10 +486,12 @@ export function SegmentEditor({
                   </g>
                 ))}
 
+                <g clipPath={`url(#${clipId})`}>
                 {segmentsPreview.map((seg, i) => {
                   const flat = (seg.offset_start + seg.offset_end) / 2;
                   const yStart = seg.is_drift ? y(seg.offset_start) : y(flat);
                   const yEnd = seg.is_drift ? y(seg.offset_end) : y(flat);
+                  const isDragged = dragging?.kind === "segment" && dragging.index === i;
                   return (
                     <g key={i}>
                       <line
@@ -273,38 +499,64 @@ export function SegmentEditor({
                         y1={yStart}
                         x2={x(seg.end_s)}
                         y2={yEnd}
-                        className={seg.is_drift ? "segment-line drift" : "segment-line constant"}
+                        className={`segment-line ${seg.is_drift ? "drift" : "constant"}${
+                          seg.confidence < LOW_CONFIDENCE_THRESHOLD ? " low-confidence" : ""
+                        }`}
+                      />
+                      {/* A wide invisible stroke on top: the visible line is too thin to grab. */}
+                      <line
+                        x1={x(seg.start_s)}
+                        y1={yStart}
+                        x2={x(seg.end_s)}
+                        y2={yEnd}
+                        className="segment-hit"
+                        onPointerDown={(e) =>
+                          startDrag(e, {
+                            kind: "segment",
+                            index: i,
+                            grabOffset: offsetFromClientY(e.clientY),
+                            offsetStart: seg.offset_start,
+                            offsetEnd: seg.offset_end,
+                          })
+                        }
                       />
                       <text
-                        x={(x(seg.start_s) + x(seg.end_s)) / 2}
-                        y={(yStart + yEnd) / 2 - 10}
-                        className="segment-label"
+                        x={labelX(seg)}
+                        y={yStart + (yEnd - yStart) * ((labelX(seg) - x(seg.start_s)) / (x(seg.end_s) - x(seg.start_s) || 1)) - 10}
+                        className={isDragged ? "segment-label dragged" : "segment-label"}
                         textAnchor="middle"
                       >
-                        {seg.is_drift ? `${seg.offset_start.toFixed(2)}s → ${seg.offset_end.toFixed(2)}s` : `${flat.toFixed(2)}s`}
+                        {segmentOffsetLabel(seg)}
                         {seg.confidence < LOW_CONFIDENCE_THRESHOLD ? " ⚠" : ""}
                       </text>
                     </g>
                   );
                 })}
 
+                {/* What the render does at each jump: cut extra content, or fill missing content with silence. */}
+                {segmentsPreview.slice(1).map((seg, k) => {
+                  const label = describeJump(seg.offset_start - segmentsPreview[k].offset_end);
+                  return (
+                    label && (
+                      <text key={k} x={x(seg.start_s) + 6} y={PLOT_H - 6} className="jump-label">
+                        {label}
+                      </text>
+                    )
+                  );
+                })}
+
+                {preview && cursor !== null && inView(x(cursor)) && (
+                  <line x1={x(cursor)} y1={0} x2={x(cursor)} y2={PLOT_H} className="playback-cursor" />
+                )}
+                </g>
+
                 {/* Draggable handles on every *internal* boundary only -- the
                     first (0) and last (total duration) are fixed. */}
                 {state.times.slice(1, -1).map((t, idx) => {
                   const i = idx + 1;
+                  if (!inView(x(t))) return null;
                   return (
-                    <g
-                      key={i}
-                      className="boundary-handle"
-                      onPointerDown={(e) => {
-                        // Same fix as WaveformNavigator's drag handle: without
-                        // this, dragging while the pointer passes over
-                        // surrounding page text triggers the browser's native
-                        // text-selection gesture.
-                        e.preventDefault();
-                        setDragging(i);
-                      }}
-                    >
+                    <g key={i} className="boundary-handle" onPointerDown={(e) => startDrag(e, { kind: "boundary", index: i })}>
                       <line x1={x(t)} y1={-4} x2={x(t)} y2={PLOT_H + 4} className="boundary-line" />
                       <circle cx={x(t)} cy={-4} r={7} />
                     </g>
@@ -320,8 +572,8 @@ export function SegmentEditor({
                     <th>#</th>
                     <th>Début (s)</th>
                     <th>Fin (s)</th>
-                    <th>Décalage début (s)</th>
-                    <th>Décalage fin (s)</th>
+                    <th>Décalage début (ms)</th>
+                    <th>Décalage fin (ms)</th>
                     <th>Confiance</th>
                     <th>Actions</th>
                   </tr>
@@ -334,7 +586,7 @@ export function SegmentEditor({
                         <input
                           type="text"
                           inputMode="decimal"
-                          value={cellValue(`start-${i}`, seg.start_s)}
+                          value={cellValue(`start-${i}`, secondsText(seg.start_s))}
                           disabled={i === 0}
                           onChange={(e) => handleCellChange(`start-${i}`, e.target.value, (n) => updateTime(i, n))}
                           onBlur={() => handleCellBlur(`start-${i}`)}
@@ -344,7 +596,7 @@ export function SegmentEditor({
                         <input
                           type="text"
                           inputMode="decimal"
-                          value={cellValue(`end-${i}`, seg.end_s)}
+                          value={cellValue(`end-${i}`, secondsText(seg.end_s))}
                           disabled={i === segmentsPreview.length - 1}
                           onChange={(e) => handleCellChange(`end-${i}`, e.target.value, (n) => updateTime(i + 1, n))}
                           onBlur={() => handleCellBlur(`end-${i}`)}
@@ -354,8 +606,8 @@ export function SegmentEditor({
                         <input
                           type="text"
                           inputMode="decimal"
-                          value={cellValue(`offsetStart-${i}`, seg.offset_start)}
-                          onChange={(e) => handleCellChange(`offsetStart-${i}`, e.target.value, (n) => updateOffset("start", i, n))}
+                          value={cellValue(`offsetStart-${i}`, msText(seg.offset_start))}
+                          onChange={(e) => handleCellChange(`offsetStart-${i}`, e.target.value, (n) => updateOffset("start", i, n / 1000))}
                           onBlur={() => handleCellBlur(`offsetStart-${i}`)}
                         />
                       </td>
@@ -363,8 +615,8 @@ export function SegmentEditor({
                         <input
                           type="text"
                           inputMode="decimal"
-                          value={cellValue(`offsetEnd-${i}`, seg.offset_end)}
-                          onChange={(e) => handleCellChange(`offsetEnd-${i}`, e.target.value, (n) => updateOffset("end", i, n))}
+                          value={cellValue(`offsetEnd-${i}`, msText(seg.offset_end))}
+                          onChange={(e) => handleCellChange(`offsetEnd-${i}`, e.target.value, (n) => updateOffset("end", i, n / 1000))}
                           onBlur={() => handleCellBlur(`offsetEnd-${i}`)}
                         />
                       </td>
@@ -380,7 +632,7 @@ export function SegmentEditor({
                           className="small-button"
                           disabled={segmentsPreview.length < 2}
                           title="Fusionne ce segment avec le suivant (ou le précédent si c'est le dernier) -- utile pour retirer un segment parasite."
-                          onClick={() => setState((s) => mergeSegment(s, i))}
+                          onClick={() => applyEdit((s) => mergeSegment(s, i))}
                         >
                           {i < segmentsPreview.length - 1 ? "Fusionner ↓" : "Fusionner ↑"}
                         </button>
@@ -402,17 +654,37 @@ export function SegmentEditor({
                 segments={segmentsPreview}
                 referenceStartTime={preview.referenceStartTime ?? 0}
                 trackStartTime={preview.trackStartTime ?? 0}
+                controller={previewRef}
+                onCursorChange={setCursor}
+                view={view}
+                onViewChange={setView}
               />
             </div>
           )}
         </div>
 
         <div className="editor-actions">
+          <div className="editor-history">
+            <button className="small-button" onClick={undo} disabled={past.length === 0} title="Ctrl+Z">
+              ↶ Défaire
+            </button>
+            <button className="small-button" onClick={redo} disabled={future.length === 0} title="Ctrl+Y">
+              ↷ Refaire
+            </button>
+            <button
+              className="small-button"
+              onClick={reset}
+              disabled={sameState(state, initialState)}
+              title="Revient aux segments tels qu'à l'ouverture de l'éditeur."
+            >
+              Réinitialiser
+            </button>
+          </div>
           <button
             className="small-button"
             disabled={!state.confidences.some((c) => c < LOW_CONFIDENCE_THRESHOLD)}
             title="Fusionne automatiquement chaque segment dont la confiance est sous le seuil avec son voisin (même effet que cliquer sur Fusionner pour chacun) -- ex. une fausse dérive détectée sur des fenêtres d'analyse qui ne s'accordent pas entre elles."
-            onClick={() => setState(ignoreLowConfidenceSegments)}
+            onClick={() => applyEdit(ignoreLowConfidenceSegments)}
           >
             Ignorer les segments peu fiables
           </button>

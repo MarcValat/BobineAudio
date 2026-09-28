@@ -163,19 +163,17 @@ N'analyse ici que les 10 minutes commençant à 5 minutes (utile pour sauter un 
 
 ## Sidecar HTTP (`serve`)
 
-Expose le même moteur (`probe`/`align`/`segments`/`render`) en HTTP, pour un client autre que le CLI — c'est ce que l'app GUI (`app/`) lance et utilise en arrière-plan :
+Expose le même moteur (`probe`/`segments`/`render`) en HTTP, pour un client autre que le CLI — c'est ce que l'app GUI (`app/`) lance et utilise en arrière-plan :
 
 ```
 uv run syncaudio serve
 ```
 
-Démarre sur `http://127.0.0.1:8756` par défaut (`--host`/`--port` pour changer). Docs interactives (Swagger) sur `/docs` une fois lancé — pratique pour explorer les endpoints à la main. `POST /render` reprend les mêmes options que la commande `render` (dont `segmented`, `import_audio`, `subs`) en JSON plutôt qu'en flags.
+Démarre sur `http://127.0.0.1:8756` par défaut (`--host`/`--port` pour changer). Docs interactives (Swagger) sur `/docs` une fois lancé — pratique pour explorer les endpoints à la main. `POST /jobs/render` reprend les mêmes options que la commande `render` (dont `segmented`, `import_audio`, `subs`) en JSON plutôt qu'en flags.
 
-Deux façons d'appeler `align`/`segments`/`render` :
-- **Direct** (`POST /align`, `POST /segments`, `POST /render`) : bloque jusqu'à la fin, simple pour un script ou une vérification rapide.
-- **En job** (`POST /jobs/align`, `POST /jobs/segments`, `POST /jobs/render`) : retourne immédiatement un `job_id`, le traitement tourne en arrière-plan. `WS /jobs/{job_id}/ws` diffuse en direct les mêmes messages de progression que ceux affichés par le CLI (`[analyse] ...`), puis un message final `done` (avec le résultat) ou `error`. `GET /jobs/{job_id}` permet aussi d'interroger l'état à tout moment (utile en complément ou à la place de la WebSocket). C'est le mode à utiliser pour un GUI sur un vrai fichier (dizaines de secondes) : progression en direct plutôt qu'un bouton figé.
+La détection et le rendu tournent **en job** (`POST /jobs/segments`, `POST /jobs/render`) : l'appel retourne immédiatement un `job_id`, le traitement tourne en arrière-plan, et `WS /jobs/{job_id}/ws` diffuse en direct les mêmes messages de progression que ceux affichés par le CLI (`[analyse] ...`), puis un message final `done` (avec le résultat) ou `error` (le message d'erreur seul, lisible tel quel). Sur un vrai fichier (dizaines de secondes), le GUI affiche ainsi une progression en direct plutôt qu'un bouton figé.
 
-Endpoints synchrones complémentaires, pensés pour le GUI :
+Endpoints synchrones, pour ce qui est rapide :
 - `GET /probe?path=...` : liste les pistes audio (codec, langue, canaux, sample rate, délai de conteneur éventuel) — voir `probe` ci-dessus.
 - `GET /waveform?path=...&index=...&start=...&duration=...&buckets=...` : enveloppe d'amplitude (min/max) sous-échantillonnée d'une fenêtre de piste, pour dessiner une forme d'onde sans envoyer l'audio brut (`duration` omis = piste entière).
 - `GET /clip?path=...&index=...&start=...&duration=...` : court extrait audio jouable (WAV), pour une écoute avant/après correction — distinct de l'extraction d'analyse (mono 16 kHz), celui-ci garde le nombre de canaux et un sample rate normal.
