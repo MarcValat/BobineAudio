@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { SegmentOut } from "./api";
-import { formatTime } from "./SegmentChart";
+import { LOW_CONFIDENCE_THRESHOLD, formatTime } from "./SegmentChart";
 import { TrackPreview } from "./TrackPreview";
 import "./SegmentEditor.css";
 
@@ -16,15 +16,6 @@ const PLOT_H = HEIGHT - MARGIN.top - MARGIN.bottom;
 // segment the backend classified as constant the moment it's opened for
 // editing -- exactly the bug this comment replaced.
 const DRIFT_EPS_S = 0.2;
-// A segment below this is flagged in the UI and eligible for "Ignorer les
-// segments peu fiables" -- see engine/segments.py's _segment_confidence,
-// which discounts a segment whose supporting windows don't agree with each
-// other and/or a segment built from too few of them. Picked as "clearly
-// more discounted than trusted" rather than a statistically derived cutoff
-// (confidence itself is a heuristic score, not a calibrated probability):
-// a segment scoring under this has already lost at least half its
-// agreement and/or sample-size factor.
-const LOW_CONFIDENCE_THRESHOLD = 0.4;
 
 /** The editable form of a segment list: N+1 boundary times (shared between
  * consecutive segments, so dragging or typing one can never open a gap or

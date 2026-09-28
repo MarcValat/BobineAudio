@@ -7,6 +7,34 @@ const MARGIN = { top: 14, right: 16, bottom: 26, left: 56 };
 const PLOT_W = WIDTH - MARGIN.left - MARGIN.right;
 const PLOT_H = HEIGHT - MARGIN.top - MARGIN.bottom;
 
+// A segment below this is flagged in the UI and eligible for "Ignorer les
+// segments peu fiables" -- see engine/segments.py's _segment_confidence,
+// which discounts a segment whose supporting windows don't agree with each
+// other and/or a segment built from too few of them. Picked as "clearly
+// more discounted than trusted" rather than a statistically derived cutoff
+// (confidence itself is a heuristic score, not a calibrated probability):
+// a segment scoring under this has already lost at least half its
+// agreement and/or sample-size factor.
+export const LOW_CONFIDENCE_THRESHOLD = 0.4;
+
+// Offset change at a boundary below which it isn't counted as a jump.
+const JUMP_MIN_S = 0.001;
+
+/** "3 segments · 2 sauts · 1 peu fiable", for a track's analysis header. */
+export function describeSegments(segments: SegmentOut[]): string {
+  const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? "s" : ""}`;
+  const jumps = segments
+    .slice(1)
+    .filter((seg, i) => Math.abs(seg.offset_start - segments[i].offset_end) >= JUMP_MIN_S).length;
+  const drifts = segments.filter((seg) => seg.is_drift).length;
+  const unreliable = segments.filter((seg) => seg.confidence < LOW_CONFIDENCE_THRESHOLD).length;
+  const parts = [plural(segments.length, "segment")];
+  if (jumps > 0) parts.push(plural(jumps, "saut"));
+  if (drifts > 0) parts.push(plural(drifts, "dérive"));
+  if (unreliable > 0) parts.push(`${unreliable} peu fiable${unreliable > 1 ? "s" : ""}`);
+  return parts.join(" · ");
+}
+
 export function formatTime(seconds: number): string {
   const s = Math.max(0, Math.round(seconds));
   const m = Math.floor(s / 60);
@@ -22,7 +50,7 @@ export function formatTime(seconds: number): string {
  * same geometry `render.segment_correction_filter` uses to compute the
  * correction, made visible.
  */
-export function SegmentChart({ segments }: { segments: SegmentOut[] }) {
+export function SegmentChart({ segments, onEdit }: { segments: SegmentOut[]; onEdit?: () => void }) {
   if (segments.length === 0) return null;
 
   const totalDuration = segments[segments.length - 1].end_s;
@@ -106,13 +134,20 @@ export function SegmentChart({ segments }: { segments: SegmentOut[] }) {
           })}
         </g>
       </svg>
-      <div className="segment-chart-legend">
-        <span className="legend-item">
-          <span className="legend-swatch constant" /> constant
-        </span>
-        <span className="legend-item">
-          <span className="legend-swatch drift" /> dérive
-        </span>
+      <div className="segment-chart-footer">
+        <div className="segment-chart-legend">
+          <span className="legend-item">
+            <span className="legend-swatch constant" /> constant
+          </span>
+          <span className="legend-item">
+            <span className="legend-swatch drift" /> dérive
+          </span>
+        </div>
+        {onEdit && (
+          <button className="small-button" onClick={onEdit}>
+            Modifier les segments
+          </button>
+        )}
       </div>
     </div>
   );

@@ -184,17 +184,24 @@ export async function startSegmentsJob(
   return data.job_id as string;
 }
 
+export interface TrackSegments {
+  trackIndex: number;
+  segments: SegmentOut[];
+}
+
 /**
- * Segmented (drift/jump-aware) render of exactly one track, using `segments`
- * as-is instead of letting the server re-run detection -- so a render after
- * "Analyser" + manual edits in SegmentEditor produces what was actually
- * reviewed, not a silently recomputed result that discards the edits.
+ * Segmented (drift/jump-aware) render of `tracks` into one file at
+ * `outputPath`, using each track's `segments` as-is instead of letting the
+ * server re-run detection -- so a render after "Analyser" + manual edits in
+ * SegmentEditor produces what was actually reviewed, not a silently
+ * recomputed result that discards the edits. The file holds the video, the
+ * reference track, these corrected tracks and the subtitles.
  */
 export async function startSegmentedRenderJob(
   inputPath: string,
   referenceIndex: number,
-  trackIndex: number,
-  segments: SegmentOut[],
+  tracks: TrackSegments[],
+  outputPath: string,
 ): Promise<string> {
   const resp = await fetch(`${BASE_URL}/jobs/render`, {
     method: "POST",
@@ -202,9 +209,10 @@ export async function startSegmentedRenderJob(
     body: JSON.stringify({
       input_path: inputPath,
       reference_index: referenceIndex,
-      track_indices: [trackIndex],
+      track_indices: tracks.map((t) => t.trackIndex),
+      output_path: outputPath,
       segmented: true,
-      segment_overrides: [{ track: { path: inputPath, index: trackIndex }, segments }],
+      segment_overrides: tracks.map((t) => ({ track: { path: inputPath, index: t.trackIndex }, segments: t.segments })),
     }),
   });
   if (!resp.ok) throw new Error(await readErrorDetail(resp));

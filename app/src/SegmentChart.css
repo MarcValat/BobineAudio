@@ -49,11 +49,17 @@
   opacity: 0.85;
 }
 
+.segment-chart-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+  margin-top: 0.25em;
+}
+
 .segment-chart-legend {
   display: flex;
-  justify-content: center;
   gap: 1.5em;
-  margin-top: 0.25em;
   font-size: 0.85em;
 }
 

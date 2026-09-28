@@ -323,10 +323,6 @@ button:focus-visible {
   font-size: 0.85em;
 }
 
-.edit-button {
-  margin-left: 0.6em;
-}
-
 .tracks-actions {
   display: flex;
   flex-direction: column;
@@ -482,6 +478,74 @@ button:focus-visible {
 
 .error {
   color: var(--danger);
+}
+
+.analysis-description {
+  margin: 0.2em 0;
+  font-size: 0.9em;
+  color: var(--text-muted);
+}
+
+/* The file's single export, pinned under the analysis tabs: it covers every
+   analyzed track at once, so it belongs to none of the cards. */
+.export-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 1.5em;
+  margin-top: 0.8em;
+  padding-top: 0.7em;
+  border-top: 1px solid var(--border);
+}
+
+/* What will be written, left of the button, sitting on the same bottom line. */
+.export-details {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.export-details > :last-child {
+  margin-bottom: 0;
+}
+
+.export-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4em 1em;
+  font-size: 0.9em;
+}
+
+.export-label {
+  font-weight: 600;
+}
+
+.export-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+}
+
+.export-summary {
+  margin: 0.4em 0;
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
+.export-written {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6em;
+}
+
+.export-written .render-success {
+  margin-top: 0;
+}
+
+/* Bottom right, closing the panel like a dialog's main action. */
+.export-button {
+  flex: 0 0 auto;
 }
 
 .render-success {
