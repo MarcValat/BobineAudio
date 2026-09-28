@@ -151,3 +151,70 @@ def test_concurrent_calls_for_the_same_key_extract_only_once(tone_wav: Path, mon
     assert len(calls) == 1  # only the owner actually extracted
     assert len(results) == 2
     assert np.array_equal(results[0][0], results[1][0])
+
+
+def _counting(monkeypatch: pytest.MonkeyPatch, name: str) -> list[int]:
+    calls: list[int] = []
+    real = getattr(analysis_cache, name)
+
+    def counting(*args, **kwargs):
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(analysis_cache, name, counting)
+    return calls
+
+
+def test_disk_cache_survives_a_new_session(tone_wav: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SYNCAUDIO_CACHE_DIR", str(tmp_path / "cache"))
+    spec = AudioTrackSpec(raw=str(tone_wav), path=str(tone_wav), stream_index=None)
+    env1, rate1 = get_envelope(spec)
+
+    analysis_cache.clear()  # what a restarted engine starts with
+    calls = _counting(monkeypatch, "extract_pcm")
+    env2, rate2 = get_envelope(spec)
+    assert calls == []
+    assert rate1 == rate2
+    assert np.array_equal(env1, env2)
+
+
+def test_a_changed_file_is_analyzed_again(tone_wav: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SYNCAUDIO_CACHE_DIR", str(tmp_path / "cache"))
+    spec = AudioTrackSpec(raw=str(tone_wav), path=str(tone_wav), stream_index=None)
+    get_envelope(spec)
+
+    with wave.open(str(tone_wav), "wb") as f:  # replaced by different, longer audio
+        f.setnchannels(1)
+        f.setsampwidth(2)
+        f.setframerate(16000)
+        f.writeframes(np.zeros(16000 * 4, dtype="<i2").tobytes())
+    analysis_cache.clear()
+    calls = _counting(monkeypatch, "extract_pcm")
+    env, _ = get_envelope(spec)
+    assert calls == [1]
+    assert not env.any()
+
+
+def test_prefetch_decodes_a_file_once_for_all_its_tracks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ffmpeg = resolve_ffmpeg()
+    mkv = tmp_path / "multi.mkv"
+    subprocess.run(
+        [
+            ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "sine=frequency=440:duration=3",
+            "-f", "lavfi", "-i", "anoisesrc=duration=3:seed=7",
+            "-map", "0:a", "-map", "1:a", "-c:a", "flac", str(mkv),
+        ],
+        check=True, capture_output=True,
+    )
+    specs = [AudioTrackSpec(raw=f"{mkv}@{i}", path=str(mkv), stream_index=i) for i in (0, 1)]
+    expected = [get_envelope(s)[0] for s in specs]
+    analysis_cache.clear()
+
+    batch_calls = _counting(monkeypatch, "decode_tracks_to_files")
+    single_calls = _counting(monkeypatch, "extract_pcm")
+    analysis_cache.prefetch(specs)
+    assert batch_calls == [1]
+    assert single_calls == []
+    for spec, env in zip(specs, expected):
+        assert np.array_equal(get_envelope(spec)[0], env)

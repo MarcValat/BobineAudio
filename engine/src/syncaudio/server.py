@@ -29,8 +29,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from syncaudio import waveform_cache
-from syncaudio.analysis_cache import ANALYSIS_SAMPLE_RATE, get_envelope
+from syncaudio import analysis_cache, waveform_cache
+from syncaudio.analysis_cache import ANALYSIS_SAMPLE_RATE
 from syncaudio.ffmpeg_backend import FFmpegError, extract_wav_clip, probe_audio_streams, probe_stream_start_time
 from syncaudio.jobs import Job, get_job, start_job
 from syncaudio.models import AudioTrackSpec
@@ -223,8 +223,7 @@ class PrefetchResponse(BaseModel):
 
 
 def _do_prefetch(req: PrefetchRequest, log: Callable[[str], None] = lambda _msg: None) -> PrefetchResponse:
-    for ref in req.tracks:
-        get_envelope(ref.to_spec(), ANALYSIS_SAMPLE_RATE, req.start, req.duration, log=log)
+    analysis_cache.prefetch([ref.to_spec() for ref in req.tracks], ANALYSIS_SAMPLE_RATE, req.start, req.duration, log=log)
     return PrefetchResponse(cached=len(req.tracks))
 
 
