@@ -13,7 +13,7 @@ from syncaudio.ffmpeg_backend import extract_pcm, parse_track_spec, probe_audio_
 from syncaudio.models import AudioTrackSpec
 from syncaudio.render import (
     TrackCorrection,
-    _atempo_chain,
+    _stretch_filter,
     correction_filter,
     plan_corrections,
     plan_segmented_correction,
@@ -334,12 +334,12 @@ def test_render_imports_audio_and_subs_from_another_file(cross_file_fixture: tup
     assert abs(actual_start - expected_start) < 0.1
 
 
-def test_atempo_chain_single_within_range() -> None:
-    assert _atempo_chain(1.02) == "atempo=1.020000"
+def test_small_drift_is_corrected_as_an_exact_speed_change() -> None:
+    assert _stretch_filter(1.002) == "rubberband=tempo=1.002000000:pitch=1.002000000"
 
 
-def test_atempo_chain_splits_large_factor() -> None:
-    assert _atempo_chain(3.0) == "atempo=2.000000,atempo=1.500000"
+def test_large_drift_is_corrected_keeping_pitch() -> None:
+    assert _stretch_filter(1.0427) == "rubberband=tempo=1.042700000"
 
 
 def test_segment_correction_filter_concatenates_all_segments() -> None:
@@ -350,13 +350,13 @@ def test_segment_correction_filter_concatenates_all_segments() -> None:
     filt = segment_correction_filter(segs, "0:a:1", "out")
     assert filt.count("atrim") == 2
     assert "concat=n=2:v=0:a=1[out]" in filt
-    assert "atempo" not in filt  # both segments are constant-offset -> no stretch needed
+    assert "rubberband" not in filt  # both segments are constant-offset -> no stretch needed
 
 
 def test_segment_correction_filter_stretches_a_drift_segment() -> None:
     segs = [Segment(0.0, 100.0, 0.0, 5.0)]
     filt = segment_correction_filter(segs, "0:a:1", "out")
-    assert "atempo=1.050000" in filt  # span 105s squeezed into 100s
+    assert "rubberband=tempo=1.050000000" in filt  # span 105s squeezed into 100s
 
 
 def _apply_jump(bed: np.ndarray, sr: int, jump_time_s: float, delta_s: float) -> np.ndarray:
@@ -649,3 +649,19 @@ def test_render_native_subs_pairing_does_not_duplicate_the_track(
     starts = _extract_srt_start_times(output_path)
     assert len(starts) == 1
     assert abs(starts[0] - (cue_start_s - offset_s)) < 0.3
+
+
+def test_missing_candidate_content_is_left_silent_not_replayed() -> None:
+    # The candidate lacks 2s at t=10: the second segment's span would start
+    # back at 8s, replaying 2s already heard.
+    segs = [Segment(0.0, 10.0, 0.0, 0.0), Segment(10.0, 20.0, -2.0, -2.0)]
+    first, second = segment_correction_filter(segs, "0:a:1", "out").split(";")[:2]
+    assert "atrim=start=10.000000:end=18.000000" in second
+    assert "adelay=2000.000:all=1" in second
+    assert "afade=t=out" in first and "afade=t=in" in second
+
+
+def test_contiguous_segments_are_not_faded() -> None:
+    # A drift segment followed by one continuing exactly where it stopped.
+    segs = [Segment(0.0, 10.0, 0.0, 0.1), Segment(10.0, 20.0, 0.1, 0.1)]
+    assert "afade" not in segment_correction_filter(segs, "0:a:1", "out")

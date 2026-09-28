@@ -19,9 +19,7 @@ from syncaudio.segments import (
     DEFAULT_MARGIN_S,
     DEFAULT_WINDOW_S,
     Segment,
-    classify_segments,
-    refine_segments,
-    windowed_offsets,
+    analyze_segments,
 )
 
 
@@ -464,29 +462,15 @@ def segments(
     progressive ou des sauts nets — utile pour comprendre CE cas avant de
     décider comment le corriger. Ne modifie ni n'écrit aucun fichier.
     """
-    sample_rate = 16000
+    ref_spec = AudioTrackSpec(raw=f"{input_path}@{reference_index}", path=input_path, stream_index=reference_index)
+    track_spec = AudioTrackSpec(raw=f"{input_path}@{track_index}", path=input_path, stream_index=track_index)
     try:
-        ref_spec = AudioTrackSpec(raw=f"{input_path}@{reference_index}", path=input_path, stream_index=reference_index)
-        track_spec = AudioTrackSpec(raw=f"{input_path}@{track_index}", path=input_path, stream_index=track_index)
-
-        _log(f"[extraction] référence @{reference_index} ...", quiet)
-        ref_pcm = extract_pcm(ref_spec, sample_rate=sample_rate, start=start or None, duration=duration)
-        ref_env, frame_rate = extract_envelope(ref_pcm, sample_rate)
-
-        _log(f"[extraction] piste @{track_index} ...", quiet)
-        cand_pcm = extract_pcm(track_spec, sample_rate=sample_rate, start=start or None, duration=duration)
-        cand_env, _ = extract_envelope(cand_pcm, sample_rate)
+        windows, segs, total_duration_s = analyze_segments(
+            ref_spec, track_spec, start=start, duration=duration,
+            window_s=window_s, hop_s=hop_s, margin_s=margin_s, log=lambda msg: _log(msg, quiet),
+        )
     except FFmpegError as exc:
         raise click.ClickException(str(exc)) from exc
-
-    total_duration_s = len(ref_pcm) / sample_rate
-
-    _log("[analyse] fenêtres glissantes...", quiet)
-    windows = windowed_offsets(ref_env, cand_env, frame_rate, window_s=window_s, hop_s=hop_s, margin_s=margin_s)
-    segs = classify_segments(windows, total_duration_s)
-    if len(segs) > 1:
-        _log("[analyse] affinage des frontières...", quiet)
-        segs = refine_segments(ref_env, cand_env, frame_rate, segs)
 
     if as_json:
         payload = {

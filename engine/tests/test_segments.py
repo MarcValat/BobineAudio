@@ -110,9 +110,7 @@ def test_classify_segments_detects_a_jump() -> None:
 
     refined = refine_segments(ref_env, cand_env, frame_rate, segments)
     assert len(refined) == 2
-    refined_error = abs(refined[0].end_s - jump_time_s)
-    assert refined_error < 5.0
-    assert refined_error <= coarse_error
+    assert abs(refined[0].end_s - jump_time_s) < 0.1
 
 
 def test_classify_segments_ignores_an_isolated_outlier_window() -> None:
@@ -314,3 +312,105 @@ def test_confidence_is_high_despite_low_raw_window_confidence_when_windows_agree
 
     assert len(segments) == 1
     assert segments[0].confidence > 0.7
+
+
+def _energy_from(reference: np.ndarray, candidate: np.ndarray, frame_rate: float):
+    hop = int(round(SAMPLE_RATE / frame_rate))
+
+    def read(role: str, start_s: float, duration_s: float) -> np.ndarray:
+        pcm = reference if role == "ref" else candidate
+        first = int(round(start_s * frame_rate))
+        out = np.zeros(int(np.ceil(duration_s * frame_rate)))
+        for i in range(len(out)):
+            a = (first + i) * hop
+            if 0 <= a and a + hop <= len(pcm):
+                out[i] = np.sqrt(np.mean(pcm[a : a + hop] ** 2))
+        return out
+
+    return read
+
+
+def test_a_blank_inserted_in_a_dialogue_stretch_is_cut_exactly() -> None:
+    """Around the jump the shared bed goes quiet (dialogue only, which
+    differs between the tracks): correlation alone can't place the split
+    there, the inserted blank in the candidate can."""
+    duration_s, jump_s, delta_s = 120.0, 60.0, 3.0
+    bed = _make_bed(duration_s + delta_s, SAMPLE_RATE, seed=20)
+    quiet = slice(int((jump_s - 6) * SAMPLE_RATE), int((jump_s + 6) * SAMPLE_RATE))
+    bed[quiet] = 0.0
+    reference = bed[: int(duration_s * SAMPLE_RATE)] + _make_dialogue(duration_s, SAMPLE_RATE, seed=21)
+    cand_bed = bed + _make_dialogue(duration_s + delta_s, SAMPLE_RATE, seed=22)
+    candidate = _apply_jump(cand_bed, SAMPLE_RATE, jump_s, delta_s)[: int(duration_s * SAMPLE_RATE)]
+
+    ref_env, frame_rate = extract_envelope(reference, SAMPLE_RATE)
+    cand_env, _ = extract_envelope(candidate, SAMPLE_RATE)
+    segments = classify_segments(windowed_offsets(ref_env, cand_env, frame_rate), duration_s)
+    assert len(segments) == 2
+
+    refined = refine_segments(
+        ref_env, cand_env, frame_rate, segments, energy=_energy_from(reference, candidate, frame_rate)
+    )
+    cut = refined[0].end_s
+    assert abs(cut - jump_s) < 0.5
+    # Wherever it lands exactly, what it removes from the candidate must be
+    # the blank (the synthetic content has natural silent gaps, so a few cut
+    # points remove near-identical silence, give or take a frame's edge).
+    removed = candidate[int(round(cut * SAMPLE_RATE)) : int(round((cut + delta_s) * SAMPLE_RATE))]
+    assert np.sqrt(np.mean(removed**2)) < 0.01 * np.sqrt(np.mean(candidate**2))
+
+
+def _windows(offsets: list[float], hop_s: float = 10.0) -> list[WindowOffset]:
+    return [WindowOffset(time_s=i * hop_s, offset_seconds=o, confidence=0.5, ambiguous=False) for i, o in enumerate(offsets)]
+
+
+def test_small_jumps_of_tens_of_ms_are_segments_of_their_own() -> None:
+    """Real dubs drift by a few tens of ms from scene to scene (the
+    fixtures' source: +47ms, then -36ms, then -115ms)."""
+    rng = np.random.default_rng(3)
+    levels = [0.047] * 8 + [-0.036] * 8 + [-0.115] * 6
+    windows = _windows([o + rng.normal(0, 0.001) for o in levels])
+
+    segments = classify_segments(windows, total_duration_s=len(levels) * 10.0)
+
+    assert [round(s.mean_offset, 3) for s in segments] == [0.047, -0.036, -0.115]
+
+
+def test_a_blip_next_to_a_small_jump_does_not_hide_it() -> None:
+    """Also from the fixtures' source: two stray windows 0.2s off, right
+    before the +47 -> -36ms change."""
+    levels = [0.047] * 10 + [0.253, 0.259] + [0.047] * 3 + [-0.036] * 10
+    segments = classify_segments(_windows(levels), total_duration_s=len(levels) * 10.0)
+
+    assert len(segments) == 2
+    assert abs(segments[0].mean_offset - 0.047) < 0.002
+    assert abs(segments[1].mean_offset - -0.036) < 0.002
+
+
+def test_a_small_jump_needs_several_windows_on_each_side() -> None:
+    levels = [0.0] * 12 + [0.05, 0.05] + [0.0] * 12
+    assert len(classify_segments(_windows(levels), total_duration_s=len(levels) * 10.0)) == 1
+
+
+def test_drift_is_measured_precisely_once_compensated() -> None:
+    """Under 1% drift a 30s window's content slides 0.3s: uncompensated
+    estimates scatter by a good part of that."""
+    from syncaudio.segments import compensate_drift
+
+    duration_s, factor = 180.0, 1.01
+    bed = _make_bed(duration_s * factor, SAMPLE_RATE, seed=30)
+    reference = bed[: int(duration_s * SAMPLE_RATE)] + _make_dialogue(duration_s, SAMPLE_RATE, seed=31)
+    candidate = _time_stretch(bed[: int(duration_s * SAMPLE_RATE)], factor) + _make_dialogue(
+        duration_s * factor, SAMPLE_RATE, seed=32
+    )[: int(round(duration_s * SAMPLE_RATE * factor))]
+
+    ref_env, frame_rate = extract_envelope(reference, SAMPLE_RATE)
+    cand_env, _ = extract_envelope(candidate, SAMPLE_RATE)
+    args = {"window_s": 30.0, "hop_s": 10.0, "margin_s": 8.0}
+    windows = compensate_drift(ref_env, cand_env, frame_rate, windowed_offsets(ref_env, cand_env, frame_rate, **args), **args)
+    usable = [w for w in windows if not w.ambiguous]
+
+    errors = [abs(w.offset_seconds - (factor - 1.0) * w.center_s) for w in usable]
+    assert np.median(errors) < 0.01
+    segments = classify_segments(windows, duration_s)
+    assert len(segments) == 1 and segments[0].is_drift
+    assert abs(segments[0].offset_end - (factor - 1.0) * duration_s) < 0.03

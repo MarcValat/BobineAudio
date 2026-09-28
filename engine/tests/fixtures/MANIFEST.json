@@ -11,12 +11,16 @@
     {
       "file": "sync_base.mkv",
       "description": "Temoin : aucune desynchronisation (sanity check, offset attendu = 0).",
+      "candidate": "dub",
+      "duration_s": 360.0,
       "breakpoints": [],
       "stretch_factor": null
     },
     {
       "file": "offset_const_plus.mkv",
       "description": "Decalage constant : la candidate est en retard de 5s des le debut.",
+      "candidate": "dub",
+      "duration_s": 360.0,
       "breakpoints": [
         {
           "time_s": 0.0,
@@ -28,6 +32,8 @@
     {
       "file": "offset_const_minus.mkv",
       "description": "Decalage constant : la candidate est en avance de 3s des le debut.",
+      "candidate": "dub",
+      "duration_s": 360.0,
       "breakpoints": [
         {
           "time_s": 0.0,
@@ -39,6 +45,8 @@
     {
       "file": "jump_single.mkv",
       "description": "Synchro au debut, puis un saut net de +4s a t=150s.",
+      "candidate": "dub",
+      "duration_s": 360.0,
       "breakpoints": [
         {
           "time_s": 150.0,
@@ -50,6 +58,8 @@
     {
       "file": "jump_multi.mkv",
       "description": "Plusieurs sauts a des instants pseudo-aleatoires (seed=1234).",
+      "candidate": "dub",
+      "duration_s": 360.0,
       "breakpoints": [
         {
           "time_s": 47.02269691581854,
@@ -69,14 +79,145 @@
     {
       "file": "drift_slower.mkv",
       "description": "Derive progressive : la candidate tourne 1% plus lentement (retard croissant).",
+      "candidate": "dub",
+      "duration_s": 360.0,
       "breakpoints": [],
       "stretch_factor": 1.01
     },
     {
       "file": "drift_faster.mkv",
       "description": "Derive progressive : la candidate tourne 1% plus vite (avance croissante).",
+      "candidate": "dub",
+      "duration_s": 360.0,
       "breakpoints": [],
       "stretch_factor": 0.99
+    },
+    {
+      "file": "exact_sync.mkv",
+      "description": "Verite exacte : reference degradee, aucune desynchronisation.",
+      "candidate": "reference",
+      "duration_s": 360.0,
+      "breakpoints": [],
+      "stretch_factor": null
+    },
+    {
+      "file": "exact_jump_single.mkv",
+      "description": "Verite exacte : saut de +4s (silence insere) a t=150s.",
+      "candidate": "reference",
+      "duration_s": 360.0,
+      "breakpoints": [
+        {
+          "time_s": 150.0,
+          "delta_s": 4.0
+        }
+      ],
+      "stretch_factor": null
+    },
+    {
+      "file": "exact_jump_multi.mkv",
+      "description": "Verite exacte : memes sauts que jump_multi.",
+      "candidate": "reference",
+      "duration_s": 360.0,
+      "breakpoints": [
+        {
+          "time_s": 47.02269691581854,
+          "delta_s": -2.6789087037199626
+        },
+        {
+          "time_s": 163.99780177734522,
+          "delta_s": -1.2460551218405538
+        },
+        {
+          "time_s": 305.94245463687747,
+          "delta_s": 1.5920244384077944
+        }
+      ],
+      "stretch_factor": null
+    },
+    {
+      "file": "exact_micro_jumps.mkv",
+      "description": "Verite exacte : micro-sauts de 50 a 250 ms, dans les deux sens.",
+      "candidate": "reference",
+      "duration_s": 360.0,
+      "breakpoints": [
+        {
+          "time_s": 60.0,
+          "delta_s": 0.08
+        },
+        {
+          "time_s": 140.0,
+          "delta_s": -0.12
+        },
+        {
+          "time_s": 220.0,
+          "delta_s": 0.25
+        },
+        {
+          "time_s": 300.0,
+          "delta_s": -0.05
+        }
+      ],
+      "stretch_factor": null
+    },
+    {
+      "file": "exact_jump_filled.mkv",
+      "description": "Verite exacte : +3s de contenu (bruit, pas un blanc) insere a 120s, puis -2s a 240s.",
+      "candidate": "reference",
+      "duration_s": 360.0,
+      "breakpoints": [
+        {
+          "time_s": 120.0,
+          "delta_s": 3.0,
+          "fill": "noise"
+        },
+        {
+          "time_s": 240.0,
+          "delta_s": -2.0
+        }
+      ],
+      "stretch_factor": null
+    },
+    {
+      "file": "exact_drift_slower.mkv",
+      "description": "Verite exacte : la candidate tourne 1% plus lentement.",
+      "candidate": "reference",
+      "duration_s": 360.0,
+      "breakpoints": [],
+      "stretch_factor": 1.01
+    },
+    {
+      "file": "exact_full.mkv",
+      "description": "Verite exacte, source entiere : sauts de tailles variees, dont un comble par du bruit.",
+      "candidate": "reference",
+      "duration_s": 1560.9,
+      "breakpoints": [
+        {
+          "time_s": 95.0,
+          "delta_s": 2.5
+        },
+        {
+          "time_s": 310.0,
+          "delta_s": -1.2
+        },
+        {
+          "time_s": 540.0,
+          "delta_s": 0.15
+        },
+        {
+          "time_s": 800.0,
+          "delta_s": -0.3
+        },
+        {
+          "time_s": 1050.0,
+          "delta_s": 3.0,
+          "fill": "noise"
+        },
+        {
+          "time_s": 1320.0,
+          "delta_s": -0.08
+        }
+      ],
+      "stretch_factor": null
     }
   ]
 }
