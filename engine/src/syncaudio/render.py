@@ -10,6 +10,7 @@ from syncaudio.analysis_cache import ANALYSIS_SAMPLE_RATE, get_envelope
 from syncaudio.ffmpeg_backend import (
     FFmpegError,
     _run as _run_subprocess,
+    _seek_args,
     probe_audio_streams,
     probe_duration,
     probe_subtitle_codec,
@@ -178,7 +179,9 @@ def _stretch_filter(factor: float) -> str:
 _SEAM_FADE_S = 0.003
 
 
-def segment_correction_filter(segments: Sequence[Segment], input_label: str, output_label: str) -> str:
+def segment_correction_filter(
+    segments: Sequence[Segment], input_label: str, output_label: str, *, played_until: float = 0.0
+) -> str:
     """Build a ffmpeg filter_complex fragment realigning one track, segment by segment.
 
     For each segment, extracts the candidate-time span that corresponds to
@@ -202,13 +205,16 @@ def segment_correction_filter(segments: Sequence[Segment], input_label: str, out
     exactly the expected length even where the real candidate audio runs out
     (segment too close to a track's start/end) -- silence fills the gap
     instead of desyncing everything concatenated after it.
+
+    ``played_until`` is how far into the candidate earlier segments, not
+    part of ``segments``, already played -- for a slice of the timeline
+    (see ``corrected_clip``) to behave exactly as it does in the whole.
     """
     if not segments:
         raise ValueError("segment_correction_filter needs at least one segment")
 
     chains = []
     seg_labels = []
-    played_until = 0.0
     for i, seg in enumerate(segments):
         duration = seg.end_s - seg.start_s
         cand_start = seg.start_s + seg.offset_start
@@ -235,6 +241,69 @@ def segment_correction_filter(segments: Sequence[Segment], input_label: str, out
 
     concat = f"{''.join(seg_labels)}concat=n={len(segments)}:v=0:a=1[{output_label}]"
     return ";".join([*chains, concat])
+
+
+def _clip_segments(segments: Sequence[Segment], start: float, end: float) -> tuple[list[Segment], float]:
+    """``segments`` restricted to reference time [start, end), shifted so ``start`` is 0,
+    plus how far into the candidate the segments before ``start`` played."""
+    played_before = 0.0
+    clipped = []
+    for seg in sorted(segments, key=lambda sg: sg.start_s):
+        if seg.end_s <= start:
+            played_before = max(played_before, seg.end_s + seg.offset_end)
+            continue
+        if seg.start_s >= end:
+            break
+        span = seg.end_s - seg.start_s
+        slope = (seg.offset_end - seg.offset_start) / span if span > 0 else 0.0
+        a, b = max(seg.start_s, start), min(seg.end_s, end)
+        clipped.append(
+            Segment(
+                a - start, b - start,
+                seg.offset_start + slope * (a - seg.start_s), seg.offset_start + slope * (b - seg.start_s),
+            )
+        )
+    return clipped, played_before
+
+
+def corrected_clip(
+    spec: AudioTrackSpec, segments: Sequence[Segment], start: float, duration: float, sample_rate: int = 44100
+) -> bytes:
+    """WAV bytes of exactly what ``render`` makes of ``spec`` over reference time
+    [start, start + duration) -- for the GUI's preview of the final result.
+
+    Built from the very same ``segment_correction_filter`` as a real render,
+    on the segments overlapping that span: jumps, skipped extra content,
+    silence where the candidate is missing some, seam fades and drift
+    stretching all sound the way the rendered file will. The candidate is
+    only decoded from just before the earliest part the span needs.
+    """
+    clipped, played_before = _clip_segments(segments, start, start + duration)
+    if not clipped:
+        raise ValueError("Aucun segment ne couvre cet extrait.")
+    earliest = min(seg.start_s + seg.offset_start for seg in clipped) + start
+    latest = max(seg.end_s + seg.offset_end for seg in clipped) + start
+    # Candidate time `seek` becomes the filter's 0: every offset moves by as much.
+    seek = max(0.0, earliest - 1.0)
+    shifted = [
+        Segment(seg.start_s, seg.end_s, seg.offset_start + start - seek, seg.offset_end + start - seek)
+        for seg in clipped
+    ]
+    filt = segment_correction_filter(
+        shifted, f"0:a:{_stream_index(spec)}", "out", played_until=played_before - seek
+    )
+    cmd = [
+        resolve_ffmpeg(), "-hide_banner", "-loglevel", "error",
+        *_seek_args(spec, seek), "-i", spec.path, "-t", f"{max(0.0, latest - seek) + 1.0:.6f}",
+        "-filter_complex", filt, "-map", "[out]",
+        "-ar", str(sample_rate), "-f", "wav", "-acodec", "pcm_s16le", "-",
+    ]
+    proc = _run_subprocess(cmd, capture_output=True)
+    if proc.returncode != 0:
+        raise FFmpegError(
+            f"Échec de la prévisualisation pour {spec.raw!r} :\n{proc.stderr.decode(errors='replace')}"
+        )
+    return proc.stdout
 
 
 def plan_corrections(
