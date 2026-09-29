@@ -19,21 +19,34 @@ export function moved<T>(arr: T[], from: number, to: number): T[] {
  * finishing sooner. Renders are lighter, but kept sequential too, for the
  * same predictable one-at-a-time progress and to avoid writing several
  * large output files to disk at once. */
-export function runJob<T>(jobId: Promise<string>, onLog: (message: string) => void): Promise<T> {
+export function runJob<T>(
+  jobId: Promise<string>,
+  onLog: (message: string) => void,
+  onStart?: (id: string) => void,
+): Promise<T> {
   return new Promise((resolve, reject) => {
     jobId
       .then((id) => {
+        onStart?.(id);
         connectJobWS<T>(id, (event) => {
           if (event.type === "log") onLog(event.message);
           else if (event.type === "done") resolve(event.result);
           else if (event.type === "error") reject(new Error(event.message));
+          else if (event.type === "cancelled") reject(new JobCancelled());
         });
       })
       .catch(reject);
   });
 }
 
-export type RunStatus = "idle" | "pending" | "running" | "done" | "error";
+/** What runJob rejects with when the job was cancelled (see cancelJob). */
+export class JobCancelled extends Error {
+  constructor() {
+    super("Annulé");
+  }
+}
+
+export type RunStatus = "idle" | "pending" | "running" | "done" | "error" | "cancelled";
 
 /** One file of a list, with the buttons that move it within its column (to
  * reorder, or pair it with another row) or drop it. A dash when its column

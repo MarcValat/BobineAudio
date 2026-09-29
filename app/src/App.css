@@ -493,6 +493,31 @@ button:focus-visible {
   width: 100%;
 }
 
+/* While exporting: the progress, and the way out if it was started too early. */
+.export-running {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+}
+
+.export-running-label {
+  flex: 1 1 auto;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.export-cancel {
+  flex: 0 0 auto;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.export-cancelled {
+  margin: 0;
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
 .analysis-header {
   flex: 0 0 auto;
   display: flex;

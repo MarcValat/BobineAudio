@@ -293,7 +293,16 @@ export async function startCrossFileSegmentedRenderJob(
 export type JobEvent<TResult> =
   | { type: "log"; message: string }
   | { type: "done"; result: TResult }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "cancelled" };
+
+/** Stop a running job (an export started too early...): the engine kills
+ * its ffmpeg run, removes a half-written file, and the job's WebSocket
+ * ends with a "cancelled" event. */
+export async function cancelJob(jobId: string): Promise<void> {
+  const resp = await fetch(`${BASE_URL}/jobs/${jobId}/cancel`, { method: "POST" });
+  if (!resp.ok) throw new Error(await readErrorDetail(resp));
+}
 
 /**
  * Connects to a job's progress WebSocket; returns a function to close it early.
@@ -309,7 +318,7 @@ export function connectJobWS<TResult>(jobId: string, onEvent: (event: JobEvent<T
 
   ws.onmessage = (ev) => {
     const event: JobEvent<TResult> = JSON.parse(ev.data);
-    if (event.type === "done" || event.type === "error") settled = true;
+    if (event.type === "done" || event.type === "error" || event.type === "cancelled") settled = true;
     onEvent(event);
   };
   ws.onerror = () => {

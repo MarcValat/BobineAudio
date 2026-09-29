@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   probe,
+  cancelJob,
   startSegmentedRenderJob,
   startSegmentsJob,
   type RenderResponse,
@@ -9,14 +10,21 @@ import {
   type SubtitleInfo,
   type TrackInfo,
 } from "./api";
-import { FileCell, languageLabel, LanguageSelect, OutputChooser, runJob, type RunStatus } from "./batchShared";
+import { FileCell, JobCancelled, languageLabel, LanguageSelect, OutputChooser, runJob, type RunStatus } from "./batchShared";
 import { InfoTip } from "./InfoTip";
 import { LogPanel } from "./LogPanel";
 import { outputPathFor, pickMediaFiles } from "./mediaDialog";
 import { basename } from "./paths";
 import { describeSegments } from "./SegmentChart";
 import { SegmentEditor } from "./SegmentEditor";
-import { SUBTITLE_MODES, subtitlesFor, type SubtitleMode } from "./subtitles";
+import {
+  SUBTITLE_MODES,
+  UNSHIFTABLE_HINT,
+  subtitleDetails,
+  subtitleLabel,
+  subtitlesFor,
+  type SubtitleMode,
+} from "./subtitles";
 
 interface FileProbe {
   tracks: TrackInfo[] | null;
@@ -28,6 +36,9 @@ interface FileProbe {
 interface TrackChoice {
   reference: number;
   targets: number[];
+  /** The subtitle tracks retimed with each corrected track (by its index),
+   * picked by hand too; absent: per the subtitle setting. */
+  subtitles?: Record<number, number[]>;
 }
 
 /** Which of a file's tracks is the reference and which get corrected, and
@@ -89,17 +100,31 @@ function resolve(tracks: TrackInfo[], referenceLanguage: string, targetLanguages
 function TrackChoiceModal({
   path,
   tracks,
+  subtitles,
   initial,
+  defaultSubtitles,
   onSave,
   onClose,
 }: {
   path: string;
   tracks: TrackInfo[];
+  subtitles: SubtitleInfo[];
   initial: TrackChoice;
+  /** The subtitle setting's pick for a corrected track, for one newly ticked. */
+  defaultSubtitles: (track: TrackInfo) => number[];
   onSave: (choice: TrackChoice) => void;
   onClose: () => void;
 }) {
   const [choice, setChoice] = useState(initial);
+  const subsOfTrack = (index: number) =>
+    choice.subtitles?.[index] ?? defaultSubtitles(tracks.find((t) => t.index === index)!);
+  function toggleSubtitle(track: number, sub: number) {
+    setChoice((c) => {
+      const mine = c.subtitles?.[track] ?? defaultSubtitles(tracks.find((t) => t.index === track)!);
+      const next = mine.includes(sub) ? mine.filter((i) => i !== sub) : [...mine, sub];
+      return { ...c, subtitles: { ...c.subtitles, [track]: next } };
+    });
+  }
   return (
     <div className="batch-tracks-overlay" role="dialog" aria-modal="true">
       <div className="batch-tracks-panel batch-choice-panel">
@@ -152,6 +177,45 @@ function TrackChoiceModal({
             ))}
           </tbody>
         </table>
+        {subtitles.length > 0 && choice.targets.length > 0 && (
+          <div className="batch-choice-subs">
+            <h3>
+              Sous-titres à recaler{" "}
+              <InfoTip>
+                Les pistes de sous-titres cochées subissent les mêmes sauts et la même dérive que la piste audio de leur
+                ligne ; les autres sont gardées telles quelles, calées sur la vidéo.
+              </InfoTip>
+            </h3>
+            {choice.targets.map((track) => {
+              const info = tracks.find((t) => t.index === track);
+              const mine = subsOfTrack(track);
+              return (
+                <div key={track} className="batch-choice-subs-row">
+                  <span className="batch-target-name">
+                    Avec @{track} {info?.language ?? "?"} :
+                  </span>
+                  {subtitles.map((sub) => {
+                    const elsewhere = choice.targets.some((other) => other !== track && subsOfTrack(other).includes(sub.index));
+                    return (
+                      <label
+                        key={sub.index}
+                        title={!sub.shiftable ? UNSHIFTABLE_HINT : elsewhere ? "Déjà recalés avec une autre piste audio" : subtitleDetails(sub)}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={mine.includes(sub.index)}
+                          disabled={!sub.shiftable || elsewhere}
+                          onChange={() => toggleSubtitle(track, sub.index)}
+                        />
+                        {subtitleLabel(sub)}
+                      </label>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        )}
         <div className="batch-choice-actions">
           <button
             className="primary-button"
@@ -266,10 +330,12 @@ export function MultiTrackBatch({
    * one audio track at most. */
   function subsOf(path: string, targets: TrackInfo[]): Record<number, number[]> {
     const subtitles = probes[path]?.subtitles ?? [];
+    const picked = choices[path]?.subtitles;
     const claimed = new Set<number>();
     const out: Record<number, number[]> = {};
     for (const t of targets) {
-      out[t.index] = subtitlesFor(subtitles, t.language, subsMode).filter((i) => !claimed.has(i));
+      const wanted = picked?.[t.index] ?? subtitlesFor(subtitles, t.language, subsMode);
+      out[t.index] = wanted.filter((i) => !claimed.has(i));
       out[t.index].forEach((i) => claimed.add(i));
     }
     return out;
@@ -334,9 +400,28 @@ export function MultiTrackBatch({
 
   /** One export per file, holding every corrected track whose analysis
    * succeeded, with its segments as edited ("Modifier"). */
+  // "Annuler l'export": stop the file being exported and don't start the next ones.
+  const cancelRequested = useRef(false);
+  const currentExportJob = useRef<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+
+  async function cancelExports() {
+    cancelRequested.current = true;
+    setCancelling(true);
+    if (currentExportJob.current) {
+      try {
+        await cancelJob(currentExportJob.current);
+      } catch {
+        // already over: the loop stops before the next file anyway
+      }
+    }
+  }
+
   async function handleExportAll() {
     setExporting(true);
+    cancelRequested.current = false;
     for (const path of files) {
+      if (cancelRequested.current) break;
       const run = runOf(path);
       const done = run ? Object.entries(run.targets).filter(([, t]) => t.status === "done" && t.result) : [];
       if (!run || done.length === 0) continue;
@@ -359,13 +444,18 @@ export function MultiTrackBatch({
             outputPathFor(path, outputDir),
           ),
           (message) => updateRun(path, (r) => ({ ...r, exportLog: [...r.exportLog, message] })),
+          (id) => (currentExportJob.current = id),
         );
         updateRun(path, (r) => ({ ...r, exportStatus: "done", exportResult: result }));
       } catch (err) {
-        updateRun(path, (r) => ({ ...r, exportStatus: "error", exportError: err instanceof Error ? err.message : String(err) }));
+        if (err instanceof JobCancelled) updateRun(path, (r) => ({ ...r, exportStatus: "cancelled" }));
+        else
+          updateRun(path, (r) => ({ ...r, exportStatus: "error", exportError: err instanceof Error ? err.message : String(err) }));
       }
+      currentExportJob.current = null;
     }
     setExporting(false);
+    setCancelling(false);
   }
 
   const allTargets = files.flatMap((f) => (runOf(f) ? Object.values(runOf(f)!.targets) : []));
@@ -580,6 +670,7 @@ export function MultiTrackBatch({
                       {run?.exportStatus === "running" && "Export en cours..."}
                       {run?.exportStatus === "done" && written && <span title={written}>{basename(written)}</span>}
                       {run?.exportStatus === "error" && (run.exportError ?? "Erreur")}
+                      {run?.exportStatus === "cancelled" && "Annulé"}
                       {run && (run.exportStatus === "running" || run.exportStatus === "error") && (
                         <LogPanel lines={run.exportLog} />
                       )}
@@ -610,19 +701,28 @@ export function MultiTrackBatch({
         <button className="primary-button" onClick={handleAnalyzeAll} disabled={!analyzable || busy}>
           {analyzing ? "Analyse en cours..." : "Analyser tout"}
         </button>
-        <button className="primary-button" onClick={handleExportAll} disabled={analyzedCount === 0 || busy}>
-          {exporting ? "Export en cours..." : "Exporter tout"}
-        </button>
+        {exporting ? (
+          <button className="export-cancel" onClick={cancelExports} disabled={cancelling}>
+            {cancelling ? "Annulation..." : "Annuler l'export"}
+          </button>
+        ) : (
+          <button className="primary-button" onClick={handleExportAll} disabled={analyzedCount === 0 || busy}>
+            Exporter tout
+          </button>
+        )}
       </div>
 
       {choosing && choosingTracks && choosingRes && (
         <TrackChoiceModal
           path={choosing}
           tracks={choosingTracks}
+          subtitles={probes[choosing]?.subtitles ?? []}
           initial={{
             reference: choosingRes.reference?.index ?? choosingTracks[0].index,
             targets: choosingRes.targets.map((t) => t.index),
+            subtitles: subsOf(choosing, choosingRes.targets),
           }}
+          defaultSubtitles={(track) => subtitlesFor(probes[choosing]?.subtitles ?? [], track.language, subsMode)}
           onSave={(choice) => setChoices((c) => ({ ...c, [choosing]: choice }))}
           onClose={() => setChoosing(null)}
         />

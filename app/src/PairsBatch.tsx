@@ -1,14 +1,15 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   probe,
   startSegmentsJob,
+  cancelJob,
   startCrossFileSegmentedRenderJob,
   type SegmentsResponse,
   type RenderResponse,
   type TrackInfo,
 } from "./api";
-import { FileCell, LanguageSelect, OutputChooser, runJob } from "./batchShared";
+import { FileCell, JobCancelled, LanguageSelect, OutputChooser, runJob } from "./batchShared";
 import { InfoTip } from "./InfoTip";
 import { describeSegments } from "./SegmentChart";
 import { SegmentEditor } from "./SegmentEditor";
@@ -23,7 +24,7 @@ interface PairAnalysis {
   result: SegmentsResponse | null;
   error: string | null;
   log: string[];
-  exportStatus: "idle" | "pending" | "running" | "done" | "error";
+  exportStatus: "idle" | "pending" | "running" | "done" | "error" | "cancelled";
   exportResult: RenderResponse | null;
   exportError: string | null;
   exportLog: string[];
@@ -342,9 +343,28 @@ export function PairsBatch({
    * reads `analyses` as it currently stands, so a concurrent re-analysis
    * could rewrite a pair's segments out from under an export already using
    * them. */
+  // "Annuler l'export": stop the file being exported and don't start the next ones.
+  const cancelRequested = useRef(false);
+  const currentExportJob = useRef<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+
+  async function cancelExports() {
+    cancelRequested.current = true;
+    setCancelling(true);
+    if (currentExportJob.current) {
+      try {
+        await cancelJob(currentExportJob.current);
+      } catch {
+        // already over: the loop stops before the next file anyway
+      }
+    }
+  }
+
   async function handleExportAll() {
     setExporting(true);
+    cancelRequested.current = false;
     for (let i = 0; i < analyses.length; i++) {
+      if (cancelRequested.current) break;
       const entry = analyses[i];
       if (entry.status !== "done" || !entry.result) continue;
       updatePair(i, { exportStatus: "running", exportLog: [] });
@@ -368,13 +388,17 @@ export function PairsBatch({
             },
           ),
           (message) => updatePair(i, (a) => ({ exportLog: [...a.exportLog, message] })),
+          (id) => (currentExportJob.current = id),
         );
         updatePair(i, { exportStatus: "done", exportResult: result });
       } catch (err) {
-        updatePair(i, { exportStatus: "error", exportError: err instanceof Error ? err.message : String(err) });
+        if (err instanceof JobCancelled) updatePair(i, { exportStatus: "cancelled" });
+        else updatePair(i, { exportStatus: "error", exportError: err instanceof Error ? err.message : String(err) });
       }
+      currentExportJob.current = null;
     }
     setExporting(false);
+    setCancelling(false);
   }
 
   const busy = analyzing || exporting;
@@ -541,6 +565,7 @@ export function PairsBatch({
                         <span title={written}>{basename(written)}</span>
                       )}
                       {a?.exportStatus === "error" && (a.exportError ?? "Erreur")}
+                      {a?.exportStatus === "cancelled" && "Annulé"}
                       {a && (a.exportStatus === "running" || a.exportStatus === "error") && (
                         <LogPanel lines={a.exportLog} />
                       )}
@@ -578,9 +603,15 @@ export function PairsBatch({
         <button className="primary-button" onClick={handleAnalyzeAll} disabled={pairCount === 0 || busy}>
           {analyzing ? "Analyse en cours..." : "Analyser tout"}
         </button>
-        <button className="primary-button" onClick={handleExportAll} disabled={analyzedCount === 0 || busy}>
-          {exporting ? "Export en cours..." : "Exporter tout"}
-        </button>
+        {exporting ? (
+          <button className="export-cancel" onClick={cancelExports} disabled={cancelling}>
+            {cancelling ? "Annulation..." : "Annuler l'export"}
+          </button>
+        ) : (
+          <button className="primary-button" onClick={handleExportAll} disabled={analyzedCount === 0 || busy}>
+            Exporter tout
+          </button>
+        )}
       </div>
 
       {showTracksModal && (

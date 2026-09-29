@@ -257,6 +257,10 @@ td.batch-index {
   color: var(--danger);
 }
 
+.batch-status-cancelled {
+  color: var(--text-muted);
+}
+
 /* "Vérifier toutes les pistes" modal -- same fixed/centered/dark-backdrop
    pattern as SegmentEditor's overlay, kept as its own local rules instead
    of reusing SegmentEditor's classes directly, so BatchView.css doesn't
@@ -498,4 +502,36 @@ td.batch-index {
   display: flex;
   justify-content: flex-end;
   margin-top: 1em;
+}
+
+/* "Choisir": the subtitle tracks retimed with each corrected track. */
+.batch-choice-subs {
+  margin-top: 1em;
+}
+
+.batch-choice-subs h3 {
+  margin: 0 0 0.5em;
+  font-size: 0.8em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.batch-choice-subs-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3em 0.9em;
+  font-size: 0.9em;
+}
+
+.batch-choice-subs-row + .batch-choice-subs-row {
+  margin-top: 0.4em;
+}
+
+.batch-choice-subs-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
 }

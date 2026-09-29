@@ -27,5 +27,12 @@ export function subtitleLabel(s: SubtitleInfo): string {
   return `@${s.index} ${s.language ?? "?"}${s.forced ? " forcés" : ""}${s.title ? ` « ${s.title} »` : ""}`;
 }
 
+/** What a subtitle track is, for a tooltip: "Format ass · sous-titres forcés · titre « ... »". */
+export function subtitleDetails(s: SubtitleInfo): string {
+  const parts = [`Format ${s.codec}`, s.forced ? "sous-titres forcés" : "sous-titres complets"];
+  if (s.title) parts.push(`titre « ${s.title} »`);
+  return parts.join(" · ");
+}
+
 export const UNSHIFTABLE_HINT =
   "Sous-titres image (PGS, VobSub) : ils ne peuvent pas être recalés segment par segment, seuls les sous-titres texte (SRT, ASS) le peuvent.";

@@ -6,6 +6,7 @@ import {
   startPrefetchJob,
   startSegmentedRenderJob,
   connectJobWS,
+  cancelJob,
   type SubtitleInfo,
   type TrackInfo,
   type SegmentsResponse,
@@ -14,6 +15,7 @@ import {
 } from "./api";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { SegmentChart, describeSegments } from "./SegmentChart";
+import { InfoTip } from "./InfoTip";
 import { LogPanel } from "./LogPanel";
 import { SegmentEditor } from "./SegmentEditor";
 import { TrackPreview } from "./TrackPreview";
@@ -21,7 +23,7 @@ import { BatchView } from "./BatchView";
 import { UpdateBanner } from "./UpdateBanner";
 import { pickMediaFiles, pickOutputFile, syncedFileName } from "./mediaDialog";
 import { basename } from "./paths";
-import { UNSHIFTABLE_HINT, subtitleLabel, subtitlesFor } from "./subtitles";
+import { UNSHIFTABLE_HINT, subtitleDetails, subtitleLabel, subtitlesFor } from "./subtitles";
 import { useElementSize } from "./useElementSize";
 import "./App.css";
 
@@ -53,12 +55,24 @@ interface TrackAnalysis {
  * the same output, so exporting never overwrites another track's export. */
 interface ExportState {
   running: boolean;
+  // The running export's job, to cancel it ("Annuler l'export").
+  jobId: string | null;
+  cancelling: boolean;
+  cancelled: boolean;
   log: string[];
   written: string | null;
   error: string | null;
 }
 
-const IDLE_EXPORT: ExportState = { running: false, log: [], written: null, error: null };
+const IDLE_EXPORT: ExportState = {
+  running: false,
+  jobId: null,
+  cancelling: false,
+  cancelled: false,
+  log: [],
+  written: null,
+  error: null,
+};
 
 // Height of the analysis panel's content below which the chart and the
 // waveforms are shown one at a time (see compactAnalysis).
@@ -282,17 +296,32 @@ function App() {
         })),
         outputPath,
       );
+      setExportState((s) => ({ ...s, jobId }));
       connectJobWS<RenderResponse>(jobId, (event) => {
         if (event.type === "log") {
           setExportState((s) => ({ ...s, log: [...s.log, event.message] }));
         } else if (event.type === "done") {
           setExportState((s) => ({ ...s, running: false, written: event.result.written[0] ?? outputPath }));
         } else if (event.type === "error") {
-          setExportState((s) => ({ ...s, running: false, error: event.message }));
+          setExportState((s) => ({ ...s, running: false, jobId: null, error: event.message }));
+        } else if (event.type === "cancelled") {
+          setExportState((s) => ({ ...s, running: false, jobId: null, cancelling: false, cancelled: true }));
         }
       });
     } catch (err) {
       setExportState((s) => ({ ...s, running: false, error: err instanceof Error ? err.message : String(err) }));
+    }
+  }
+
+  /** Stop the running export: the engine kills it and removes the
+   * half-written file; the export can then be started again. */
+  async function cancelExport() {
+    if (!exportState.jobId) return;
+    setExportState((s) => ({ ...s, cancelling: true }));
+    try {
+      await cancelJob(exportState.jobId);
+    } catch (err) {
+      setExportState((s) => ({ ...s, cancelling: false, error: err instanceof Error ? err.message : String(err) }));
     }
   }
   const editingEntry = editingTrack !== null ? analyses[editingTrack] : null;
@@ -459,7 +488,16 @@ function App() {
                       {entry.error && <p className="error">{entry.error}</p>}
                       {entry.result && subtitles.length > 0 && (
                         <div className="result-subs" onClick={(e) => e.stopPropagation()}>
-                          <span className="result-subs-label">Sous-titres recalés avec cette piste :</span>
+                          <span className="result-subs-label">
+                            Recaler aussi ces sous-titres{" "}
+                            <InfoTip>
+                              Coche les pistes de sous-titres calées sur cette piste audio (typiquement les sous-titres
+                              forcés de sa langue, pré-cochés) : elles subiront les mêmes sauts et la même dérive à
+                              l'export. Les pistes décochées sont copiées telles quelles, calées sur la vidéo. Les
+                              sous-titres image (PGS, VobSub) ne peuvent pas être recalés.
+                            </InfoTip>
+                            :
+                          </span>
                           {subtitles.map((s) => {
                             const elsewhere = Object.entries(subsByTrack).some(
                               ([track, subs]) => Number(track) !== t.index && subs.includes(s.index),
@@ -468,7 +506,13 @@ function App() {
                             return (
                               <label
                                 key={s.index}
-                                title={!s.shiftable ? UNSHIFTABLE_HINT : elsewhere ? "Déjà recalés avec une autre piste" : undefined}
+                                title={
+                                  !s.shiftable
+                                    ? UNSHIFTABLE_HINT
+                                    : elsewhere
+                                      ? "Déjà recalés avec une autre piste audio"
+                                      : subtitleDetails(s)
+                                }
                               >
                                 <input
                                   type="checkbox"
@@ -526,13 +570,23 @@ function App() {
                     </button>
                   </div>
                 )}
-                <button
-                  className="primary-button export-button"
-                  onClick={exportFile}
-                  disabled={exportState.running || exportReference === null}
-                >
-                  {exportState.running ? "Export en cours..." : "Exporter le fichier synchronisé"}
-                </button>
+                {exportState.cancelled && <p className="export-cancelled">Export annulé : aucun fichier n'a été écrit.</p>}
+                {exportState.running ? (
+                  <div className="export-running">
+                    <span className="export-running-label">Export en cours...</span>
+                    <button
+                      className="export-cancel"
+                      onClick={cancelExport}
+                      disabled={!exportState.jobId || exportState.cancelling}
+                    >
+                      {exportState.cancelling ? "Annulation..." : "Annuler l'export"}
+                    </button>
+                  </div>
+                ) : (
+                  <button className="primary-button export-button" onClick={exportFile} disabled={exportReference === null}>
+                    Exporter le fichier synchronisé
+                  </button>
+                )}
               </div>
             </section>
           )}
