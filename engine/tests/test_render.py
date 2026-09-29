@@ -13,6 +13,7 @@ from syncaudio.features import extract_envelope
 from syncaudio.ffmpeg_backend import extract_pcm, parse_track_spec, probe_audio_streams, probe_stream_tags, resolve_ffmpeg
 from syncaudio.models import AudioTrackSpec
 from syncaudio.render import (
+    SegmentedTrackCorrection,
     TrackCorrection,
     _stretch_filter,
     correction_filter,
@@ -719,3 +720,36 @@ def test_default_output_path_keeps_every_part_of_the_name_but_the_extension() ->
     # Stripping every suffix used to name each episode of a series the same.
     assert default_output_path(r"D:\Series\Show.S01E01.1080p.mkv") == r"D:\Series\Show.S01E01.1080p.synced.mkv"
     assert default_output_path("film.mkv") == "film.synced.mkv"
+
+
+def test_render_segmented_with_retimed_native_subs_keeps_attachments(
+    offset_mkv_with_native_subs: tuple[Path, float, float], tmp_path: Path
+) -> None:
+    """A file with attachments (an .ass track's fonts, typically) used to
+    fail to mux as soon as a native subtitle track was retimed along with a
+    corrected audio track: ffmpeg handed the retimed subtitles' packets to
+    an attachment stream."""
+    mkv, offset_s, cue_start_s = offset_mkv_with_native_subs
+    font = tmp_path / "font.ttf"
+    font.write_bytes(b"not a real font, any bytes do")
+    with_font = tmp_path / "with_font.mkv"
+    subprocess.run(
+        [
+            resolve_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-i", str(mkv),
+            "-attach", str(font), "-metadata:s:t", "mimetype=application/x-truetype-font",
+            "-map", "0", "-c", "copy", str(with_font),
+        ],
+        check=True, capture_output=True,
+    )
+    segments = [Segment(0.0, 30.0, offset_s, offset_s)]
+    output_path = str(tmp_path / "out.synced.mkv")
+    render(
+        str(with_font), reference_index=0, corrections=[], output_path=output_path,
+        segmented_corrections=[SegmentedTrackCorrection(track=_spec(with_font, 1), language="fre", segments=segments)],
+        segmented_imported_subs=[(_spec(with_font, 0), segments)],
+    )
+    report = subprocess.run([resolve_ffmpeg(), "-hide_banner", "-i", output_path], capture_output=True, text=True).stderr
+    assert "Attachment" in report
+    starts = _extract_srt_start_times(output_path)
+    assert len(starts) == 1
+    assert abs(starts[0] - (cue_start_s - offset_s)) < 0.3
