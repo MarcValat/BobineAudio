@@ -306,6 +306,14 @@ def corrected_clip(
     return proc.stdout
 
 
+def default_output_path(input_path: str) -> str:
+    """Where a render of ``input_path`` goes when no output path is given: next
+    to it, its last extension replaced -- "Show.S01E01.mkv" becomes
+    "Show.S01E01.synced.mkv". Only the last one: stripping them all made every
+    episode of a series named like that write the same "Show.synced.mkv"."""
+    return str(Path(input_path).with_suffix("")) + ".synced.mkv"
+
+
 def plan_corrections(
     reference: AudioTrackSpec,
     candidates: Sequence[AudioTrackSpec],

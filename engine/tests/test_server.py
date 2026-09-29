@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 import syncaudio.analysis_cache as analysis_cache
 import syncaudio.waveform_cache as waveform_cache
-from syncaudio.ffmpeg_backend import resolve_ffmpeg
+from syncaudio.ffmpeg_backend import probe_audio_streams, resolve_ffmpeg
 from syncaudio.server import app
 
 client = TestClient(app)
@@ -304,6 +304,30 @@ def test_job_render_segmented_uses_supplied_segment_override(offset_mkv: tuple[P
     assert result["written"] == [output_path]
     assert result["corrections"][0]["segments"] == [{**segment, "confidence": 1.0}]
     assert any("segments fournis" in m for m in _logs(events))
+
+
+def test_job_render_tags_an_imported_audio_file_with_the_given_language(offset_mkv: tuple[Path, float]) -> None:
+    """A bare .wav has no language: the one given with its segments is what
+    the corrected track gets in the output."""
+    mkv, _ = offset_mkv
+    wav = mkv.with_name("cand.wav")
+    output_path = str(mkv.with_name("out.imported.mkv"))
+    segment = {"start_s": 0.0, "end_s": 30.0, "offset_start": 3.0, "offset_end": 3.0, "is_drift": False}
+    events = _run_job(
+        "/jobs/render",
+        {
+            "input_path": str(mkv),
+            "reference_index": 0,
+            "only_imports": True,
+            "import_audio": [{"path": str(wav), "index": 0}],
+            "output_path": output_path,
+            "segmented": True,
+            "segment_overrides": [{"track": {"path": str(wav), "index": 0}, "segments": [segment], "language": "ger"}],
+        },
+    )
+    assert events[-1]["type"] == "done", events[-1]
+    streams = probe_audio_streams(output_path)
+    assert [s.language for s in streams] == ["jpn", "ger"]
 
 
 def test_job_render_unknown_track_reports_a_readable_error(offset_mkv: tuple[Path, float]) -> None:

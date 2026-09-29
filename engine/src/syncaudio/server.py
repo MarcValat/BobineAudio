@@ -36,6 +36,7 @@ from syncaudio.render import (
     SegmentedTrackCorrection,
     TrackCorrection,
     corrected_clip,
+    default_output_path,
     plan_corrections,
     plan_segmented_correction,
     render as render_tracks,
@@ -355,6 +356,9 @@ class SegmentOverride(BaseModel):
 
     track: TrackRef
     segments: list[SegmentOut]
+    # Language to tag the corrected track with instead of its own -- for a
+    # track that has none (a bare .wav, .flac...) or a wrong one.
+    language: str | None = None
 
 
 class RenderRequest(BaseModel):
@@ -441,27 +445,25 @@ def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> Rend
             )
         subs_positions.append(candidate_keys.index(key))
 
-    if req.output_path is None:
-        stem = Path(req.input_path)
-        while stem.suffix:
-            stem = stem.with_suffix("")
-        output_path = str(stem) + ".synced.mkv"
-    else:
-        output_path = req.output_path
+    output_path = req.output_path if req.output_path is not None else default_output_path(req.input_path)
 
     try:
         if req.segmented:
-            overrides = {_track_key(o.track.to_spec()): o.segments for o in req.segment_overrides}
+            overrides = {_track_key(o.track.to_spec()): o for o in req.segment_overrides}
             seg_corrections: list[SegmentedTrackCorrection] = []
             for spec in candidates:
                 override = overrides.get(_track_key(spec))
                 if override is not None:
-                    idx = spec.stream_index if spec.stream_index is not None else 0
-                    streams = {s.index: s for s in probe_audio_streams(spec.path)}
-                    language = streams[idx].language if idx in streams else None
+                    language = override.language
+                    if language is None:
+                        idx = spec.stream_index if spec.stream_index is not None else 0
+                        streams = {s.index: s for s in probe_audio_streams(spec.path)}
+                        language = streams[idx].language if idx in streams else None
                     log(f"[segments] {spec.raw} : utilisation des segments fournis (édités manuellement)")
                     seg_corrections.append(
-                        SegmentedTrackCorrection(track=spec, language=language, segments=[s.to_segment() for s in override])
+                        SegmentedTrackCorrection(
+                            track=spec, language=language, segments=[s.to_segment() for s in override.segments]
+                        )
                     )
                 else:
                     seg_corrections.append(

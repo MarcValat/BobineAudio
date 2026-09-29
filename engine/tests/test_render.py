@@ -16,6 +16,7 @@ from syncaudio.render import (
     TrackCorrection,
     _stretch_filter,
     correction_filter,
+    default_output_path,
     plan_corrections,
     plan_segmented_correction,
     render,
@@ -712,3 +713,9 @@ def test_a_preview_clip_sounds_exactly_like_that_slice_of_the_render(tmp_path: P
     expected = whole[int(7.0 * sr) : int(21.0 * sr)]
     assert len(clip) == len(expected)
     assert np.max(np.abs(clip - expected)) <= 1.0  # one LSB of rounding at most
+
+
+def test_default_output_path_keeps_every_part_of_the_name_but_the_extension() -> None:
+    # Stripping every suffix used to name each episode of a series the same.
+    assert default_output_path(r"D:\Series\Show.S01E01.1080p.mkv") == r"D:\Series\Show.S01E01.1080p.synced.mkv"
+    assert default_output_path("film.mkv") == "film.synced.mkv"
