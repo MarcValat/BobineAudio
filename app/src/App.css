@@ -139,22 +139,19 @@ body {
   color: inherit;
 }
 
-/* A fixed 2-column grid: tracks on the left, analysis results (one card per
-   analyzed track) on the right, both full height. Every region always
-   exists (see App.tsx's placeholders) and owns a fixed slice of the window
-   -- nothing here grows the window or the page; overflowing *content*
-   scrolls inside its own panel instead. `min-height: 0` on both the grid
-   container and each panel is load-bearing: grid/flex items default to
-   `min-height: auto`, which lets their content's natural size override the
-   track/panel size and defeats `overflow: auto` entirely -- a classic CSS
-   trap. */
+/* Nothing in the app scrolls but lists: the window is split into regions
+   that shrink and grow with it, and a list that outgrows its region (tracks,
+   analyzed tracks) scrolls inside its own frame (.list-scroll). Left, the
+   file: tracks, analyzed tracks and the export. Right, what's looked at and
+   listened to: the chart and the waveforms. `min-height: 0` on every grid/
+   flex level is load-bearing: items default to `min-height: auto`, which
+   lets content push past its region instead of shrinking into it. */
 .app-main {
   flex: 1 1 auto;
   min-height: 0;
   padding: 1em;
   display: grid;
-  /* The tracks column follows the window's width instead of keeping 440px
-     on a small screen, where the analysis needs every pixel. */
+  /* Follows the window's width instead of keeping a fixed one. */
   grid-template-columns: clamp(290px, 24vw, 420px) minmax(0, 1fr);
   gap: 1em;
   overflow: hidden;
@@ -168,16 +165,29 @@ body {
   gap: 0.8em;
 }
 
+/* Keeps its natural height (the analyzed tracks below give way first), up
+   to a point where a file with many tracks scrolls its table instead. */
 .left-column .field-tracks {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
+  flex: 0 0 auto;
+  max-height: 55%;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Flex column so the single visible tab's content (see analysis-tabs/
-   analysis-card below) can be squeezed to fit the available height instead
-   of needing to scroll -- min-height:0 is load-bearing here too, same trap
-   as .app-main above. */
+.left-column .field-results {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* A list that may hold more than its region can show: it scrolls in its own
+   frame, the only kind of scrolling in the app. */
+.list-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 .field-analysis {
   grid-column: 2;
   display: flex;
@@ -194,8 +204,7 @@ body {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 1em 1.1em;
-  /* Clips to the rounded corners; what can outgrow a panel scrolls inside
-     it instead (.field-tracks, .analysis-card). */
+  /* Clips to the rounded corners. */
   overflow: hidden;
   text-align: left;
   /* Windows paths have no spaces to break on -- without this, a long one
@@ -335,111 +344,160 @@ button:focus-visible {
   margin-top: 1em;
 }
 
-/* One tab per analyzed track (App.tsx only ever renders the active one's
-   card below), so any number of analyzed tracks takes one card's room. */
-.analysis-tabs {
-  flex: 0 0 auto;
-  display: flex;
-  gap: 0.3em;
-  flex-wrap: wrap;
-  margin-bottom: 0.6em;
+/* One row per analyzed track (App.tsx): select it to show it on the right,
+   tick it to export it. A left bar gives its state at a glance. */
+.result-list {
+  flex: 0 1 auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.analysis-tab {
-  padding: 0.35em 0.8em;
-  font-size: 0.85em;
+.result-row {
+  padding: 0.45em 0.6em;
+  margin-bottom: 0.35em;
+  border: 1px solid var(--border);
   border-left: 3px solid var(--border);
   border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.9em;
 }
-.analysis-tab.status-running {
-  border-left-color: var(--accent);
-}
-.analysis-tab.status-done {
-  border-left-color: var(--success);
-}
-.analysis-tab.status-error {
-  border-left-color: var(--danger);
-}
-.analysis-tab.active {
+
+.result-row:hover {
   background: var(--surface-alt);
-  font-weight: 700;
 }
 
-/* The single visible card, with a left accent bar reflecting its state at a
-   glance (running/done/error). Its content -- ultimately the waveforms
-   inside .preview -- grows to fill a tall window, but never shrinks below a
-   readable size: on a small screen the card scrolls instead (the export bar
-   below it stays in view). */
-.analysis-card {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  padding: 0.2em 0 0.2em 0.9em;
-  border-left: 3px solid var(--border);
+.result-row.active {
+  background: var(--surface-alt);
+  border-color: var(--accent);
 }
 
-.analysis-card.status-running {
+.result-row.status-running {
   border-left-color: var(--accent);
 }
-.analysis-card.status-done {
+
+.result-row.status-done {
   border-left-color: var(--success);
 }
-.analysis-card.status-error {
+
+.result-row.status-error {
   border-left-color: var(--danger);
 }
 
-.analysis-card h3 {
-  flex: 0 0 auto;
-  margin: 0 0 0.5em;
-  font-size: 0.95em;
+.result-row-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  flex-wrap: wrap;
+}
+
+.result-name {
   font-weight: 600;
 }
 
-.segments-result {
-  flex: 1 0 auto;
-  display: flex;
-  flex-direction: column;
-  margin-top: 0.5em;
+.result-status {
+  color: var(--text-muted);
+  font-size: 0.9em;
 }
 
-/* Everything in the card except .preview (summary, chart) keeps its
-   natural size; .preview alone (the waveform comparison) takes the room
-   left over. */
-.segments-result > :not(.preview),
-.analysis-card > :not(.segments-result) {
+.result-row .error,
+.result-row .log-panel {
+  margin: 0.3em 0 0;
+  cursor: auto;
+}
+
+/* The export of the whole file, at the bottom of the analyzed tracks. */
+.export-box {
+  flex: 0 0 auto;
+  margin-top: auto;
+  padding-top: 0.7em;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+
+.export-button {
+  width: 100%;
+}
+
+.analysis-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+  margin-bottom: 0.7em;
+}
+
+.analysis-header h2 {
+  flex: 1 1 auto;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Segments / Écoute, when the panel is too low for both at once. */
+.view-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.3em;
+}
+
+.view-tabs button {
+  padding: 0.3em 0.9em;
+  font-size: 0.85em;
+}
+
+.view-tabs button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+/* The chart on top, the waveforms taking every pixel left. */
+.analysis-view {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7em;
+}
+
+.analysis-chart {
   flex: 0 0 auto;
 }
 
-/* The chart sits next to the summary while it has room to stay legible,
-   and moves under it (full width) otherwise. */
-.analysis-top {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.8em 1.5em;
-  align-items: flex-start;
-}
-
-.analysis-summary {
-  flex: 0 1 16em;
-  min-width: 12em;
-}
-
-.analysis-top .segment-chart {
-  flex: 1 1 440px;
-  min-width: 0;
+.analysis-chart .segment-chart {
   max-width: none;
   margin: 0;
 }
 
-.preview {
-  flex: 1 0 auto;
+/* The Segments tab: the chart alone, as tall as the panel. */
+.analysis-chart-fill {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.view-hidden {
+  display: none;
+}
+
+.segments-result {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  margin-top: 0.7em;
-  padding-top: 0.6em;
-  border-top: 1px solid var(--border);
+}
+
+.preview {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35em;
 }
 
 .preview > .error {
@@ -492,54 +550,8 @@ button:focus-visible {
   color: var(--danger);
 }
 
-.analysis-description {
-  margin: 0.2em 0;
-  font-size: 0.9em;
-  color: var(--text-muted);
-}
-
-/* The file's single export, pinned under the analysis tabs: it covers every
-   analyzed track at once, so it belongs to none of the cards. */
-.export-bar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: flex-end;
-  gap: 1.5em;
-  margin-top: 0.8em;
-  padding-top: 0.7em;
-  border-top: 1px solid var(--border);
-}
-
-/* What will be written, left of the button, sitting on the same bottom line. */
-.export-details {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.export-details > :last-child {
-  margin-bottom: 0;
-}
-
-.export-choice {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4em 1em;
-  font-size: 0.9em;
-}
-
-.export-label {
-  font-weight: 600;
-}
-
-.export-track {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3em;
-}
-
 .export-summary {
-  margin: 0.4em 0;
+  margin: 0;
   font-size: 0.85em;
   color: var(--text-muted);
 }
@@ -551,7 +563,7 @@ button:focus-visible {
   gap: 0.6em;
 }
 
-.export-written .render-success {
+.render-success {
   margin-top: 0;
 }
 

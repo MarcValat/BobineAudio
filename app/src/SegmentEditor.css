@@ -6,7 +6,7 @@
   align-items: center;
   justify-content: center;
   z-index: 50;
-  padding: 2em;
+  padding: 1em;
   box-sizing: border-box;
 }
 
@@ -18,9 +18,10 @@
   padding: 1.2em 1.4em;
   width: 100%;
   max-width: 960px;
-  max-height: 100%;
-  /* Title and actions always in view; only what's between them scrolls
-     (.editor-columns), so Enregistrer never ends up below the window's edge. */
+  /* The whole window (bar the backdrop's margin), fitted rather than
+     scrolled: the chart takes the height left over, the segment table
+     scrolls in its own frame when long. */
+  height: 100%;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -43,16 +44,22 @@
 .editor-columns {
   flex: 1 1 auto;
   min-height: 0;
-  overflow-y: auto;
   display: flex;
   align-items: stretch;
-  flex-wrap: wrap;
   gap: 1.4em;
 }
 
 .editor-primary {
-  flex: 1 1 520px;
-  min-width: min(460px, 100%);
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8em;
+}
+
+.editor-chart-box {
+  flex: 1 1 auto;
+  min-height: 160px;
 }
 
 .editor-header {
@@ -71,6 +78,7 @@
 .editor-chart {
   display: block;
   width: 100%;
+  height: 100%;
   border: 1px solid var(--border, rgba(128, 128, 128, 0.25));
   border-radius: var(--radius-sm, 8px);
   box-sizing: border-box;
@@ -178,10 +186,12 @@
   fill: #d33;
 }
 
+/* Its natural height up to 40% of the column, then it scrolls in its own
+   frame, headers kept in view: the chart above takes the rest. */
 .editor-table-wrap {
-  margin-top: 0.8em;
-  max-height: 14em;
-  overflow-y: auto;
+  flex: 0 1 auto;
+  max-height: 40%;
+  min-height: 5.5em;
   border: 1px solid var(--border, rgba(128, 128, 128, 0.3));
   border-radius: var(--radius-sm, 8px);
 }
@@ -200,6 +210,9 @@
 }
 
 .editor-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   white-space: nowrap;
   font-size: 0.75em;
   font-weight: 700;
@@ -213,8 +226,13 @@
   white-space: nowrap;
 }
 
+/* As wide as its column, not a fixed width: the table then fits its frame
+   instead of scrolling sideways in a narrow editor. */
 .editor-table input {
-  width: 5.5em;
+  width: 100%;
+  min-width: 4.8em;
+  max-width: 7em;
+  box-sizing: border-box;
   padding: 0.25em 0.4em;
   font-size: 0.95em;
 }
@@ -236,8 +254,9 @@
 /* No fixed height: the waveforms keep their own readable minimum (see
    Waveform.css), and .editor-columns scrolls when they don't fit. */
 .editor-preview {
-  flex: 1 1 420px;
-  min-width: min(340px, 100%);
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   border-left: 1px solid var(--border, rgba(128, 128, 128, 0.3));
@@ -266,17 +285,14 @@
   margin-right: auto;
 }
 
-/* A narrow window: the preview goes under the chart and table instead of
-   beside them, and the backdrop gives the panel more of the screen. */
-@media (max-width: 1100px) {
-  .editor-overlay {
-    padding: 1em;
-  }
+/* Chart and preview as tabs (SegmentEditor's `narrow`): one column at a
+   time, full width. */
+.editor-narrow .editor-preview {
+  border-left: none;
+  padding-left: 0;
+}
 
-  .editor-preview {
-    border-left: none;
-    padding-left: 0;
-    border-top: 1px solid var(--border, rgba(128, 128, 128, 0.3));
-    padding-top: 1em;
-  }
+.editor-header .view-tabs {
+  margin-left: auto;
+  margin-right: 0.8em;
 }

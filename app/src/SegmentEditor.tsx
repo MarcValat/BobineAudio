@@ -3,7 +3,6 @@ import type { SegmentOut } from "./api";
 import {
   LOW_CONFIDENCE_THRESHOLD,
   describeJump,
-  useShortWindow,
   formatOffsetMs,
   formatTime,
   offsetTicks,
@@ -12,13 +11,14 @@ import {
 import { InfoTip } from "./InfoTip";
 import { type TimeView, WHEEL_ZOOM_IN_FACTOR, WHEEL_ZOOM_OUT_FACTOR, useWheel, zoomView } from "./timeView";
 import { TrackPreview, type TrackPreviewHandle } from "./TrackPreview";
+import { useElementSize } from "./useElementSize";
 import "./SegmentEditor.css";
 
-// The chart is drawn at its real on-screen width (measured) and a fixed
-// height, so its text keeps one size on any window (see SegmentChart);
-// lower on a short window, so the segment table below stays in view.
-const HEIGHT = 300;
-const COMPACT_HEIGHT = 240;
+// The chart is drawn at the size its box actually gets (measured), so its
+// text keeps one size on any window (see SegmentChart).
+const MIN_CHART_HEIGHT = 160;
+// Narrower than this, the editor shows its two columns as tabs.
+const NARROW_EDITOR_WIDTH = 1000;
 const MARGIN = { top: 20, right: 20, bottom: 32, left: 64 };
 // Must match engine/src/syncaudio/segments.py's _DRIFT_EPS_S: the editor
 // recomputes is_drift live as the user edits offset values (rather than
@@ -185,15 +185,12 @@ export function SegmentEditor({
   // as "move the playback position here".
   const movedRef = useRef(false);
   const svgRef = useRef<SVGSVGElement>(null);
-  const [chartWidth, setChartWidth] = useState(900);
-  useEffect(() => {
-    const svg = svgRef.current;
-    if (!svg) return;
-    const observer = new ResizeObserver(([entry]) => setChartWidth(Math.max(300, Math.round(entry.contentRect.width))));
-    observer.observe(svg);
-    return () => observer.disconnect();
-  }, []);
-  const chartHeight = useShortWindow() ? COMPACT_HEIGHT : HEIGHT;
+  const [chartBoxRef, chartBox] = useElementSize<HTMLDivElement>();
+  const chartWidth = Math.max(300, chartBox.width || 900);
+  const chartHeight = Math.max(MIN_CHART_HEIGHT, chartBox.height || 300);
+  const [panelRef, panelSize] = useElementSize<HTMLDivElement>();
+  const narrow = preview !== undefined && panelSize.width > 0 && panelSize.width < NARROW_EDITOR_WIDTH;
+  const [editorView, setEditorView] = useState<"segments" | "listen">("segments");
   const PLOT_W = chartWidth - MARGIN.left - MARGIN.right;
   const PLOT_H = chartHeight - MARGIN.top - MARGIN.bottom;
 
@@ -442,7 +439,7 @@ export function SegmentEditor({
 
   return (
     <div className="editor-overlay" role="dialog" aria-modal="true">
-      <div className={preview ? "editor-panel editor-panel-wide" : "editor-panel"}>
+      <div ref={panelRef} className={`editor-panel${preview ? " editor-panel-wide" : ""}${narrow ? " editor-narrow" : ""}`}>
         <div className="editor-header">
           <h2>
             Corriger manuellement les segments{" "}
@@ -459,18 +456,39 @@ export function SegmentEditor({
               </ul>
             </InfoTip>
           </h2>
+          {/* Too narrow for the chart and the preview side by side: one at a time. */}
+          {narrow && (
+            <div className="view-tabs" role="tablist">
+              <button
+                role="tab"
+                aria-selected={editorView === "segments"}
+                className={editorView === "segments" ? "active" : ""}
+                onClick={() => setEditorView("segments")}
+              >
+                Segments
+              </button>
+              <button
+                role="tab"
+                aria-selected={editorView === "listen"}
+                className={editorView === "listen" ? "active" : ""}
+                onClick={() => setEditorView("listen")}
+              >
+                Écoute
+              </button>
+            </div>
+          )}
           <button className="small-button" onClick={onClose}>
             Annuler
           </button>
         </div>
 
         <div className="editor-columns">
-          <div className="editor-primary">
+          <div className={narrow && editorView !== "segments" ? "editor-primary view-hidden" : "editor-primary"}>
+            <div className="editor-chart-box" ref={chartBoxRef}>
             <svg
               ref={svgRef}
               className={`editor-chart${preview ? " editor-chart-listenable" : ""}${dragging ? " editor-chart-dragging" : ""}`}
               viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-              style={{ height: chartHeight }}
               role="img"
               onClick={handleChartClick}
               onDoubleClick={handleChartDoubleClick}
@@ -578,8 +596,9 @@ export function SegmentEditor({
                 })}
               </g>
             </svg>
+            </div>
 
-            <div className="editor-table-wrap">
+            <div className="editor-table-wrap list-scroll">
               <table className="editor-table">
                 <thead>
                   <tr>
@@ -659,7 +678,7 @@ export function SegmentEditor({
           </div>
 
           {preview && (
-            <div className="editor-preview">
+            <div className={narrow && editorView !== "listen" ? "editor-preview view-hidden" : "editor-preview"}>
               <TrackPreview
                 referenceFilePath={preview.referenceFilePath}
                 candidateFilePath={preview.candidateFilePath}

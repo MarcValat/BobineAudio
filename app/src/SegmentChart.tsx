@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { SegmentOut } from "./api";
+import { useElementSize } from "./useElementSize";
 import "./SegmentChart.css";
 
 // Drawn at its real on-screen width and a fixed height, so its text stays
@@ -104,20 +105,15 @@ export function formatTime(seconds: number): string {
  * same geometry `render.segment_correction_filter` uses to compute the
  * correction, made visible.
  */
-export function SegmentChart({ segments, onEdit }: { segments: SegmentOut[]; onEdit?: () => void }) {
-  const svgRef = useRef<SVGSVGElement>(null);
-  const [width, setWidth] = useState(760);
+/** `fill`: take all the height its container gives it (a tab of its own)
+ * instead of its usual fixed one. */
+export function SegmentChart({ segments, fill = false }: { segments: SegmentOut[]; fill?: boolean }) {
+  const [boxRef, box] = useElementSize<HTMLDivElement>();
   const compact = useShortWindow();
-  useEffect(() => {
-    const svg = svgRef.current;
-    if (!svg) return;
-    const observer = new ResizeObserver(([entry]) => setWidth(Math.max(200, Math.round(entry.contentRect.width))));
-    observer.observe(svg);
-    return () => observer.disconnect();
-  }, [segments.length === 0]);
 
   if (segments.length === 0) return null;
-  const height = compact ? COMPACT_HEIGHT : HEIGHT;
+  const width = Math.max(200, box.width || 760);
+  const height = fill ? Math.max(COMPACT_HEIGHT, box.height || HEIGHT) : compact ? COMPACT_HEIGHT : HEIGHT;
   const PLOT_W = width - MARGIN.left - MARGIN.right;
   const PLOT_H = height - MARGIN.top - MARGIN.bottom;
 
@@ -140,11 +136,10 @@ export function SegmentChart({ segments, onEdit }: { segments: SegmentOut[]; onE
   const timeTickValues = Array.from({ length: timeTicks + 1 }, (_, i) => (totalDuration * i) / timeTicks);
 
   return (
-    <div className="segment-chart">
+    <div className={fill ? "segment-chart segment-chart-fill" : "segment-chart"}>
+      <div className="segment-chart-box" ref={boxRef} style={fill ? undefined : { height }}>
       <svg
-        ref={svgRef}
         viewBox={`0 0 ${width} ${height}`}
-        style={{ height }}
         role="img"
         aria-label="Décalage en fonction du temps"
       >
@@ -204,6 +199,7 @@ export function SegmentChart({ segments, onEdit }: { segments: SegmentOut[]; onE
           })}
         </g>
       </svg>
+      </div>
       <div className="segment-chart-footer">
         <div className="segment-chart-legend">
           <span className="legend-item">
@@ -218,11 +214,6 @@ export function SegmentChart({ segments, onEdit }: { segments: SegmentOut[]; onE
             </span>
           )}
         </div>
-        {onEdit && (
-          <button className="small-button" onClick={onEdit}>
-            Modifier les segments
-          </button>
-        )}
       </div>
     </div>
   );
