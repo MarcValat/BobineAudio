@@ -581,7 +581,13 @@ button:focus-visible {
 .tracks-table-wrap {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  overflow: hidden;
+}
+
+/* Headers stay in view when the table scrolls (.list-scroll). */
+.field-tracks th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .field-tracks table {

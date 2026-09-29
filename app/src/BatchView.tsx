@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   probe,
   startSegmentsJob,
@@ -8,6 +9,8 @@ import {
   type RenderResponse,
   type TrackInfo,
 } from "./api";
+import { InfoTip } from "./InfoTip";
+import { describeSegments } from "./SegmentChart";
 import { SegmentEditor } from "./SegmentEditor";
 import { LogPanel } from "./LogPanel";
 import { pickMediaFiles } from "./mediaDialog";
@@ -136,132 +139,57 @@ function TrackPicker({ label, tracks, loading, error, value, onChange }: TrackPi
   );
 }
 
-interface FileListProps {
-  title: string;
-  hint: string;
+/** One file of a pair, with the buttons that move it within its column (so
+ * it pairs with another row) or drop it. A dash when its column is shorter
+ * than the other one. */
+function FileCell({
+  files,
+  index,
+  disabled,
+  onChange,
+}: {
   files: string[];
-  tbodyRef: React.RefObject<HTMLTableSectionElement | null>;
-  onOpen: () => void;
-  onMove: (from: number, to: number) => void;
-  onRemove: (index: number) => void;
-}
-
-/** One side of the batch pairing: its own file list, reorderable in place
- * (drag would feel nicer, but up/down arrows are far less fiddly to get
- * right and every row still needs a keyboard-reachable way to move).
- * `tbodyRef` lets BatchView measure each row's real screen position, to
- * float a ↔ between this table and the other one at the same height --
- * see usePairArrowTops for why that needs actual measurement rather than
- * a CSS-only layout trick. */
-function FileList({ title, hint, files, tbodyRef, onOpen, onMove, onRemove }: FileListProps) {
+  index: number;
+  disabled: boolean;
+  onChange: (update: (files: string[]) => string[]) => void;
+}) {
+  const file = files[index];
+  if (file === undefined) return <td className="batch-file batch-file-missing">—</td>;
   return (
-    <section className="panel batch-file-list">
-      <h2>{title}</h2>
-      <button className="primary-button file-open-button" onClick={onOpen}>
-        Ouvrir des fichiers
-      </button>
-      <p className="batch-hint">{hint}</p>
-      {files.length === 0 ? (
-        <p className="placeholder">Aucun fichier sélectionné.</p>
-      ) : (
-        <div className="batch-table-wrap">
-          <table>
-            {/* table-layout: fixed sizes columns strictly from this row's
-                widths, not any row's -- without it, the empty actions <th>
-                (no text to size itself by) let the browser hand it far more
-                width than its 3 tiny buttons need, at the filename's
-                expense. */}
-            <colgroup>
-              <col className="batch-col-index" />
-              <col />
-              <col className="batch-col-actions" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th className="batch-index">#</th>
-                <th>Fichier</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody ref={tbodyRef}>
-              {files.map((f, i) => (
-                <tr key={`${i}-${f}`}>
-                  <td className="batch-index">{i + 1}</td>
-                  <td className="batch-filename" title={f}>
-                    {basename(f)}
-                  </td>
-                  <td className="batch-row-actions">
-                    <button className="small-button" onClick={() => onMove(i, i - 1)} disabled={i === 0} title="Monter">
-                      ↑
-                    </button>
-                    <button
-                      className="small-button"
-                      onClick={() => onMove(i, i + 1)}
-                      disabled={i === files.length - 1}
-                      title="Descendre"
-                    >
-                      ↓
-                    </button>
-                    <button className="small-button" onClick={() => onRemove(i)} title="Retirer">
-                      ✕
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
+    <td className="batch-file">
+      <div className="batch-file-inner">
+        <span className="batch-filename" title={file}>
+          {basename(file)}
+        </span>
+        <span className="batch-file-actions">
+          <button
+            className="small-button"
+            onClick={() => onChange((f) => moved(f, index, index - 1))}
+            disabled={disabled || index === 0}
+            title="Monter"
+          >
+            ↑
+          </button>
+          <button
+            className="small-button"
+            onClick={() => onChange((f) => moved(f, index, index + 1))}
+            disabled={disabled || index === files.length - 1}
+            title="Descendre"
+          >
+            ↓
+          </button>
+          <button
+            className="small-button"
+            onClick={() => onChange((f) => f.filter((_, i) => i !== index))}
+            disabled={disabled}
+            title="Retirer"
+          >
+            ✕
+          </button>
+        </span>
+      </div>
+    </td>
   );
-}
-
-/** Real screen Y-position (relative to `containerRef`'s box) of each of the
- * first `rowCount` rows, read from whichever of the two tbodies actually
- * has that row. A reserved connector column (an earlier version of this)
- * kept its own rows the same height as the real tables by sharing their
- * exact CSS classes -- but both `.panel` and `.batch-table-wrap` clip
- * overflow (for their rounded corners), so anything meant to float loose
- * in the gap *between* two clipped boxes can't be a descendant of either:
- * it has to be a sibling, positioned from real measured coordinates
- * instead of shared layout. Recomputed on resize (a ResizeObserver on the
- * container catches width changes; row count/content changes go through
- * the effect's own dependency list). */
-function usePairArrowTops(
-  containerRef: React.RefObject<HTMLDivElement | null>,
-  leftTbodyRef: React.RefObject<HTMLTableSectionElement | null>,
-  rightTbodyRef: React.RefObject<HTMLTableSectionElement | null>,
-  rowCount: number,
-): number[] {
-  const [tops, setTops] = useState<number[]>([]);
-
-  useLayoutEffect(() => {
-    function recompute() {
-      const container = containerRef.current;
-      if (!container || rowCount === 0) {
-        setTops([]);
-        return;
-      }
-      const containerTop = container.getBoundingClientRect().top;
-      const leftRows = leftTbodyRef.current?.children;
-      const rightRows = rightTbodyRef.current?.children;
-      const next: number[] = [];
-      for (let i = 0; i < rowCount; i++) {
-        const row = (leftRows?.[i] ?? rightRows?.[i]) as HTMLElement | undefined;
-        if (!row) continue;
-        const rect = row.getBoundingClientRect();
-        next.push(rect.top + rect.height / 2 - containerTop);
-      }
-      setTops(next);
-    }
-    recompute();
-    const container = containerRef.current;
-    const ro = new ResizeObserver(recompute);
-    if (container) ro.observe(container);
-    return () => ro.disconnect();
-  }, [containerRef, leftTbodyRef, rightTbodyRef, rowCount]);
-
-  return tops;
 }
 
 /** "Vérifier toutes les pistes" modal: probes *every* file in both lists
@@ -370,9 +298,12 @@ function AllTracksModal({ referenceFiles, candidateFiles, onClose }: { reference
  * keep the same track layout episode to episode (both @0 is a real,
  * expected case: a reference file with only VO and a to-correct file with
  * only VF); "Vérifier toutes les pistes" lets that assumption actually be
- * checked instead of just hoped. Export isn't wired up yet -- this slice
- * stops at detection, to confirm the pairing + analysis flow before
- * building render on top.
+ * checked instead of just hoped.
+ *
+ * Laid out as one table, one row per pair: both files, the analysis, the
+ * export and the row's actions side by side, so nothing needs lining up
+ * across separate lists. The table takes the height the window leaves and
+ * scrolls in its own frame; nothing else in the view scrolls.
  *
  * Always kept mounted by the caller (App.tsx) even while on the other tab
  * -- `hidden` just toggles visibility -- so switching tabs never resets
@@ -387,10 +318,6 @@ export function BatchView({ hidden }: { hidden: boolean }) {
   const [exporting, setExporting] = useState(false);
   const [showTracksModal, setShowTracksModal] = useState(false);
   const [editingPairIndex, setEditingPairIndex] = useState<number | null>(null);
-
-  const pairingRowRef = useRef<HTMLDivElement>(null);
-  const referenceTbodyRef = useRef<HTMLTableSectionElement>(null);
-  const candidateTbodyRef = useRef<HTMLTableSectionElement>(null);
 
   const referenceProbe = useTracksOf(referenceFiles[0]);
   const candidateProbe = useTracksOf(candidateFiles[0]);
@@ -408,15 +335,20 @@ export function BatchView({ hidden }: { hidden: boolean }) {
     }
   }, [candidateProbe.tracks]);
 
-  async function pickFiles(setFiles: (files: string[]) => void) {
-    const selected = await pickMediaFiles(true);
-    if (!selected) return;
-    setFiles(selected);
-  }
+  // Dev only (stripped from production builds): `?batchRef=a|b&batchCand=c|d`
+  // fills the lists without the system dialog, for automated screenshots.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const params = new URLSearchParams(window.location.search);
+    const refs = params.get("batchRef");
+    const cands = params.get("batchCand");
+    if (refs) setReferenceFiles(refs.split("|"));
+    if (cands) setCandidateFiles(cands.split("|"));
+  }, []);
 
   /** `analyses` is indexed by pairing position, so moving or removing a
    * file in either list shifts what every later index actually refers to
-   * -- keeping the old entries around would either crash the results table
+   * -- keeping the old entries around would either crash the table
    * (reading a filename past the shrunk list's end) or, worse, silently
    * show/export a pair's analysis against the wrong file. Clearing forces
    * a re-analysis instead of trusting stale indices. */
@@ -425,14 +357,20 @@ export function BatchView({ hidden }: { hidden: boolean }) {
     setEditingPairIndex(null);
   }
 
+  async function addFiles(setFiles: (update: (files: string[]) => string[]) => void) {
+    const selected = await pickMediaFiles(true);
+    if (!selected) return;
+    setFiles((files) => [...files, ...selected]);
+    resetAnalyses();
+  }
+
+  function editList(setFiles: (update: (files: string[]) => string[]) => void, update: (files: string[]) => string[]) {
+    setFiles(update);
+    resetAnalyses();
+  }
+
   const pairCount = Math.min(referenceFiles.length, candidateFiles.length);
-  // No arrows/warnings at all until both sides have at least one file --
-  // one list starting empty while the other is being built up is a normal,
-  // expected in-progress state, not a mismatch worth flagging (pairCount
-  // would otherwise be 0 and every row past it would show a ⚠).
-  const bothStarted = referenceFiles.length > 0 && candidateFiles.length > 0;
-  const rowCount = bothStarted ? Math.max(referenceFiles.length, candidateFiles.length) : 0;
-  const arrowTops = usePairArrowTops(pairingRowRef, referenceTbodyRef, candidateTbodyRef, rowCount);
+  const rowCount = Math.max(referenceFiles.length, candidateFiles.length);
 
   function updatePair(index: number, patch: Partial<PairAnalysis> | ((entry: PairAnalysis) => Partial<PairAnalysis>)) {
     setAnalyses((current) =>
@@ -458,16 +396,17 @@ export function BatchView({ hidden }: { hidden: boolean }) {
     setAnalyzing(false);
   }
 
-  const exportableCount = analyses.filter((a) => a.status === "done" && a.result).length;
+  const analyzedCount = analyses.filter((a) => a.status === "done" && a.result).length;
+  const exportedCount = analyses.filter((a) => a.exportStatus === "done").length;
 
   /** Exports every successfully-analyzed pair, in the order analyzed --
    * pairs that failed detection or never ran are left alone (exportStatus
    * stays "idle") rather than attempted, since there's no segment list to
    * render from. Uses each pair's current `result.segments`, which is
-   * exactly what "Modifier" (below) lets the user hand-adjust first -- same
+   * exactly what "Modifier" lets the user hand-adjust first -- same
    * principle as the single-file view: export must reflect a reviewed
-   * edit, not silently re-run detection and discard it. Both buttons below
-   * are disabled while *either* operation runs, not just their own: export
+   * edit, not silently re-run detection and discard it. Both buttons are
+   * disabled while *either* operation runs, not just their own: export
    * reads `analyses` as it currently stands, so a concurrent re-analysis
    * could rewrite a pair's segments out from under an export already using
    * them. */
@@ -496,6 +435,8 @@ export function BatchView({ hidden }: { hidden: boolean }) {
     setExporting(false);
   }
 
+  const busy = analyzing || exporting;
+
   return (
     <main className="batch-main" style={hidden ? { display: "none" } : undefined}>
       <div className="batch-config panel">
@@ -515,77 +456,53 @@ export function BatchView({ hidden }: { hidden: boolean }) {
           value={candidateTrackIndex}
           onChange={setCandidateTrackIndex}
         />
-        <span className="batch-config-hint">D'après le 1er fichier de chaque liste, appliqué à toutes les paires.</span>
-        <button
-          className="small-button"
-          onClick={() => setShowTracksModal(true)}
-          disabled={referenceFiles.length === 0 && candidateFiles.length === 0}
-        >
+        <InfoTip>
+          Pistes proposées d'après le 1er fichier de chaque colonne, puis appliquées à toutes les paires. « Vérifier
+          toutes les pistes » montre celles de chaque fichier.
+        </InfoTip>
+        <button className="small-button" onClick={() => setShowTracksModal(true)} disabled={rowCount === 0}>
           Vérifier toutes les pistes
         </button>
-        <button className="primary-button" onClick={handleAnalyzeAll} disabled={pairCount === 0 || analyzing || exporting}>
-          {analyzing ? "Analyse en cours..." : "Analyser tout"}
-        </button>
-        <button className="primary-button" onClick={handleExportAll} disabled={exportableCount === 0 || analyzing || exporting}>
-          {exporting ? "Export en cours..." : "Exporter tout"}
-        </button>
       </div>
 
-      <div className="batch-pairing-row" ref={pairingRowRef}>
-        <FileList
-          title="Fichiers référence"
-          hint="Piste à ne jamais modifier (ex. VO), une par épisode."
-          files={referenceFiles}
-          tbodyRef={referenceTbodyRef}
-          onOpen={() => pickFiles(setReferenceFiles)}
-          onMove={(from, to) => {
-            setReferenceFiles((f) => moved(f, from, to));
-            resetAnalyses();
-          }}
-          onRemove={(i) => {
-            setReferenceFiles((f) => f.filter((_, idx) => idx !== i));
-            resetAnalyses();
-          }}
-        />
-        <FileList
-          title="Fichiers à corriger"
-          hint="Piste à resynchroniser et intégrer (ex. VF), une par épisode."
-          files={candidateFiles}
-          tbodyRef={candidateTbodyRef}
-          onOpen={() => pickFiles(setCandidateFiles)}
-          onMove={(from, to) => {
-            setCandidateFiles((f) => moved(f, from, to));
-            resetAnalyses();
-          }}
-          onRemove={(i) => {
-            setCandidateFiles((f) => f.filter((_, idx) => idx !== i));
-            resetAnalyses();
-          }}
-        />
-        {/* Sibling overlay, not a descendant of either panel -- see
-            usePairArrowTops for why that matters (.panel/.batch-table-wrap
-            both clip overflow for their rounded corners). pointer-events:
-            none (set in CSS) lets clicks reach the real buttons underneath. */}
-        <div className="batch-arrows-overlay" aria-hidden="true">
-          {arrowTops.map((top, i) => (
-            <span key={i} className={`batch-pair-arrow${i >= pairCount ? " batch-pair-arrow-warn" : ""}`} style={{ top }}>
-              {i < pairCount ? "↔" : "⚠"}
-            </span>
-          ))}
+      <section className="panel batch-jobs">
+        <div className="batch-jobs-header">
+          <h2>Paires</h2>
+          <button className="small-button" onClick={() => addFiles(setReferenceFiles)} disabled={busy}>
+            + Références
+          </button>
+          <button className="small-button" onClick={() => addFiles(setCandidateFiles)} disabled={busy}>
+            + Fichiers à corriger
+          </button>
+          <button
+            className="small-button"
+            onClick={() => {
+              setReferenceFiles([]);
+              setCandidateFiles([]);
+              resetAnalyses();
+            }}
+            disabled={busy || rowCount === 0}
+          >
+            Tout retirer
+          </button>
+          <InfoTip align="right">
+            Une ligne = une paire : la référence (piste jamais modifiée, ex. VO) et le fichier dont la piste est
+            resynchronisée puis intégrée (ex. VF). Les fichiers sont appariés dans l'ordre : ↑ ↓ pour corriger l'ordre
+            d'une colonne.
+          </InfoTip>
         </div>
-      </div>
 
-      {analyses.length > 0 && (
-        <div className="batch-results panel">
-          <h2>Résultats</h2>
-          <div className="batch-table-wrap">
+        {rowCount === 0 ? (
+          <p className="placeholder">Ajoute les fichiers de référence et les fichiers à corriger, un par épisode.</p>
+        ) : (
+          <div className="batch-table-wrap list-scroll">
             <table>
               <colgroup>
                 <col className="batch-col-index" />
                 <col />
                 <col />
-                <col />
-                <col />
+                <col className="batch-col-status" />
+                <col className="batch-col-status" />
                 <col className="batch-col-actions" />
               </colgroup>
               <thead>
@@ -599,47 +516,82 @@ export function BatchView({ hidden }: { hidden: boolean }) {
                 </tr>
               </thead>
               <tbody>
-                {analyses.map((a, i) => (
-                  <tr key={i}>
-                    <td className="batch-index">{i + 1}</td>
-                    <td className="batch-filename" title={referenceFiles[i]}>
-                      {basename(referenceFiles[i])}
-                    </td>
-                    <td className="batch-filename" title={candidateFiles[i]}>
-                      {basename(candidateFiles[i])}
-                    </td>
-                    <td className={`batch-status batch-status-${a.status}`}>
-                      {a.status === "pending" && "En attente"}
-                      {a.status === "running" && "Analyse en cours..."}
-                      {a.status === "done" &&
-                        a.result &&
-                        `${a.result.segments.length} segment${a.result.segments.length > 1 ? "s" : ""}`}
-                      {a.status === "error" && (a.error ?? "Erreur")}
-                      <LogPanel lines={a.log} />
-                    </td>
-                    <td className={`batch-status batch-status-${a.exportStatus === "idle" ? "pending" : a.exportStatus}`}>
-                      {a.exportStatus === "idle" && "—"}
-                      {a.exportStatus === "running" && "Export en cours..."}
-                      {a.exportStatus === "done" && a.exportResult && basename(a.exportResult.written[0] ?? "")}
-                      {a.exportStatus === "error" && (a.exportError ?? "Erreur")}
-                      <LogPanel lines={a.exportLog} />
-                    </td>
-                    <td className="batch-row-actions">
-                      <button
-                        className="small-button"
-                        onClick={() => setEditingPairIndex(i)}
-                        disabled={a.status !== "done" || !a.result}
-                      >
-                        Modifier
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {Array.from({ length: rowCount }, (_, i) => {
+                  const a = analyses[i];
+                  const written = a?.exportResult?.written[0];
+                  return (
+                    <tr key={i} className={i >= pairCount ? "batch-row-unpaired" : undefined}>
+                      <td className="batch-index">{i + 1}</td>
+                      <FileCell
+                        files={referenceFiles}
+                        index={i}
+                        disabled={busy}
+                        onChange={(update) => editList(setReferenceFiles, update)}
+                      />
+                      <FileCell
+                        files={candidateFiles}
+                        index={i}
+                        disabled={busy}
+                        onChange={(update) => editList(setCandidateFiles, update)}
+                      />
+                      <td className={`batch-status batch-status-${a?.status ?? "pending"}`}>
+                        {!a && (i < pairCount ? "—" : "⚠ Sans paire")}
+                        {a?.status === "pending" && "En attente"}
+                        {a?.status === "running" && "Analyse en cours..."}
+                        {a?.status === "done" && a.result && describeSegments(a.result.segments)}
+                        {a?.status === "error" && (a.error ?? "Erreur")}
+                        {/* Only while it runs (progress) or when it failed (why): a
+                            done row stays one line. */}
+                        {a && (a.status === "running" || a.status === "error") && <LogPanel lines={a.log} />}
+                      </td>
+                      <td className={`batch-status batch-status-${!a || a.exportStatus === "idle" ? "pending" : a.exportStatus}`}>
+                        {(!a || a.exportStatus === "idle") && "—"}
+                        {a?.exportStatus === "running" && "Export en cours..."}
+                        {a?.exportStatus === "done" && written && (
+                          <span title={written}>{basename(written)}</span>
+                        )}
+                        {a?.exportStatus === "error" && (a.exportError ?? "Erreur")}
+                        {a && (a.exportStatus === "running" || a.exportStatus === "error") && (
+                          <LogPanel lines={a.exportLog} />
+                        )}
+                      </td>
+                      <td className="batch-row-actions">
+                        <button
+                          className="small-button"
+                          onClick={() => setEditingPairIndex(i)}
+                          disabled={a?.status !== "done" || !a.result}
+                        >
+                          Modifier
+                        </button>
+                        {written && (
+                          <button className="small-button" title="Ouvrir le dossier du fichier écrit" onClick={() => revealItemInDir(written)}>
+                            Dossier
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        )}
+      </section>
+
+      <div className="batch-footer panel">
+        <span className="batch-progress">
+          {pairCount} paire{pairCount > 1 ? "s" : ""}
+          {analyses.length > 0 && ` · ${analyzedCount}/${analyses.length} analysée${analyzedCount > 1 ? "s" : ""}`}
+          {exportedCount > 0 && ` · ${exportedCount} exportée${exportedCount > 1 ? "s" : ""}`}
+          {rowCount > pairCount && ` · ${rowCount - pairCount} fichier${rowCount - pairCount > 1 ? "s" : ""} sans paire`}
+        </span>
+        <button className="primary-button" onClick={handleAnalyzeAll} disabled={pairCount === 0 || busy}>
+          {analyzing ? "Analyse en cours..." : "Analyser tout"}
+        </button>
+        <button className="primary-button" onClick={handleExportAll} disabled={analyzedCount === 0 || busy}>
+          {exporting ? "Export en cours..." : "Exporter tout"}
+        </button>
+      </div>
 
       {showTracksModal && (
         <AllTracksModal referenceFiles={referenceFiles} candidateFiles={candidateFiles} onClose={() => setShowTracksModal(false)} />

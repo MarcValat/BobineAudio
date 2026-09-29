@@ -115,11 +115,14 @@ function App() {
   }
 
   // Dev only (stripped from production builds): `?open=<path>` opens a file
-  // without the system dialog, for automated layout screenshots in a plain
-  // browser, where Tauri's dialog doesn't exist.
+  // without the system dialog, and `?mode=batch` starts on batch mode, for
+  // automated layout screenshots in a plain browser, where Tauri's dialog
+  // doesn't exist.
   useEffect(() => {
     if (!import.meta.env.DEV || engineStatus !== "ready") return;
-    const path = new URLSearchParams(window.location.search).get("open");
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("mode") === "batch") setMode("batch");
+    const path = params.get("open");
     if (path) openFile(path);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engineStatus]);
