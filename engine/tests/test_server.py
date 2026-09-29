@@ -125,6 +125,34 @@ def test_probe_reports_container_level_track_delay(tmp_path: Path) -> None:
     assert abs(body["tracks"][1]["start_time"] - 1.0) < 0.05
 
 
+def test_probe_lists_subtitle_tracks(offset_mkv: tuple[Path, float], tmp_path: Path) -> None:
+    mkv, _ = offset_mkv
+    srt = tmp_path / "subs.srt"
+    srt.write_text("1\n00:00:01,000 --> 00:00:02,000\nBonjour\n", encoding="utf-8")
+    with_subs = tmp_path / "with_subs.mkv"
+    subprocess.run(
+        [
+            resolve_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y",
+            "-i", str(mkv), "-i", str(srt), "-i", str(srt), "-i", str(srt),
+            "-map", "0", "-map", "1", "-map", "2", "-map", "3", "-c", "copy", "-c:s", "srt",
+            "-metadata:s:s:0", "language=fre", "-metadata:s:s:0", "title=Français",
+            "-metadata:s:s:1", "language=fre", "-disposition:s:1", "forced",
+            "-metadata:s:s:2", "language=eng", "-metadata:s:s:2", "title=English Forced",
+            str(with_subs),
+        ],
+        check=True, capture_output=True,
+    )
+    resp = client.get("/probe", params={"path": str(with_subs)})
+    assert resp.status_code == 200
+    subs = resp.json()["subtitles"]
+    assert [(s["index"], s["language"], s["forced"], s["shiftable"]) for s in subs] == [
+        (0, "fre", False, True),
+        (1, "fre", True, True),  # by disposition
+        (2, "eng", True, True),  # by title only
+    ]
+    assert subs[0]["title"] == "Français"
+
+
 def test_probe_missing_file_returns_400() -> None:
     resp = client.get("/probe", params={"path": "does-not-exist.mkv"})
     assert resp.status_code == 400

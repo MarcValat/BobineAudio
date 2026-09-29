@@ -29,7 +29,13 @@ from pydantic import BaseModel
 
 from syncaudio import analysis_cache, dsp, waveform_cache
 from syncaudio.analysis_cache import ANALYSIS_SAMPLE_RATE
-from syncaudio.ffmpeg_backend import FFmpegError, extract_wav_clip, probe_audio_streams, probe_stream_start_time
+from syncaudio.ffmpeg_backend import (
+    FFmpegError,
+    extract_wav_clip,
+    probe_audio_streams,
+    probe_stream_start_time,
+    probe_subtitle_streams,
+)
 from syncaudio.jobs import get_job, start_job
 from syncaudio.models import AudioTrackSpec
 from syncaudio.render import (
@@ -42,6 +48,7 @@ from syncaudio.render import (
     render as render_tracks,
 )
 from syncaudio.segments import DEFAULT_HOP_S, DEFAULT_MARGIN_S, DEFAULT_WINDOW_S, Segment, detect_segments
+from syncaudio.subtitles import is_shiftable
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -129,9 +136,21 @@ class TrackInfo(BaseModel):
     start_time: float
 
 
+class SubtitleInfo(BaseModel):
+    index: int  # among the file's subtitle tracks
+    codec: str
+    language: str | None
+    title: str | None
+    forced: bool
+    # Text subtitles (srt, ass/ssa) can be retimed segment by segment along
+    # with their audio; image ones (PGS, VobSub) can't.
+    shiftable: bool
+
+
 class ProbeResponse(BaseModel):
     path: str
     tracks: list[TrackInfo]
+    subtitles: list[SubtitleInfo] = []
 
 
 @app.get("/probe", response_model=ProbeResponse)
@@ -152,6 +171,17 @@ def probe(path: str) -> ProbeResponse:
                 start_time=probe_stream_start_time(path, s.index),
             )
             for s in streams
+        ],
+        subtitles=[
+            SubtitleInfo(
+                index=s.index,
+                codec=s.codec,
+                language=s.language,
+                title=s.title,
+                forced=s.forced,
+                shiftable=is_shiftable(s.codec),
+            )
+            for s in probe_subtitle_streams(path)
         ],
     )
 

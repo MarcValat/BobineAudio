@@ -19,6 +19,12 @@ _CODEC_TO_FORMAT = {
 }
 
 
+def is_shiftable(codec: str) -> bool:
+    """Whether subtitles in ``codec`` can be retimed segment by segment (text
+    ones); image subtitles (PGS, VobSub...) can't."""
+    return codec.strip().lower() in _CODEC_TO_FORMAT
+
+
 def format_for_codec(codec: str) -> str:
     """Map a probed subtitle codec name to the format ``shift_subtitle_text`` understands."""
     fmt = _CODEC_TO_FORMAT.get(codec.strip().lower())

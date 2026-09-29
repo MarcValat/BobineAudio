@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from syncaudio.models import AudioStreamInfo, AudioTrackSpec
+from syncaudio.models import AudioStreamInfo, AudioTrackSpec, SubtitleStreamInfo
 
 # A packaged sidecar build has no console of its own (see
 # engine/packaging/ -- built windowed, so the app doesn't flash a terminal
@@ -250,6 +250,30 @@ def probe_stream_tags(path: str, kind: str) -> list[dict[str, str]]:
         elif current is not None and (title := _TITLE_TAG_RE.match(line)):
             current.setdefault("title", title["title"])
     return tags
+
+
+_FORCED_TITLE_RE = re.compile(r"forc", re.IGNORECASE)
+
+
+def probe_subtitle_streams(path: str) -> list[SubtitleStreamInfo]:
+    """List the subtitle streams of a media file, indexed like ffmpeg's ``0:s:N``."""
+    tags = probe_stream_tags(path, "Subtitle")
+    streams: list[SubtitleStreamInfo] = []
+    for match in _list_subtitle_streams(path):
+        line = match.string
+        tag = tags[len(streams)] if len(streams) < len(tags) else {}
+        title = tag.get("title")
+        streams.append(
+            SubtitleStreamInfo(
+                index=len(streams),
+                codec=match["codec"],
+                language=tag.get("language"),
+                title=title,
+                forced="(forced)" in line or bool(title and _FORCED_TITLE_RE.search(title)),
+                default="(default)" in line,
+            )
+        )
+    return streams
 
 
 def probe_subtitle_count(path: str) -> int:

@@ -23,6 +23,21 @@ class AudioTrackSpec:
 
 
 @dataclass(frozen=True)
+class SubtitleStreamInfo:
+    """One subtitle stream reported by ffmpeg for a container file."""
+
+    index: int  # among subtitle streams only, like ffmpeg's 0:s:N
+    codec: str
+    language: str | None
+    title: str | None
+    # Forced subtitles (only the lines the audio doesn't cover: signs, a
+    # foreign-language line...), by disposition or, as many files only say
+    # it there, by title.
+    forced: bool
+    default: bool
+
+
+@dataclass(frozen=True)
 class AudioStreamInfo:
     """One audio stream reported by ffmpeg for a container file."""
 
