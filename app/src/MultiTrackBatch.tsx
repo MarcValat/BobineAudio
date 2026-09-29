@@ -10,7 +10,18 @@ import {
   type SubtitleInfo,
   type TrackInfo,
 } from "./api";
-import { FileCell, JobCancelled, languageLabel, LanguageSelect, OutputChooser, runJob, type RunStatus } from "./batchShared";
+import {
+  AnalyzeButton,
+  FileCell,
+  JobCancelled,
+  languageLabel,
+  LanguageSelect,
+  OTHER_MODE_BUSY,
+  OutputChooser,
+  runJob,
+  useEscape,
+  type RunStatus,
+} from "./batchShared";
 import { InfoTip } from "./InfoTip";
 import { LogPanel } from "./LogPanel";
 import { pickMediaFiles, planOutputPaths } from "./mediaDialog";
@@ -116,6 +127,7 @@ function TrackChoiceModal({
   onClose: () => void;
 }) {
   const [choice, setChoice] = useState(initial);
+  useEscape(onClose);
   const subsOfTrack = (index: number) =>
     choice.subtitles?.[index] ?? defaultSubtitles(tracks.find((t) => t.index === index)!);
   function toggleSubtitle(track: number, sub: number) {
@@ -156,7 +168,7 @@ function TrackChoiceModal({
                     name="choice-reference"
                     checked={choice.reference === t.index}
                     onChange={() =>
-                      setChoice((c) => ({ reference: t.index, targets: c.targets.filter((i) => i !== t.index) }))
+                      setChoice((c) => ({ ...c, reference: t.index, targets: c.targets.filter((i) => i !== t.index) }))
                     }
                   />
                 </td>
@@ -245,11 +257,16 @@ export function MultiTrackBatch({
   modeSwitch,
   outputDir,
   onOutputDirChange,
+  blocked,
+  onBusyChange,
 }: {
   hidden: boolean;
   modeSwitch: ReactNode;
   outputDir: string | null;
   onOutputDirChange: (dir: string | null) => void;
+  /** The other batch mode is working: nothing starts here meanwhile. */
+  blocked: boolean;
+  onBusyChange: (busy: boolean) => void;
 }) {
   const [files, setFiles] = useState<string[]>([]);
   const [probes, setProbes] = useState<Record<string, FileProbe>>({});
@@ -263,6 +280,7 @@ export function MultiTrackBatch({
   const [choosing, setChoosing] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ path: string; track: number } | null>(null);
   const busy = analyzing || exporting;
+  useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
 
   /** Adds files not in the list yet (checked against the list as it really
    * is, not a possibly stale copy: adding the same files twice in a row
@@ -360,19 +378,42 @@ export function MultiTrackBatch({
     });
   }
 
-  async function handleAnalyzeAll() {
+  /** A file's tracks to correct (as picked now) whose analysis against its
+   * current reference succeeded -- what its export holds. */
+  function doneTargets(path: string): [TrackInfo, TargetRun][] {
+    const run = runOf(path);
+    const res = resolutions[path];
+    if (!run || !res) return [];
+    return res.targets.flatMap((t) => {
+      const target = run.targets[t.index];
+      return target?.status === "done" && target.result ? [[t, target] as [TrackInfo, TargetRun]] : [];
+    });
+  }
+
+  /** Analyzes the tracks to correct that aren't yet (new files, new
+   * languages, failed ones), keeping the rest and any edit made to them; or
+   * all of them again (`all`). */
+  async function handleAnalyze(all: boolean) {
     setAnalyzing(true);
-    const plan = files
-      .map((path) => ({ path, res: resolutions[path] }))
-      .filter((x): x is { path: string; res: Resolution } => !!x.res?.reference && x.res.targets.length > 0);
+    const plan = files.flatMap((path) => {
+      const res = resolutions[path];
+      if (!res?.reference || res.targets.length === 0) return [];
+      const run = runOf(path);
+      const targets = all ? res.targets : res.targets.filter((t) => run?.targets[t.index]?.status !== "done");
+      return targets.length > 0 ? [{ path, reference: res.reference, targets, keep: all ? null : run }] : [];
+    });
     setRuns((current) => {
       const next = { ...current };
-      for (const { path, res } of plan) {
+      for (const { path, reference, targets, keep } of plan) {
         next[path] = {
-          referenceIndex: res.reference!.index,
-          targets: Object.fromEntries(
-            res.targets.map((t) => [t.index, { status: "pending" as RunStatus, result: null, error: null, log: [] }]),
-          ),
+          referenceIndex: reference.index,
+          targets: {
+            ...keep?.targets,
+            ...Object.fromEntries(
+              targets.map((t) => [t.index, { status: "pending" as RunStatus, result: null, error: null, log: [] }]),
+            ),
+          },
+          // What it held changes: the last export no longer matches.
           exportStatus: "idle",
           exportResult: null,
           exportError: null,
@@ -381,12 +422,12 @@ export function MultiTrackBatch({
       }
       return next;
     });
-    for (const { path, res } of plan) {
-      for (const target of res.targets) {
+    for (const { path, reference, targets } of plan) {
+      for (const target of targets) {
         updateTarget(path, target.index, { status: "running" });
         try {
           const result = await runJob<SegmentsResponse>(
-            startSegmentsJob(path, res.reference!.index, path, target.index),
+            startSegmentsJob(path, reference.index, path, target.index),
             (message) => updateTarget(path, target.index, (t) => ({ log: [...t.log, message] })),
           );
           updateTarget(path, target.index, { status: "done", result });
@@ -420,9 +461,7 @@ export function MultiTrackBatch({
   async function handleExportAll() {
     setExporting(true);
     cancelRequested.current = false;
-    const doneOf = (run: FileRun | null) =>
-      run ? Object.entries(run.targets).filter(([, t]) => t.status === "done" && t.result) : [];
-    const toExport = files.filter((path) => doneOf(runOf(path)).length > 0);
+    const toExport = files.filter((path) => doneTargets(path).length > 0);
     let outputs: string[];
     try {
       outputs = await planOutputPaths(toExport, outputDir);
@@ -435,12 +474,11 @@ export function MultiTrackBatch({
     for (const [k, path] of toExport.entries()) {
       if (cancelRequested.current) break;
       const run = runOf(path)!;
-      const done = doneOf(run);
+      const done = doneTargets(path);
       updateRun(path, (r) => ({ ...r, exportStatus: "running", exportLog: [], exportError: null }));
-      const tracks = probes[path]?.tracks ?? [];
       const subs = subsOf(
         path,
-        done.map(([track]) => tracks.find((t) => t.index === Number(track))).filter((t): t is TrackInfo => !!t),
+        done.map(([track]) => track),
       );
       try {
         const result = await runJob<RenderResponse>(
@@ -448,9 +486,9 @@ export function MultiTrackBatch({
             path,
             run.referenceIndex,
             done.map(([track, t]) => ({
-              trackIndex: Number(track),
+              trackIndex: track.index,
               segments: t.result!.segments,
-              subtitles: subs[Number(track)] ?? [],
+              subtitles: subs[track.index] ?? [],
             })),
             outputs[k],
           ),
@@ -469,8 +507,14 @@ export function MultiTrackBatch({
     setCancelling(false);
   }
 
-  const allTargets = files.flatMap((f) => (runOf(f) ? Object.values(runOf(f)!.targets) : []));
-  const analyzedCount = allTargets.filter((t) => t.status === "done").length;
+  // Counted over the tracks to correct as picked now, analyzed or not.
+  const allTargets = files.flatMap((f) => resolutions[f]?.targets.map((t) => runOf(f)?.targets[t.index]) ?? []);
+  const analyzedCount = allTargets.filter((t) => t?.status === "done").length;
+  // Tracks "Analyser" would do: not analyzed yet, or failed.
+  const missingCount = files.reduce((n, f) => {
+    const res = resolutions[f];
+    return res?.reference ? n + res.targets.length - doneTargets(f).length : n;
+  }, 0);
   const exportedCount = files.filter((f) => runOf(f)?.exportStatus === "done").length;
   const flaggedCount = files.filter((f) => (resolutions[f]?.issues.length ?? 0) > 0 || probes[f]?.error).length;
   const analyzable = files.some((f) => resolutions[f]?.reference && resolutions[f]!.targets.length > 0);
@@ -543,6 +587,9 @@ export function MultiTrackBatch({
               setFiles([]);
               setChoices({});
               setRuns({});
+              // Picked again from the next files added.
+              setReferenceLanguage("");
+              setTargetLanguages([]);
             }}
             disabled={busy || files.length === 0}
           >
@@ -649,29 +696,32 @@ export function MultiTrackBatch({
                       )}
                     </td>
                     <td className="batch-status">
-                      {!run && "—"}
-                      {run &&
-                        Object.entries(run.targets).map(([track, t]) => {
-                          const info = probed?.tracks?.find((x) => x.index === Number(track));
+                      {/* The tracks to correct as picked now: one picked since
+                          the last analysis shows as not analyzed yet. */}
+                      {(!res?.reference || res.targets.length === 0) && "—"}
+                      {res?.reference &&
+                        res.targets.map((info) => {
+                          const t = run?.targets[info.index];
                           return (
-                            <div key={track} className={`batch-target batch-status-${t.status}`}>
+                            <div key={info.index} className={`batch-target batch-status-${t?.status ?? "pending"}`}>
                               <span className="batch-target-name">
-                                @{track} {info?.language ?? "?"} :
+                                @{info.index} {info.language ?? "?"} :
                               </span>{" "}
-                              {t.status === "pending" && "en attente"}
-                              {t.status === "running" && "analyse en cours..."}
-                              {t.status === "done" && t.result && describeSegments(t.result.segments)}
-                              {t.status === "error" && (t.error ?? "erreur")}
-                              {t.status === "done" && t.result && (
+                              {!t && "À analyser"}
+                              {t?.status === "pending" && "En attente"}
+                              {t?.status === "running" && "Analyse en cours..."}
+                              {t?.status === "done" && t.result && describeSegments(t.result.segments)}
+                              {t?.status === "error" && (t.error ?? "Erreur")}
+                              {t?.status === "done" && t.result && (
                                 <button
                                   className="small-button"
                                   disabled={busy}
-                                  onClick={() => setEditing({ path, track: Number(track) })}
+                                  onClick={() => setEditing({ path, track: info.index })}
                                 >
                                   Modifier
                                 </button>
                               )}
-                              {(t.status === "running" || t.status === "error") && <LogPanel lines={t.log} />}
+                              {t && (t.status === "running" || t.status === "error") && <LogPanel lines={t.log} />}
                             </div>
                           );
                         })}
@@ -709,15 +759,26 @@ export function MultiTrackBatch({
           {exportedCount > 0 && ` · ${exportedCount} exporté${exportedCount > 1 ? "s" : ""}`}
           {flaggedCount > 0 && ` · ⚠ ${flaggedCount} à vérifier`}
         </span>
-        <button className="primary-button" onClick={handleAnalyzeAll} disabled={!analyzable || busy}>
-          {analyzing ? "Analyse en cours..." : "Analyser tout"}
-        </button>
+        <AnalyzeButton
+          analyzing={analyzing}
+          missing={missingCount}
+          analyzed={analyzedCount}
+          unit="piste"
+          disabled={!analyzable || busy || blocked}
+          blocked={blocked}
+          onAnalyze={handleAnalyze}
+        />
         {exporting ? (
           <button className="export-cancel" onClick={cancelExports} disabled={cancelling}>
             {cancelling ? "Annulation..." : "Annuler l'export"}
           </button>
         ) : (
-          <button className="primary-button" onClick={handleExportAll} disabled={analyzedCount === 0 || busy}>
+          <button
+            className="primary-button"
+            onClick={handleExportAll}
+            disabled={analyzedCount === 0 || busy || blocked}
+            title={blocked ? OTHER_MODE_BUSY : undefined}
+          >
             Exporter tout
           </button>
         )}
@@ -753,6 +814,9 @@ export function MultiTrackBatch({
             candidateFilePath: editing.path,
             referenceIndex: runOf(editing.path)!.referenceIndex,
             trackIndex: editing.track,
+            referenceStartTime: probes[editing.path]?.tracks?.find((t) => t.index === runOf(editing.path)!.referenceIndex)
+              ?.start_time,
+            trackStartTime: probes[editing.path]?.tracks?.find((t) => t.index === editing.track)?.start_time,
           }}
         />
       )}

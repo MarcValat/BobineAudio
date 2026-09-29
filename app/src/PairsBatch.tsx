@@ -9,7 +9,16 @@ import {
   type RenderResponse,
   type TrackInfo,
 } from "./api";
-import { FileCell, JobCancelled, LanguageSelect, OutputChooser, runJob } from "./batchShared";
+import {
+  AnalyzeButton,
+  FileCell,
+  JobCancelled,
+  LanguageSelect,
+  OTHER_MODE_BUSY,
+  OutputChooser,
+  runJob,
+  useEscape,
+} from "./batchShared";
 import { InfoTip } from "./InfoTip";
 import { describeSegments } from "./SegmentChart";
 import { SegmentEditor } from "./SegmentEditor";
@@ -34,7 +43,7 @@ const IDLE_EXPORT = { exportStatus: "idle" as const, exportResult: null, exportE
 
 /** Probes one file's tracks, to fill the track-picker dropdown. Only ever
  * called on the *first* file of each list, not every file: one picked
- * index applies to every pair (see BatchView's docstring, "a series keeps
+ * index applies to every pair (see PairsBatch's docstring, "a series keeps
  * the same track layout episode to episode"), so probing every file in a
  * big batch just to fill a dropdown would be slow and redundant -- the
  * "Vérifier toutes les pistes" modal below is what covers checking every
@@ -78,18 +87,19 @@ interface TrackPickerProps {
   error: string | null;
   value: number;
   onChange: (index: number) => void;
+  disabled?: boolean;
 }
 
 /** A dropdown of the first file's actual tracks (index/language/codec),
  * not a blind number field -- falls back to a plain number input when
  * there's nothing to probe yet or probing failed, so picking is never
  * blocked on that. */
-function TrackPicker({ label, tracks, loading, error, value, onChange }: TrackPickerProps) {
+function TrackPicker({ label, tracks, loading, error, value, onChange, disabled }: TrackPickerProps) {
   return (
     <label>
       {label} :
       {tracks && tracks.length > 0 ? (
-        <select value={value} onChange={(e) => onChange(Number(e.target.value))}>
+        <select value={value} onChange={(e) => onChange(Number(e.target.value))} disabled={disabled}>
           {tracks.map((t) => (
             <option key={t.index} value={t.index}>
               @{t.index} — {t.language ?? "?"} ({t.codec ?? "?"})
@@ -97,7 +107,13 @@ function TrackPicker({ label, tracks, loading, error, value, onChange }: TrackPi
           ))}
         </select>
       ) : (
-        <input type="number" min={0} value={value} onChange={(e) => onChange(Math.max(0, Number(e.target.value)))} />
+        <input
+          type="number"
+          min={0}
+          value={value}
+          disabled={disabled}
+          onChange={(e) => onChange(Math.max(0, Number(e.target.value)))}
+        />
       )}
       {loading && <span className="batch-track-status">Sondage...</span>}
       {error && (
@@ -119,6 +135,7 @@ function TrackPicker({ label, tracks, loading, error, value, onChange }: TrackPi
 function AllTracksModal({ referenceFiles, candidateFiles, onClose }: { referenceFiles: string[]; candidateFiles: string[]; onClose: () => void }) {
   const [entries, setEntries] = useState<Record<string, { tracks: TrackInfo[] | null; error: string | null }>>({});
   const [loading, setLoading] = useState(true);
+  useEscape(onClose);
 
   useEffect(() => {
     let cancelled = false;
@@ -232,11 +249,16 @@ export function PairsBatch({
   modeSwitch,
   outputDir,
   onOutputDirChange,
+  blocked,
+  onBusyChange,
 }: {
   hidden: boolean;
   modeSwitch: ReactNode;
   outputDir: string | null;
   onOutputDirChange: (dir: string | null) => void;
+  /** The other batch mode is working: nothing starts here meanwhile. */
+  blocked: boolean;
+  onBusyChange: (busy: boolean) => void;
 }) {
   const [referenceFiles, setReferenceFiles] = useState<string[]>([]);
   const [candidateFiles, setCandidateFiles] = useState<string[]>([]);
@@ -246,7 +268,10 @@ export function PairsBatch({
   // instead (a bare .wav has none).
   const [candidateLanguage, setCandidateLanguage] = useState("");
   const [subsMode, setSubsMode] = useState<SubtitleMode>("forced");
-  const [analyses, setAnalyses] = useState<PairAnalysis[]>([]);
+  // Keyed by what each analysis was made of (see pairKey), not by row: moving
+  // files, adding more or picking other tracks never shows a pair another
+  // pair's analysis, and one that comes back finds its own again.
+  const [analyses, setAnalyses] = useState<Record<string, PairAnalysis>>({});
   const [analyzing, setAnalyzing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [showTracksModal, setShowTracksModal] = useState(false);
@@ -279,58 +304,62 @@ export function PairsBatch({
     if (cands) setCandidateFiles(cands.split("|"));
   }, []);
 
-  /** `analyses` is indexed by pairing position, so moving or removing a
-   * file in either list shifts what every later index actually refers to
-   * -- keeping the old entries around would either crash the table
-   * (reading a filename past the shrunk list's end) or, worse, silently
-   * show/export a pair's analysis against the wrong file. Clearing forces
-   * a re-analysis instead of trusting stale indices. */
-  function resetAnalyses() {
-    setAnalyses([]);
-    setEditingPairIndex(null);
-  }
-
-  async function addFiles(setFiles: (update: (files: string[]) => string[]) => void) {
-    const selected = await pickMediaFiles(true);
-    if (!selected) return;
-    setFiles((files) => [...files, ...selected]);
-    resetAnalyses();
-  }
-
-  function editList(setFiles: (update: (files: string[]) => string[]) => void, update: (files: string[]) => string[]) {
-    setFiles(update);
-    resetAnalyses();
+  function addFiles(setFiles: (update: (files: string[]) => string[]) => void) {
+    return async () => {
+      const selected = await pickMediaFiles(true);
+      if (selected) setFiles((files) => [...files, ...selected]);
+    };
   }
 
   const pairCount = Math.min(referenceFiles.length, candidateFiles.length);
   const rowCount = Math.max(referenceFiles.length, candidateFiles.length);
 
-  function updatePair(index: number, patch: Partial<PairAnalysis> | ((entry: PairAnalysis) => Partial<PairAnalysis>)) {
+  /** Row `i`'s pair as it stands: both files and both tracks. */
+  function pairKey(i: number): string {
+    return JSON.stringify([referenceFiles[i], referenceTrackIndex, candidateFiles[i], candidateTrackIndex]);
+  }
+  const analysisOf = (i: number): PairAnalysis | undefined => (i < pairCount ? analyses[pairKey(i)] : undefined);
+  const isDone = (a: PairAnalysis | undefined) => a?.status === "done" && !!a.result;
+
+  function updatePair(key: string, patch: Partial<PairAnalysis> | ((entry: PairAnalysis) => Partial<PairAnalysis>)) {
     setAnalyses((current) =>
-      current.map((a, i) => (i === index ? { ...a, ...(typeof patch === "function" ? patch(a) : patch) } : a)),
+      current[key] ? { ...current, [key]: { ...current[key], ...(typeof patch === "function" ? patch(current[key]) : patch) } } : current,
     );
   }
 
-  async function handleAnalyzeAll() {
+  /** Analyzes the pairs that aren't yet (new ones, failed ones), keeping the
+   * rest and any edit made to them; or all of them again (`all`). */
+  async function handleAnalyze(all: boolean) {
     setAnalyzing(true);
-    setAnalyses(Array.from({ length: pairCount }, () => ({ status: "pending", result: null, error: null, log: [], ...IDLE_EXPORT })));
-    for (let i = 0; i < pairCount; i++) {
-      updatePair(i, { status: "running" });
+    const plan = Array.from({ length: pairCount }, (_, i) => ({
+      key: pairKey(i),
+      reference: referenceFiles[i],
+      candidate: candidateFiles[i],
+    })).filter(({ key }) => all || !isDone(analyses[key]));
+    const [referenceTrack, candidateTrack] = [referenceTrackIndex, candidateTrackIndex];
+    setAnalyses((current) => {
+      const next = { ...current };
+      for (const { key } of plan) next[key] = { status: "pending", result: null, error: null, log: [], ...IDLE_EXPORT };
+      return next;
+    });
+    for (const { key, reference, candidate } of plan) {
+      updatePair(key, { status: "running" });
       try {
         const result = await runJob<SegmentsResponse>(
-          startSegmentsJob(referenceFiles[i], referenceTrackIndex, candidateFiles[i], candidateTrackIndex),
-          (message) => updatePair(i, (a) => ({ log: [...a.log, message] })),
+          startSegmentsJob(reference, referenceTrack, candidate, candidateTrack),
+          (message) => updatePair(key, (a) => ({ log: [...a.log, message] })),
         );
-        updatePair(i, { status: "done", result });
+        updatePair(key, { status: "done", result });
       } catch (err) {
-        updatePair(i, { status: "error", error: err instanceof Error ? err.message : String(err) });
+        updatePair(key, { status: "error", error: err instanceof Error ? err.message : String(err) });
       }
     }
     setAnalyzing(false);
   }
 
-  const analyzedCount = analyses.filter((a) => a.status === "done" && a.result).length;
-  const exportedCount = analyses.filter((a) => a.exportStatus === "done").length;
+  const pairAnalyses = Array.from({ length: pairCount }, (_, i) => analysisOf(i));
+  const analyzedCount = pairAnalyses.filter(isDone).length;
+  const exportedCount = pairAnalyses.filter((a) => a?.exportStatus === "done").length;
 
   /** Exports every successfully-analyzed pair, in the order analyzed --
    * pairs that failed detection or never ran are left alone (exportStatus
@@ -363,21 +392,23 @@ export function PairsBatch({
   async function handleExportAll() {
     setExporting(true);
     cancelRequested.current = false;
-    const toExport = analyses.flatMap((a, i) => (a.status === "done" && a.result ? [i] : []));
+    const toExport = pairAnalyses.flatMap((a, i) => (isDone(a) ? [i] : []));
+    const keys = toExport.map(pairKey);
     let outputs: string[];
     try {
       outputs = await planOutputPaths(toExport.map((i) => referenceFiles[i]), outputDir);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      for (const i of toExport) updatePair(i, { exportStatus: "error", exportError: message });
+      for (const key of keys) updatePair(key, { exportStatus: "error", exportError: message });
       setExporting(false);
       return;
     }
     for (const [k, i] of toExport.entries()) {
       if (cancelRequested.current) break;
-      const entry = analyses[i];
-      if (!entry.result) continue;
-      updatePair(i, { exportStatus: "running", exportLog: [] });
+      const key = keys[k];
+      const entry = analyses[key];
+      if (!entry?.result) continue;
+      updatePair(key, { exportStatus: "running", exportLog: [], exportError: null });
       try {
         // The candidate file's subtitles in its audio's language come along,
         // retimed with it (per the subtitle setting).
@@ -397,13 +428,13 @@ export function PairsBatch({
               subtitles: candidate ? subtitlesFor(candidate.subtitles ?? [], audioLanguage, subsMode) : [],
             },
           ),
-          (message) => updatePair(i, (a) => ({ exportLog: [...a.exportLog, message] })),
+          (message) => updatePair(key, (a) => ({ exportLog: [...a.exportLog, message] })),
           (id) => (currentExportJob.current = id),
         );
-        updatePair(i, { exportStatus: "done", exportResult: result });
+        updatePair(key, { exportStatus: "done", exportResult: result });
       } catch (err) {
-        if (err instanceof JobCancelled) updatePair(i, { exportStatus: "cancelled" });
-        else updatePair(i, { exportStatus: "error", exportError: err instanceof Error ? err.message : String(err) });
+        if (err instanceof JobCancelled) updatePair(key, { exportStatus: "cancelled" });
+        else updatePair(key, { exportStatus: "error", exportError: err instanceof Error ? err.message : String(err) });
       }
       currentExportJob.current = null;
     }
@@ -412,6 +443,32 @@ export function PairsBatch({
   }
 
   const busy = analyzing || exporting;
+  useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
+
+  // The files' own start times, for the editor's informational "delay
+  // already in the file" note: probed when a pair is opened for editing.
+  const [editStartTimes, setEditStartTimes] = useState<{ reference?: number; track?: number }>({});
+  useEffect(() => {
+    setEditStartTimes({});
+    if (editingPairIndex === null) return;
+    let cancelled = false;
+    Promise.all([probe(referenceFiles[editingPairIndex]), probe(candidateFiles[editingPairIndex])])
+      .then(([ref, cand]) => {
+        if (cancelled) return;
+        setEditStartTimes({
+          reference: ref.tracks.find((t) => t.index === referenceTrackIndex)?.start_time,
+          track: cand.tracks.find((t) => t.index === candidateTrackIndex)?.start_time,
+        });
+      })
+      .catch(() => {
+        // informational only: the editor just goes without it
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the lists and tracks can't change while the editor is open
+  }, [editingPairIndex]);
+  const editingAnalysis = editingPairIndex !== null ? analysisOf(editingPairIndex) : undefined;
 
   return (
     <main className="batch-main" style={hidden ? { display: "none" } : undefined}>
@@ -424,6 +481,7 @@ export function PairsBatch({
           error={referenceProbe.error}
           value={referenceTrackIndex}
           onChange={setReferenceTrackIndex}
+          disabled={busy}
         />
         <TrackPicker
           label="Piste à corriger"
@@ -432,6 +490,7 @@ export function PairsBatch({
           error={candidateProbe.error}
           value={candidateTrackIndex}
           onChange={setCandidateTrackIndex}
+          disabled={busy}
         />
         <label>
           Langue :
@@ -473,7 +532,7 @@ export function PairsBatch({
             onClick={() => {
               setReferenceFiles([]);
               setCandidateFiles([]);
-              resetAnalyses();
+              setAnalyses({});
             }}
             disabled={busy || rowCount === 0}
           >
@@ -506,7 +565,7 @@ export function PairsBatch({
                     <span>Référence</span>
                     <button
                       className="small-button"
-                      onClick={() => addFiles(setReferenceFiles)}
+                      onClick={addFiles(setReferenceFiles)}
                       disabled={busy}
                       title="Ajouter des fichiers de référence (piste jamais modifiée, ex. VO), un par épisode"
                     >
@@ -519,7 +578,7 @@ export function PairsBatch({
                     <span>À corriger</span>
                     <button
                       className="small-button"
-                      onClick={() => addFiles(setCandidateFiles)}
+                      onClick={addFiles(setCandidateFiles)}
                       disabled={busy}
                       title="Ajouter des fichiers dont la piste est à resynchroniser (ex. VF), un par épisode"
                     >
@@ -541,7 +600,7 @@ export function PairsBatch({
                 </tr>
               )}
               {Array.from({ length: rowCount }, (_, i) => {
-                const a = analyses[i];
+                const a = analysisOf(i);
                 const written = a?.exportResult?.written[0];
                 return (
                   <tr key={i} className={i >= pairCount ? "batch-row-unpaired" : undefined}>
@@ -550,20 +609,25 @@ export function PairsBatch({
                       files={referenceFiles}
                       index={i}
                       disabled={busy}
-                      onChange={(update) => editList(setReferenceFiles, update)}
+                      onChange={setReferenceFiles}
                     />
                     <FileCell
                       files={candidateFiles}
                       index={i}
                       disabled={busy}
-                      onChange={(update) => editList(setCandidateFiles, update)}
+                      onChange={setCandidateFiles}
                     />
                     <td className={`batch-status batch-status-${a?.status ?? "pending"}`}>
-                      {!a && (i < pairCount ? "—" : "⚠ Sans paire")}
+                      {!a && (i < pairCount ? "À analyser" : "⚠ Sans paire")}
                       {a?.status === "pending" && "En attente"}
                       {a?.status === "running" && "Analyse en cours..."}
                       {a?.status === "done" && a.result && describeSegments(a.result.segments)}
                       {a?.status === "error" && (a.error ?? "Erreur")}
+                      {a?.status === "done" && a.result && (
+                        <button className="small-button" disabled={busy} onClick={() => setEditingPairIndex(i)}>
+                          Modifier
+                        </button>
+                      )}
                       {/* Only while it runs (progress) or when it failed (why): a
                           done row stays one line. */}
                       {a && (a.status === "running" || a.status === "error") && <LogPanel lines={a.log} />}
@@ -581,13 +645,6 @@ export function PairsBatch({
                       )}
                     </td>
                     <td className="batch-row-actions">
-                      <button
-                        className="small-button"
-                        onClick={() => setEditingPairIndex(i)}
-                        disabled={a?.status !== "done" || !a.result}
-                      >
-                        Modifier
-                      </button>
                       {written && (
                         <button className="small-button" title="Ouvrir le dossier du fichier écrit" onClick={() => revealItemInDir(written)}>
                           Dossier
@@ -606,19 +663,30 @@ export function PairsBatch({
         <OutputChooser outputDir={outputDir} onChange={onOutputDirChange} disabled={busy} />
         <span className="batch-progress">
           {pairCount} paire{pairCount > 1 ? "s" : ""}
-          {analyses.length > 0 && ` · ${analyzedCount}/${analyses.length} analysée${analyzedCount > 1 ? "s" : ""}`}
+          {analyzedCount > 0 && ` · ${analyzedCount}/${pairCount} analysée${analyzedCount > 1 ? "s" : ""}`}
           {exportedCount > 0 && ` · ${exportedCount} exportée${exportedCount > 1 ? "s" : ""}`}
           {rowCount > pairCount && ` · ${rowCount - pairCount} fichier${rowCount - pairCount > 1 ? "s" : ""} sans paire`}
         </span>
-        <button className="primary-button" onClick={handleAnalyzeAll} disabled={pairCount === 0 || busy}>
-          {analyzing ? "Analyse en cours..." : "Analyser tout"}
-        </button>
+        <AnalyzeButton
+          analyzing={analyzing}
+          missing={pairCount - analyzedCount}
+          analyzed={analyzedCount}
+          unit="paire"
+          disabled={pairCount === 0 || busy || blocked}
+          blocked={blocked}
+          onAnalyze={handleAnalyze}
+        />
         {exporting ? (
           <button className="export-cancel" onClick={cancelExports} disabled={cancelling}>
             {cancelling ? "Annulation..." : "Annuler l'export"}
           </button>
         ) : (
-          <button className="primary-button" onClick={handleExportAll} disabled={analyzedCount === 0 || busy}>
+          <button
+            className="primary-button"
+            onClick={handleExportAll}
+            disabled={analyzedCount === 0 || busy || blocked}
+            title={blocked ? OTHER_MODE_BUSY : undefined}
+          >
             Exporter tout
           </button>
         )}
@@ -628,21 +696,20 @@ export function PairsBatch({
         <AllTracksModal referenceFiles={referenceFiles} candidateFiles={candidateFiles} onClose={() => setShowTracksModal(false)} />
       )}
 
-      {editingPairIndex !== null && analyses[editingPairIndex]?.result && (
+      {editingPairIndex !== null && editingAnalysis?.result && (
         <SegmentEditor
-          segments={analyses[editingPairIndex].result.segments}
+          segments={editingAnalysis.result.segments}
           onClose={() => setEditingPairIndex(null)}
-          onSave={(edited) => {
-            const i = editingPairIndex;
-            setAnalyses((current) =>
-              current.map((a, idx) => (idx === i && a.result ? { ...a, result: { ...a.result, segments: edited } } : a)),
-            );
-          }}
+          onSave={(edited) =>
+            updatePair(pairKey(editingPairIndex), (a) => ({ result: a.result ? { ...a.result, segments: edited } : a.result }))
+          }
           preview={{
             referenceFilePath: referenceFiles[editingPairIndex],
             candidateFilePath: candidateFiles[editingPairIndex],
             referenceIndex: referenceTrackIndex,
             trackIndex: candidateTrackIndex,
+            referenceStartTime: editStartTimes.reference,
+            trackStartTime: editStartTimes.track,
           }}
         />
       )}

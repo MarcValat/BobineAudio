@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { connectJobWS } from "./api";
 import { pickFolder } from "./mediaDialog";
 import { basename } from "./paths";
@@ -45,6 +46,78 @@ export class JobCancelled extends Error {
     super("Annulé");
   }
 }
+
+/** Escape closes a dialog (the latest `onClose`, however often it changes). */
+export function useEscape(onClose: () => void): void {
+  const latest = useRef(onClose);
+  latest.current = onClose;
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") latest.current();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+}
+
+/** A batch's analyze button: the items (tracks, pairs) not analyzed yet
+ * when there are, keeping the others and their edits -- with a way to redo
+ * everything -- or everything again once all are done. */
+export function AnalyzeButton({
+  analyzing,
+  missing,
+  analyzed,
+  unit,
+  disabled,
+  blocked,
+  onAnalyze,
+}: {
+  analyzing: boolean;
+  missing: number;
+  analyzed: number;
+  /** What's counted, feminine singular: "piste", "paire". */
+  unit: string;
+  disabled: boolean;
+  blocked: boolean;
+  onAnalyze: (all: boolean) => void;
+}) {
+  const blockedTitle = blocked ? OTHER_MODE_BUSY : undefined;
+  const redoTitle = "Réanalyse tout, y compris ce qui l'est déjà : les modifications faites avec « Modifier » sont perdues.";
+  if (analyzing) {
+    return (
+      <button className="primary-button" disabled>
+        Analyse en cours...
+      </button>
+    );
+  }
+  if (missing === 0 && analyzed > 0) {
+    return (
+      <button className="primary-button" disabled={disabled} title={blockedTitle ?? redoTitle} onClick={() => onAnalyze(true)}>
+        Tout réanalyser
+      </button>
+    );
+  }
+  return (
+    <>
+      {analyzed > 0 && (
+        <button className="small-button" disabled={disabled} title={blockedTitle ?? redoTitle} onClick={() => onAnalyze(true)}>
+          Tout réanalyser
+        </button>
+      )}
+      <button
+        className="primary-button"
+        disabled={disabled}
+        title={blockedTitle ?? (analyzed > 0 ? `Analyse seulement les ${unit}s qui ne le sont pas encore ; les autres et leurs modifications sont gardées.` : undefined)}
+        onClick={() => onAnalyze(false)}
+      >
+        {analyzed > 0 ? `Analyser ${missing > 1 ? `les ${missing} ${unit}s restantes` : `la ${unit} restante`}` : "Analyser tout"}
+      </button>
+    </>
+  );
+}
+
+/** Why a batch mode's buttons are off while the other mode works. */
+export const OTHER_MODE_BUSY = "Un traitement est en cours dans l'autre mode batch : attends sa fin.";
 
 export type RunStatus = "idle" | "pending" | "running" | "done" | "error" | "cancelled";
 

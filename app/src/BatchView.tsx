@@ -19,6 +19,9 @@ type BatchMode = "multi" | "pairs";
 export function BatchView({ hidden }: { hidden: boolean }) {
   const [mode, setMode] = useState<BatchMode>("multi");
   const [outputDir, setOutputDir] = useState<string | null>(loadOutputDir);
+  // Which mode is analyzing or exporting: only one runs at a time, each
+  // already uses every core (see batchShared's runJob).
+  const [busy, setBusy] = useState<Record<BatchMode, boolean>>({ multi: false, pairs: false });
 
   // Dev only (stripped from production builds): pairs mode for `?batchRef=`.
   useEffect(() => {
@@ -48,12 +51,16 @@ export function BatchView({ hidden }: { hidden: boolean }) {
         modeSwitch={modeSwitch}
         outputDir={outputDir}
         onOutputDirChange={changeOutputDir}
+        blocked={busy.pairs}
+        onBusyChange={(b) => setBusy((c) => (c.multi === b ? c : { ...c, multi: b }))}
       />
       <PairsBatch
         hidden={hidden || mode !== "pairs"}
         modeSwitch={modeSwitch}
         outputDir={outputDir}
         onOutputDirChange={changeOutputDir}
+        blocked={busy.multi}
+        onBusyChange={(b) => setBusy((c) => (c.pairs === b ? c : { ...c, pairs: b }))}
       />
     </>
   );
