@@ -1,6 +1,18 @@
 import { open, save } from "@tauri-apps/plugin-dialog";
 
-const MEDIA_FILTERS = [{ name: "Vidéo/Audio", extensions: ["mkv", "mp4", "wav", "flac", "aac", "mp3"] }];
+// Videos to take a reference from, and the audio-only files a corrected track
+// can come from (batch mode): anything ffmpeg reads is fine, these are the
+// usual ones.
+const MEDIA_FILTERS = [
+  {
+    name: "Vidéo/Audio",
+    extensions: [
+      "mkv", "mp4", "m4v", "mov", "avi", "webm", "ts", "m2ts",
+      "mka", "wav", "flac", "aac", "ac3", "eac3", "dts", "thd", "mlp", "mp3", "m4a", "opus", "ogg", "wma",
+    ],
+  },
+  { name: "Tous les fichiers", extensions: ["*"] },
+];
 const LAST_FOLDER_KEY = "syncaudio.lastFolder";
 
 // Browser storage can be unavailable or throw: the dialog then just opens
@@ -33,6 +45,22 @@ export async function pickMediaFiles(multiple: boolean): Promise<string | string
   const files = Array.isArray(selected) ? selected : [selected];
   if (files.length > 0) rememberFolder(files[0]);
   return multiple ? files : files[0] ?? null;
+}
+
+/** The system's folder picker, starting at `defaultPath` when given. */
+export async function pickFolder(defaultPath?: string | null): Promise<string | null> {
+  const selected = await open({ directory: true, defaultPath: defaultPath ?? lastFolder() });
+  return typeof selected === "string" ? selected : null;
+}
+
+/** Where `inputPath`'s synchronized copy goes: in `outputDir` when one was
+ * chosen, next to it otherwise (see syncedFileName). */
+export function outputPathFor(inputPath: string, outputDir: string | null): string {
+  const synced = syncedFileName(inputPath);
+  if (!outputDir) return synced;
+  const cut = Math.max(synced.lastIndexOf("\\"), synced.lastIndexOf("/"));
+  const sep = outputDir.endsWith("\\") || outputDir.endsWith("/") ? "" : "\\";
+  return outputDir + sep + synced.slice(cut + 1);
 }
 
 /** Where `inputPath`'s synchronized copy goes, by default right next to it:

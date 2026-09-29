@@ -187,6 +187,8 @@ export async function startSegmentsJob(
 export interface TrackSegments {
   trackIndex: number;
   segments: SegmentOut[];
+  /** Tag the corrected track with this language instead of its own. */
+  language?: string | null;
 }
 
 /**
@@ -212,7 +214,11 @@ export async function startSegmentedRenderJob(
       track_indices: tracks.map((t) => t.trackIndex),
       output_path: outputPath,
       segmented: true,
-      segment_overrides: tracks.map((t) => ({ track: { path: inputPath, index: t.trackIndex }, segments: t.segments })),
+      segment_overrides: tracks.map((t) => ({
+        track: { path: inputPath, index: t.trackIndex },
+        segments: t.segments,
+        language: t.language ?? null,
+      })),
     }),
   });
   if (!resp.ok) throw new Error(await readErrorDetail(resp));
@@ -235,6 +241,7 @@ export async function startCrossFileSegmentedRenderJob(
   candidatePath: string,
   candidateIndex: number,
   segments: SegmentOut[],
+  options: { outputPath?: string; language?: string | null } = {},
 ): Promise<string> {
   const resp = await fetch(`${BASE_URL}/jobs/render`, {
     method: "POST",
@@ -244,8 +251,11 @@ export async function startCrossFileSegmentedRenderJob(
       reference_index: referenceIndex,
       only_imports: true,
       import_audio: [{ path: candidatePath, index: candidateIndex }],
+      output_path: options.outputPath ?? null,
       segmented: true,
-      segment_overrides: [{ track: { path: candidatePath, index: candidateIndex }, segments }],
+      segment_overrides: [
+        { track: { path: candidatePath, index: candidateIndex }, segments, language: options.language ?? null },
+      ],
     }),
   });
   if (!resp.ok) throw new Error(await readErrorDetail(resp));

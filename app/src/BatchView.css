@@ -375,3 +375,127 @@ td.batch-index {
   padding: 0.3em 0.5em;
   border-bottom: 1px solid var(--border);
 }
+
+/* Fichiers multipistes / Paires de fichiers, first in the settings bar. */
+.batch-mode {
+  margin-right: 0.6em;
+}
+
+/* The languages to correct, one checkbox each. */
+.batch-languages {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3em 0.9em;
+  font-size: 0.9em;
+}
+
+.batch-languages label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+}
+
+.batch-col-tracks {
+  width: 24%;
+}
+
+.batch-col-folder {
+  width: 6.5em;
+}
+
+/* A file's tracks: which are used, what's off (⚠), and "Choisir". */
+.batch-tracks-cell {
+  font-size: 0.95em;
+}
+
+/* The tracks used, with "Choisir" at the right of the same line. */
+.batch-tracks-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.batch-tracks-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-mono);
+}
+
+.batch-issues {
+  display: block;
+  color: var(--danger);
+  font-size: 0.9em;
+}
+
+.batch-tracks-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.3em;
+}
+
+.batch-tracks-actions button,
+.batch-target button {
+  padding: 0.1em 0.5em;
+}
+
+/* One line per corrected track of a file. */
+.batch-target + .batch-target {
+  margin-top: 0.3em;
+}
+
+.batch-target-name {
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+
+.batch-target button {
+  margin-left: 0.4em;
+}
+
+.batch-row-flagged td.batch-index {
+  color: var(--danger);
+}
+
+/* Where the exports go, left of the progress line. */
+.batch-output {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: 0.9em;
+}
+
+.batch-output-label {
+  color: var(--text-muted);
+}
+
+.batch-output-dir {
+  min-width: 0;
+  max-width: 22em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+
+.batch-output button {
+  flex: 0 0 auto;
+  padding: 0.25em 0.7em;
+}
+
+.batch-footer {
+  flex-wrap: wrap;
+}
+
+/* "Choisir": a file's tracks, picked by hand. */
+.batch-choice-panel {
+  max-width: 640px;
+}
+
+.batch-choice-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1em;
+}
