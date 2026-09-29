@@ -24,7 +24,7 @@ export function useShortWindow(): boolean {
 }
 const MARGIN = { top: 14, right: 16, bottom: 26, left: 70 };
 
-// A segment below this is flagged in the UI and eligible for "Ignorer les
+// A segment below this is flagged in the UI and eligible for "Retirer les
 // segments peu fiables" -- see engine/segments.py's _segment_confidence,
 // which discounts a segment whose supporting windows don't agree with each
 // other and/or a segment built from too few of them. Picked as "clearly

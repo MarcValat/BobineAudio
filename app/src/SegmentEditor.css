@@ -128,6 +128,25 @@
   stroke-dasharray: 7 5;
 }
 
+/* "Retirer" hovered: the segment going away, and its neighbour stretched over it. */
+.editor-chart .segment-line.removal-target {
+  stroke: var(--danger, #cc3333);
+  opacity: 0.45;
+}
+
+.editor-chart .segment-line.removal-ghost {
+  stroke: #2e9e5b;
+  stroke-dasharray: 6 4;
+  pointer-events: none;
+}
+
+.editor-confirm-close {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-size: 0.9em;
+}
+
 .editor-chart .segment-label {
   font-size: 11px;
   fill: currentColor;

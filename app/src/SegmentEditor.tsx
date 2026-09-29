@@ -123,10 +123,10 @@ type Drag =
   // A whole segment, up or down: both its ends move together, so a drift keeps its slope.
   | { kind: "segment"; index: number; grabOffset: number; offsetStart: number; offsetEnd: number };
 
-/** "Ignorer les segments peu fiables": repeatedly merges away the first
+/** "Retirer les segments peu fiables": repeatedly merges away the first
  * remaining segment under LOW_CONFIDENCE_THRESHOLD (same merge -- absorb
  * into the next segment, or the previous one if it's the last -- a manual
- * "Fusionner" click already does), until none are left below the
+ * "Retirer" click already does), until none are left below the
  * threshold or only one segment remains. Repeats rather than a single
  * pass because merging shifts every later index and can change which
  * segment is now "last". */
@@ -191,6 +191,17 @@ export function SegmentEditor({
   const [panelRef, panelSize] = useElementSize<HTMLDivElement>();
   const narrow = preview !== undefined && panelSize.width > 0 && panelSize.width < NARROW_EDITOR_WIDTH;
   const [editorView, setEditorView] = useState<"segments" | "listen">("segments");
+  // The segment whose "Retirer" button is hovered: shown on the chart, with
+  // the neighbour that would take its place.
+  const [removalPreview, setRemovalPreview] = useState<number | null>(null);
+  // "Annuler" (or Escape) with unsaved changes asks first.
+  const [confirmingClose, setConfirmingClose] = useState(false);
+  const dirty = !sameState(state, initialState);
+
+  function requestClose() {
+    if (dirty) setConfirmingClose(true);
+    else onClose();
+  }
   const PLOT_W = chartWidth - MARGIN.left - MARGIN.right;
   const PLOT_H = chartHeight - MARGIN.top - MARGIN.bottom;
 
@@ -232,7 +243,7 @@ export function SegmentEditor({
   }
 
   function reset() {
-    if (sameState(state, initialState)) return;
+    if (!dirty) return;
     remember();
     restore(initialState);
   }
@@ -241,6 +252,12 @@ export function SegmentEditor({
   // native undo can't follow values the editor rewrites.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (confirmingClose) setConfirmingClose(false);
+        else requestClose();
+        return;
+      }
       if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
       const key = e.key.toLowerCase();
       if (key === "z" && !e.shiftKey) {
@@ -407,6 +424,13 @@ export function SegmentEditor({
   }
 
   const segmentsPreview = useMemo(() => toSegments(state), [state]);
+  // The segment "Retirer" would leave in place of the hovered one and its neighbour.
+  const removalGhost =
+    removalPreview !== null && removalPreview < segmentsPreview.length && segmentsPreview.length > 1
+      ? toSegments(mergeSegment(state, removalPreview))[
+          removalPreview < segmentsPreview.length - 1 ? removalPreview : removalPreview - 1
+        ]
+      : null;
 
   const previewRef = useRef<TrackPreviewHandle>(null);
   const [cursor, setCursor] = useState<number | null>(null);
@@ -450,6 +474,10 @@ export function SegmentEditor({
                 <li>Double-clique sur le graphe pour couper un segment à cet endroit.</li>
                 <li>Molette : zoomer ou dézoomer, en même temps que les formes d'onde.</li>
                 <li>Un segment en pointillés (⚠) est peu fiable : à vérifier à l'écoute.</li>
+                <li>
+                  « Retirer » supprime un segment (une fausse détection, par exemple) : son voisin s'étend sur sa
+                  durée, avec son propre décalage.
+                </li>
                 <li>Ctrl+Z / Ctrl+Y : défaire / refaire.</li>
                 {preview && <li>Clique sur le graphe pour placer la lecture à cet endroit.</li>}
                 <li>Décalage : + = la piste est en retard sur la référence, − = en avance.</li>
@@ -477,9 +505,21 @@ export function SegmentEditor({
               </button>
             </div>
           )}
-          <button className="small-button" onClick={onClose}>
-            Annuler
-          </button>
+          {confirmingClose ? (
+            <div className="editor-confirm-close" role="alertdialog">
+              <span>Abandonner les modifications non enregistrées ?</span>
+              <button className="small-button export-cancel" onClick={onClose}>
+                Abandonner
+              </button>
+              <button className="small-button" onClick={() => setConfirmingClose(false)}>
+                Continuer l'édition
+              </button>
+            </div>
+          ) : (
+            <button className="small-button" onClick={requestClose} title="Fermer sans enregistrer (Échap)">
+              Annuler
+            </button>
+          )}
         </div>
 
         <div className="editor-columns">
@@ -533,7 +573,7 @@ export function SegmentEditor({
                         y2={yEnd}
                         className={`segment-line ${seg.is_drift ? "drift" : "constant"}${
                           seg.confidence < LOW_CONFIDENCE_THRESHOLD ? " low-confidence" : ""
-                        }`}
+                        }${removalPreview === i ? " removal-target" : ""}`}
                       />
                       {/* A wide invisible stroke on top: the visible line is too thin to grab. */}
                       <line
@@ -564,6 +604,17 @@ export function SegmentEditor({
                     </g>
                   );
                 })}
+
+                {/* "Retirer" hovered: what the neighbour would become once stretched over the removed segment. */}
+                {removalGhost && (
+                  <line
+                    x1={x(removalGhost.start_s)}
+                    y1={y(removalGhost.is_drift ? removalGhost.offset_start : (removalGhost.offset_start + removalGhost.offset_end) / 2)}
+                    x2={x(removalGhost.end_s)}
+                    y2={y(removalGhost.is_drift ? removalGhost.offset_end : (removalGhost.offset_start + removalGhost.offset_end) / 2)}
+                    className="segment-line removal-ghost"
+                  />
+                )}
 
                 {/* What the render does at each jump: cut extra content, or fill missing content with silence. */}
                 {segmentsPreview.slice(1).map((seg, k) => {
@@ -655,7 +706,7 @@ export function SegmentEditor({
                       </td>
                       <td
                         className={seg.confidence < LOW_CONFIDENCE_THRESHOLD ? "editor-confidence-cell low" : "editor-confidence-cell"}
-                        title="À quel point cette détection (décalage et classification dérive/constant) est fiable -- voir engine/segments.py:_segment_confidence. Un score bas vient de fenêtres d'analyse qui ne s'accordent pas entre elles et/ou de trop peu de fenêtres en soutien, pas forcément d'une erreur certaine."
+                        title="Fiabilité de cette détection (décalage, dérive ou constant). Un score bas vient de mesures qui ne s'accordent pas entre elles, ou trop peu nombreuses : à vérifier à l'écoute, sans être forcément faux."
                       >
                         {seg.confidence < LOW_CONFIDENCE_THRESHOLD ? "⚠ " : ""}
                         {Math.round(seg.confidence * 100)}%
@@ -664,10 +715,23 @@ export function SegmentEditor({
                         <button
                           className="small-button"
                           disabled={segmentsPreview.length < 2}
-                          title="Fusionne ce segment avec le suivant (ou le précédent si c'est le dernier) -- utile pour retirer un segment parasite."
-                          onClick={() => applyEdit((s) => mergeSegment(s, i))}
+                          title={
+                            segmentsPreview.length < 2
+                              ? "Le seul segment ne peut pas être retiré."
+                              : `Retire le segment ${i + 1} (une fausse détection, par exemple) : le segment ${
+                                  i < segmentsPreview.length - 1 ? i + 2 : i
+                                } s'étend sur sa durée, avec son propre décalage. Aperçu en pointillés verts sur le graphe.`
+                          }
+                          onMouseEnter={() => setRemovalPreview(i)}
+                          onMouseLeave={() => setRemovalPreview(null)}
+                          onFocus={() => setRemovalPreview(i)}
+                          onBlur={() => setRemovalPreview(null)}
+                          onClick={() => {
+                            setRemovalPreview(null);
+                            applyEdit((s) => mergeSegment(s, i));
+                          }}
                         >
-                          {i < segmentsPreview.length - 1 ? "Fusionner ↓" : "Fusionner ↑"}
+                          Retirer
                         </button>
                       </td>
                     </tr>
@@ -707,7 +771,7 @@ export function SegmentEditor({
             <button
               className="small-button"
               onClick={reset}
-              disabled={sameState(state, initialState)}
+              disabled={!dirty}
               title="Revient aux segments tels qu'à l'ouverture de l'éditeur."
             >
               Réinitialiser
@@ -716,10 +780,10 @@ export function SegmentEditor({
           <button
             className="small-button"
             disabled={!state.confidences.some((c) => c < LOW_CONFIDENCE_THRESHOLD)}
-            title="Fusionne automatiquement chaque segment dont la confiance est sous le seuil avec son voisin (même effet que cliquer sur Fusionner pour chacun) -- ex. une fausse dérive détectée sur des fenêtres d'analyse qui ne s'accordent pas entre elles."
+            title="Retire chaque segment peu fiable (⚠), comme « Retirer » sur chacun : son voisin s'étend sur sa durée."
             onClick={() => applyEdit(ignoreLowConfidenceSegments)}
           >
-            Ignorer les segments peu fiables
+            Retirer les segments peu fiables
           </button>
           <button
             className="primary-button"
