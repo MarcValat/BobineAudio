@@ -36,6 +36,9 @@ _DURATION_RE = re.compile(r"Duration:\s*(?P<h>\d+):(?P<m>\d+):(?P<s>\d+(?:\.\d+)
 _DURATION_START_RE = re.compile(r"Duration:\s*\d+:\d+:\d+(?:\.\d+)?,\s*start:\s*(?P<start>-?\d+(?:\.\d+)?)")
 _SUBTITLE_STREAM_RE = re.compile(r"^\s*Stream #\d+:(?P<index>\d+)(?:\([^)]+\))?:\s*Subtitle:\s*(?P<codec>\S+)")
 _BITRATE_RE = re.compile(r"(?P<kbps>\d+)\s*kb/s")
+# The container's codec tag ffmpeg appends to some codec names, e.g.
+# "pcm_s16le ([1][0][0][0] / 0x0001)" for a .wav: noise to anyone reading it.
+_CODEC_TAG_RE = re.compile(r"\s*\(\[[^()]*/ 0x[0-9A-Fa-f]+\)")
 
 
 class FFmpegError(RuntimeError):
@@ -128,7 +131,7 @@ def probe_audio_streams(path: str) -> list[AudioStreamInfo]:
         streams.append(
             AudioStreamInfo(
                 index=len(streams),
-                codec=match.group("codec").strip(),
+                codec=_CODEC_TAG_RE.sub("", match.group("codec")).strip(),
                 language=match.group("lang"),
                 channels=channels,
                 sample_rate=int(match.group("rate")),

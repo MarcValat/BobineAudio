@@ -176,6 +176,11 @@ def test_extract_pcm_from_plain_wav(wav_file: Path) -> None:
     assert np.abs(pcm).max() <= 1.0
 
 
+def test_probe_names_a_wav_codec_without_its_container_tag(wav_file: Path) -> None:
+    # ffmpeg reports "pcm_s16le ([1][0][0][0] / 0x0001)".
+    assert probe_audio_streams(str(wav_file))[0].codec == "pcm_s16le"
+
+
 def test_extract_peaks_bucket_count_and_range(wav_file: Path) -> None:
     spec = parse_track_spec(str(wav_file))
     mins, maxes, duration = extract_peaks(spec, buckets=50)
