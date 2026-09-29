@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   checkHealth,
   probe,
@@ -104,6 +104,10 @@ function App() {
   const [exportState, setExportState] = useState<ExportState>(IDLE_EXPORT);
   const [analysisViewRef, analysisViewSize] = useElementSize<HTMLDivElement>();
   const [analysisView, setAnalysisView] = useState<"segments" | "listen">("listen");
+  // Bumped each time a file is opened: a job started for the previous file
+  // (analysis, prefetch) that answers afterwards is ignored instead of
+  // landing in the new file's view.
+  const fileGenRef = useRef(0);
 
   const pollHealth = useCallback(() => {
     let cancelled = false;
@@ -148,6 +152,7 @@ function App() {
   }, [engineStatus]);
 
   async function openFile(selected: string) {
+    const gen = ++fileGenRef.current;
     setFilePath(selected);
     setTracks(null);
     setReferenceIndex(null);
@@ -163,6 +168,7 @@ function App() {
 
     try {
       const res = await probe(selected);
+      if (gen !== fileGenRef.current) return;
       setTracks(res.tracks);
       setSubtitles(res.subtitles ?? []);
       if (res.tracks.length >= 2) {
@@ -171,7 +177,7 @@ function App() {
         prefetchTracks(selected, res.tracks.map((t) => t.index));
       }
     } catch (err) {
-      setProbeError(err instanceof Error ? err.message : String(err));
+      if (gen === fileGenRef.current) setProbeError(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -179,14 +185,18 @@ function App() {
    * doesn't pay the ~7s-per-track extraction cost that's otherwise
    * unavoidable on a cold cache (see api.ts's startPrefetchJob). */
   function prefetchTracks(path: string, trackIndices: number[]) {
+    const gen = fileGenRef.current;
+    const done = () => {
+      if (gen === fileGenRef.current) setPrefetching(false);
+    };
     setPrefetching(true);
     startPrefetchJob(path, trackIndices)
       .then((jobId) => {
         connectJobWS<PrefetchResponse>(jobId, (event) => {
-          if (event.type !== "log") setPrefetching(false);
+          if (event.type !== "log") done();
         });
       })
-      .catch(() => setPrefetching(false));
+      .catch(done);
   }
 
   function handleReferenceChange(index: number) {
@@ -212,6 +222,10 @@ function App() {
 
   async function analyzeTrack(trackIndex: number, refIndex: number) {
     if (!filePath) return;
+    const gen = fileGenRef.current;
+    const update: typeof updateAnalysis = (index, patch) => {
+      if (gen === fileGenRef.current) updateAnalysis(index, patch);
+    };
     setAnalyses((current) => ({
       ...current,
       [trackIndex]: {
@@ -226,15 +240,15 @@ function App() {
       const jobId = await startSegmentsJob(filePath, refIndex, filePath, trackIndex);
       connectJobWS<SegmentsResponse>(jobId, (event) => {
         if (event.type === "log") {
-          updateAnalysis(trackIndex, (e) => ({ log: [...e.log, event.message] }));
+          update(trackIndex, (e) => ({ log: [...e.log, event.message] }));
         } else if (event.type === "done") {
-          updateAnalysis(trackIndex, { status: "done", result: event.result });
+          update(trackIndex, { status: "done", result: event.result });
         } else if (event.type === "error") {
-          updateAnalysis(trackIndex, { status: "error", error: event.message });
+          update(trackIndex, { status: "error", error: event.message });
         }
       });
     } catch (err) {
-      updateAnalysis(trackIndex, { status: "error", error: err instanceof Error ? err.message : String(err) });
+      update(trackIndex, { status: "error", error: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -265,6 +279,15 @@ function App() {
   }
   const exportTracks = exportableTracks.filter((t) => !exportExcluded.includes(t.index));
   const retimedSubs = exportTracks.flatMap((t) => subsByTrack[t.index] ?? []);
+  // What an export would contain now: once it changes (another analysis, a
+  // track or subtitle unticked, segments edited), the last export's outcome
+  // no longer describes it.
+  const exportContent = JSON.stringify(
+    exportTracks.map((t) => [t.index, analyses[t.index].result?.segments, subsByTrack[t.index]]),
+  );
+  useEffect(() => {
+    setExportState((s) => (s.running ? s : IDLE_EXPORT));
+  }, [exportContent]);
   // One output file has one reference track: tracks analyzed against
   // different references (the reference was changed in between) can't be
   // exported together.
@@ -345,7 +368,7 @@ function App() {
           </>
         ) : (
           <>
-            <p className="startup-text error">Moteur injoignable — le sidecar a-t-il démarré ? (voir la console)</p>
+            <p className="startup-text error">Le moteur d'analyse ne répond pas. Réessaie, ou redémarre l'application.</p>
             <button onClick={pollHealth}>Réessayer</button>
           </>
         )}
@@ -377,7 +400,12 @@ function App() {
       {mode === "single" && (
       <main className="app-main">
         <div className="left-column">
-          <button className="primary-button file-open-button" onClick={handleOpenFile}>
+          <button
+            className="primary-button file-open-button"
+            onClick={handleOpenFile}
+            disabled={exportState.running}
+            title={exportState.running ? "Un export est en cours : attends sa fin ou annule-le." : undefined}
+          >
             Ouvrir un fichier
           </button>
 
@@ -389,8 +417,8 @@ function App() {
               </p>
             )}
             {prefetching && (
-              <p className="prefetch-status" title="Analyse des pistes en arrière-plan pour accélérer le premier clic sur Analyser.">
-                Analyse audio en cours...
+              <p className="prefetch-status" title="Lecture des pistes audio en arrière-plan, pour que l'analyse démarre plus vite.">
+                Préparation des pistes...
               </p>
             )}
             {!tracks && !probeError && <p className="placeholder">Ouvre un fichier pour voir ses pistes.</p>}
@@ -408,7 +436,7 @@ function App() {
                         <th>Langue</th>
                         <th>Codec</th>
                         <th>Réf.</th>
-                        <th>Analyser</th>
+                        <th>À corriger</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -540,6 +568,9 @@ function App() {
               </ul>
 
               <div className="export-box">
+                {exportableTracks.length > 0 && exportTracks.length === 0 && (
+                  <p className="placeholder">Coche au moins une piste analysée pour l'inclure dans l'export.</p>
+                )}
                 {exportTracks.length > 0 && exportReference === null && (
                   <p className="error">
                     Ces pistes ont été analysées avec des références différentes : relance l'analyse avec une seule
