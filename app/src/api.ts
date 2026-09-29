@@ -84,6 +84,18 @@ export async function probe(path: string): Promise<ProbeResponse> {
   return resp.json();
 }
 
+/** Which of `paths` already exist, in order. */
+export async function pathsExist(paths: string[]): Promise<boolean[]> {
+  if (paths.length === 0) return [];
+  const resp = await fetch(`${BASE_URL}/paths/exist`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paths }),
+  });
+  if (!resp.ok) throw new Error(await readErrorDetail(resp));
+  return (await resp.json()).exists;
+}
+
 export interface PrefetchResponse {
   cached: number;
 }

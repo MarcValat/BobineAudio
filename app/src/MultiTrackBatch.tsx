@@ -13,7 +13,7 @@ import {
 import { FileCell, JobCancelled, languageLabel, LanguageSelect, OutputChooser, runJob, type RunStatus } from "./batchShared";
 import { InfoTip } from "./InfoTip";
 import { LogPanel } from "./LogPanel";
-import { outputPathFor, pickMediaFiles } from "./mediaDialog";
+import { pickMediaFiles, planOutputPaths } from "./mediaDialog";
 import { basename } from "./paths";
 import { describeSegments } from "./SegmentChart";
 import { SegmentEditor } from "./SegmentEditor";
@@ -420,11 +420,22 @@ export function MultiTrackBatch({
   async function handleExportAll() {
     setExporting(true);
     cancelRequested.current = false;
-    for (const path of files) {
+    const doneOf = (run: FileRun | null) =>
+      run ? Object.entries(run.targets).filter(([, t]) => t.status === "done" && t.result) : [];
+    const toExport = files.filter((path) => doneOf(runOf(path)).length > 0);
+    let outputs: string[];
+    try {
+      outputs = await planOutputPaths(toExport, outputDir);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      for (const path of toExport) updateRun(path, (r) => ({ ...r, exportStatus: "error", exportError: message }));
+      setExporting(false);
+      return;
+    }
+    for (const [k, path] of toExport.entries()) {
       if (cancelRequested.current) break;
-      const run = runOf(path);
-      const done = run ? Object.entries(run.targets).filter(([, t]) => t.status === "done" && t.result) : [];
-      if (!run || done.length === 0) continue;
+      const run = runOf(path)!;
+      const done = doneOf(run);
       updateRun(path, (r) => ({ ...r, exportStatus: "running", exportLog: [], exportError: null }));
       const tracks = probes[path]?.tracks ?? [];
       const subs = subsOf(
@@ -441,7 +452,7 @@ export function MultiTrackBatch({
               segments: t.result!.segments,
               subtitles: subs[Number(track)] ?? [],
             })),
-            outputPathFor(path, outputDir),
+            outputs[k],
           ),
           (message) => updateRun(path, (r) => ({ ...r, exportLog: [...r.exportLog, message] })),
           (id) => (currentExportJob.current = id),

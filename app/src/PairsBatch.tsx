@@ -14,7 +14,7 @@ import { InfoTip } from "./InfoTip";
 import { describeSegments } from "./SegmentChart";
 import { SegmentEditor } from "./SegmentEditor";
 import { LogPanel } from "./LogPanel";
-import { outputPathFor, pickMediaFiles } from "./mediaDialog";
+import { pickMediaFiles, planOutputPaths } from "./mediaDialog";
 import { basename } from "./paths";
 import { SUBTITLE_MODES, subtitlesFor, type SubtitleMode } from "./subtitles";
 
@@ -363,10 +363,20 @@ export function PairsBatch({
   async function handleExportAll() {
     setExporting(true);
     cancelRequested.current = false;
-    for (let i = 0; i < analyses.length; i++) {
+    const toExport = analyses.flatMap((a, i) => (a.status === "done" && a.result ? [i] : []));
+    let outputs: string[];
+    try {
+      outputs = await planOutputPaths(toExport.map((i) => referenceFiles[i]), outputDir);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      for (const i of toExport) updatePair(i, { exportStatus: "error", exportError: message });
+      setExporting(false);
+      return;
+    }
+    for (const [k, i] of toExport.entries()) {
       if (cancelRequested.current) break;
       const entry = analyses[i];
-      if (entry.status !== "done" || !entry.result) continue;
+      if (!entry.result) continue;
       updatePair(i, { exportStatus: "running", exportLog: [] });
       try {
         // The candidate file's subtitles in its audio's language come along,
@@ -382,7 +392,7 @@ export function PairsBatch({
             candidateTrackIndex,
             entry.result.segments,
             {
-              outputPath: outputPathFor(referenceFiles[i], outputDir),
+              outputPath: outputs[k],
               language: candidateLanguage || null,
               subtitles: candidate ? subtitlesFor(candidate.subtitles ?? [], audioLanguage, subsMode) : [],
             },

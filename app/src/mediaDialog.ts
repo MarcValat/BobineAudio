@@ -1,4 +1,5 @@
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { pathsExist } from "./api";
 
 // Videos to take a reference from, and the audio-only files a corrected track
 // can come from (batch mode): anything ffmpeg reads is fine, these are the
@@ -53,23 +54,60 @@ export async function pickFolder(defaultPath?: string | null): Promise<string | 
   return typeof selected === "string" ? selected : null;
 }
 
-/** Where `inputPath`'s synchronized copy goes: in `outputDir` when one was
- * chosen, next to it otherwise (see syncedFileName). */
-export function outputPathFor(inputPath: string, outputDir: string | null): string {
-  const synced = syncedFileName(inputPath);
-  if (!outputDir) return synced;
-  const cut = Math.max(synced.lastIndexOf("\\"), synced.lastIndexOf("/"));
-  const sep = outputDir.endsWith("\\") || outputDir.endsWith("/") ? "" : "\\";
-  return outputDir + sep + synced.slice(cut + 1);
+function splitPath(path: string): { dir: string; stem: string } {
+  const cut = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/"));
+  const name = path.slice(cut + 1);
+  const dot = name.lastIndexOf("."); // "Show.S01E01.mkv" keeps its episode number
+  return { dir: path.slice(0, cut + 1), stem: dot > 0 ? name.slice(0, dot) : name };
+}
+
+function joinPath(dir: string, name: string): string {
+  const sep = dir === "" || dir.endsWith("\\") || dir.endsWith("/") ? "" : "\\";
+  return dir + sep + name;
+}
+
+/** Windows paths: case and slash direction don't matter. */
+function samePath(a: string, b: string): boolean {
+  const norm = (p: string) => p.replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase();
+  return norm(a) === norm(b);
+}
+
+/** Where a batch's synchronized copies go, one per input, in order. In an
+ * output folder other than the original's, a copy keeps the original's name
+ * ("Film.mp4" -> "Film.mkv") unless a file there already has it or another
+ * copy of the batch takes it; otherwise, and next to the originals, it's
+ * "Film.synced.mkv". Copies that would still share a name are numbered. */
+export async function planOutputPaths(inputs: string[], outputDir: string | null): Promise<string[]> {
+  const plain = inputs.map((input) => {
+    const { dir, stem } = splitPath(input);
+    return outputDir && !samePath(dir, outputDir) ? joinPath(outputDir, `${stem}.mkv`) : null;
+  });
+  const candidates = plain.filter((p): p is string => p !== null);
+  const taken = await pathsExist(candidates);
+  const existing = new Set(candidates.filter((_, i) => taken[i]).map((p) => p.toLowerCase()));
+
+  const planned: string[] = [];
+  const isFree = (path: string) => !planned.some((p) => samePath(p, path));
+  inputs.forEach((input, i) => {
+    const keep = plain[i];
+    if (keep && !existing.has(keep.toLowerCase()) && isFree(keep)) {
+      planned.push(keep);
+      return;
+    }
+    const { dir, stem } = splitPath(input);
+    const folder = outputDir ?? dir;
+    let path = joinPath(folder, `${stem}.synced.mkv`);
+    for (let n = 2; !isFree(path); n++) path = joinPath(folder, `${stem}.synced (${n}).mkv`);
+    planned.push(path);
+  });
+  return planned;
 }
 
 /** Where `inputPath`'s synchronized copy goes, by default right next to it:
  * "Film.mkv" -> "Film.synced.mkv". */
 export function syncedFileName(inputPath: string): string {
-  const cut = Math.max(inputPath.lastIndexOf("\\"), inputPath.lastIndexOf("/"));
-  const name = inputPath.slice(cut + 1);
-  const dot = name.lastIndexOf("."); // "Show.S01E01.mkv" keeps its episode number
-  return inputPath.slice(0, cut + 1) + (dot > 0 ? name.slice(0, dot) : name) + ".synced.mkv";
+  const { dir, stem } = splitPath(inputPath);
+  return dir + stem + ".synced.mkv";
 }
 
 /** The system's "save as" dialog for an exported MKV, starting at `suggestedPath`. */

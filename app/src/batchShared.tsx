@@ -209,6 +209,7 @@ export function OutputChooser({
       <button
         className="small-button"
         disabled={disabled}
+        title="Dans un autre dossier que l'original, un export garde le nom de l'original (sauf si ce nom y est déjà pris) ; à côté de l'original, il prend le suffixe « .synced »."
         onClick={async () => {
           const dir = await pickFolder(outputDir);
           if (dir) onChange(dir);
