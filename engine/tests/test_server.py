@@ -415,6 +415,14 @@ def test_cancel_unknown_job_returns_404() -> None:
     assert client.post("/jobs/does-not-exist/cancel").status_code == 404
 
 
+def test_paths_exist_answers_in_order(tmp_path: Path) -> None:
+    taken = tmp_path / "Episode 1.mkv"
+    taken.write_bytes(b"")
+    resp = client.post("/paths/exist", json={"paths": [str(tmp_path / "Episode 2.mkv"), str(taken)]})
+    assert resp.status_code == 200
+    assert resp.json() == {"exists": [False, True]}
+
+
 def test_a_cancelled_export_leaves_no_partial_file(offset_mkv: tuple[Path, float], monkeypatch: pytest.MonkeyPatch) -> None:
     import syncaudio.server as server
     from syncaudio.cancellation import Cancelled

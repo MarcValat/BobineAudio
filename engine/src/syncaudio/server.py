@@ -136,6 +136,21 @@ def cancel_job(job_id: str) -> dict[str, bool]:
     return {"cancelled": True}
 
 
+class PathsRequest(BaseModel):
+    paths: list[str]
+
+
+class PathsExistResponse(BaseModel):
+    exists: list[bool]
+
+
+@app.post("/paths/exist", response_model=PathsExistResponse)
+def paths_exist(req: PathsRequest) -> PathsExistResponse:
+    """Which of these paths are already taken, in order: the GUI names a
+    batch export after its original only where that overwrites nothing."""
+    return PathsExistResponse(exists=[Path(p).exists() for p in req.paths])
+
+
 class TrackInfo(BaseModel):
     index: int
     codec: str | None
