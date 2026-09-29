@@ -1,11 +1,27 @@
+import { useEffect, useRef, useState } from "react";
 import type { SegmentOut } from "./api";
 import "./SegmentChart.css";
 
-const WIDTH = 760;
-const HEIGHT = 140;
+// Drawn at its real on-screen width and a fixed height, so its text stays
+// the same size on any window, instead of scaling a fixed picture (too tall
+// on a wide window, unreadably small on a narrow one). A bit lower on a
+// short window, where the waveforms below need the room.
+const HEIGHT = 150;
+const COMPACT_HEIGHT = 120;
+const SHORT_WINDOW = "(max-height: 850px)";
+
+/** Whether the window is short enough for charts to take less height. */
+export function useShortWindow(): boolean {
+  const [short, setShort] = useState(() => window.matchMedia(SHORT_WINDOW).matches);
+  useEffect(() => {
+    const query = window.matchMedia(SHORT_WINDOW);
+    const onChange = () => setShort(query.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+  return short;
+}
 const MARGIN = { top: 14, right: 16, bottom: 26, left: 70 };
-const PLOT_W = WIDTH - MARGIN.left - MARGIN.right;
-const PLOT_H = HEIGHT - MARGIN.top - MARGIN.bottom;
 
 // A segment below this is flagged in the UI and eligible for "Ignorer les
 // segments peu fiables" -- see engine/segments.py's _segment_confidence,
@@ -89,7 +105,21 @@ export function formatTime(seconds: number): string {
  * correction, made visible.
  */
 export function SegmentChart({ segments, onEdit }: { segments: SegmentOut[]; onEdit?: () => void }) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [width, setWidth] = useState(760);
+  const compact = useShortWindow();
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const observer = new ResizeObserver(([entry]) => setWidth(Math.max(200, Math.round(entry.contentRect.width))));
+    observer.observe(svg);
+    return () => observer.disconnect();
+  }, [segments.length === 0]);
+
   if (segments.length === 0) return null;
+  const height = compact ? COMPACT_HEIGHT : HEIGHT;
+  const PLOT_W = width - MARGIN.left - MARGIN.right;
+  const PLOT_H = height - MARGIN.top - MARGIN.bottom;
 
   const totalDuration = segments[segments.length - 1].end_s;
   const offsets = segments.flatMap((s) => [s.offset_start, s.offset_end]);
@@ -111,14 +141,10 @@ export function SegmentChart({ segments, onEdit }: { segments: SegmentOut[]; onE
 
   return (
     <div className="segment-chart">
-      {/* aspect-ratio (not just viewBox + CSS height:auto) is needed inside
-          a flex container: a flex item's height-from-width-via-aspect-ratio
-          isn't reliably resolved from viewBox alone before layout runs,
-          which was making this chart render tiny once its parent became a
-          flex column (see App.css's analysis-card chain). */}
       <svg
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        style={{ aspectRatio: `${WIDTH} / ${HEIGHT}` }}
+        ref={svgRef}
+        viewBox={`0 0 ${width} ${height}`}
+        style={{ height }}
         role="img"
         aria-label="Décalage en fonction du temps"
       >

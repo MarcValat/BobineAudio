@@ -19,7 +19,10 @@
   width: 100%;
   max-width: 960px;
   max-height: 100%;
-  overflow-y: auto;
+  /* Title and actions always in view; only what's between them scrolls
+     (.editor-columns), so Enregistrer never ends up below the window's edge. */
+  display: flex;
+  flex-direction: column;
   box-sizing: border-box;
   text-align: left;
 }
@@ -38,6 +41,9 @@
 }
 
 .editor-columns {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   align-items: stretch;
   flex-wrap: wrap;
@@ -46,10 +52,11 @@
 
 .editor-primary {
   flex: 1 1 520px;
-  min-width: 460px;
+  min-width: min(460px, 100%);
 }
 
 .editor-header {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -62,8 +69,8 @@
 }
 
 .editor-chart {
+  display: block;
   width: 100%;
-  height: auto;
   border: 1px solid var(--border, rgba(128, 128, 128, 0.25));
   border-radius: var(--radius-sm, 8px);
   box-sizing: border-box;
@@ -193,12 +200,17 @@
 }
 
 .editor-table th {
+  white-space: nowrap;
   font-size: 0.75em;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-muted);
   background: var(--surface-alt, rgba(128, 128, 128, 0.08));
+}
+
+.editor-table td:last-child {
+  white-space: nowrap;
 }
 
 .editor-table input {
@@ -221,18 +233,11 @@
   background: color-mix(in srgb, var(--danger, #cc3333) 8%, transparent);
 }
 
-/* A concrete height (not just min-height) is the point: .preview and its
-   own children (see App.css/Waveform.css) are all `flex: 1 1 auto; min-
-   height: 0`, which only lets them shrink to whatever space a *bounded*
-   ancestor hands them -- in the main view that ancestor is the page's
-   viewport-height layout, which doesn't reach into this modal, so without
-   an explicit height here the whole chain collapsed to each element's own
-   tiny min-height (a barely-visible sliver) instead of actually filling the
-   column. */
+/* No fixed height: the waveforms keep their own readable minimum (see
+   Waveform.css), and .editor-columns scrolls when they don't fit. */
 .editor-preview {
   flex: 1 1 420px;
-  min-width: 340px;
-  height: 520px;
+  min-width: min(340px, 100%);
   display: flex;
   flex-direction: column;
   border-left: 1px solid var(--border, rgba(128, 128, 128, 0.3));
@@ -247,6 +252,7 @@
 }
 
 .editor-actions {
+  flex: 0 0 auto;
   margin-top: 1em;
   display: flex;
   justify-content: center;
@@ -258,4 +264,19 @@
   display: flex;
   gap: 0.4em;
   margin-right: auto;
+}
+
+/* A narrow window: the preview goes under the chart and table instead of
+   beside them, and the backdrop gives the panel more of the screen. */
+@media (max-width: 1100px) {
+  .editor-overlay {
+    padding: 1em;
+  }
+
+  .editor-preview {
+    border-left: none;
+    padding-left: 0;
+    border-top: 1px solid var(--border, rgba(128, 128, 128, 0.3));
+    padding-top: 1em;
+  }
 }

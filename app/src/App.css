@@ -117,7 +117,11 @@ body {
   flex: 0 0 auto;
   display: flex;
   gap: 0.5em;
-  padding: 1em 1em 0;
+  padding: 0.7em 1em 0;
+}
+
+.mode-switch button {
+  padding: 0.4em 1em;
 }
 
 .update-banner {
@@ -149,7 +153,9 @@ body {
   min-height: 0;
   padding: 1em;
   display: grid;
-  grid-template-columns: minmax(320px, 440px) 1fr;
+  /* The tracks column follows the window's width instead of keeping 440px
+     on a small screen, where the analysis needs every pixel. */
+  grid-template-columns: clamp(290px, 24vw, 420px) minmax(0, 1fr);
   gap: 1em;
   overflow: hidden;
 }
@@ -188,10 +194,8 @@ body {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 1em 1.1em;
-  /* No section scrolls internally: field-tracks' content is always small
-     (a handful of table rows), and field-analysis only ever shows one
-     analysis tab at a time, whose content shrinks to fit (see the flex
-     chain below) -- overflow is a last-resort clip, not an expected path. */
+  /* Clips to the rounded corners; what can outgrow a panel scrolls inside
+     it instead (.field-tracks, .analysis-card). */
   overflow: hidden;
   text-align: left;
   /* Windows paths have no spaces to break on -- without this, a long one
@@ -332,8 +336,7 @@ button:focus-visible {
 }
 
 /* One tab per analyzed track (App.tsx only ever renders the active one's
-   card below) -- this is what lets an arbitrary number of analyzed tracks
-   never need field-analysis itself to scroll. */
+   card below), so any number of analyzed tracks takes one card's room. */
 .analysis-tabs {
   flex: 0 0 auto;
   display: flex;
@@ -363,12 +366,14 @@ button:focus-visible {
 }
 
 /* The single visible card, with a left accent bar reflecting its state at a
-   glance (running/done/error). A flex column itself so its content --
-   ultimately the waveforms inside .preview -- can shrink to fit whatever
-   height field-analysis has left, instead of overflowing into a scroll. */
+   glance (running/done/error). Its content -- ultimately the waveforms
+   inside .preview -- grows to fill a tall window, but never shrinks below a
+   readable size: on a small screen the card scrolls instead (the export bar
+   below it stays in view). */
 .analysis-card {
   flex: 1 1 auto;
   min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   padding: 0.2em 0 0.2em 0.9em;
@@ -393,42 +398,43 @@ button:focus-visible {
 }
 
 .segments-result {
-  flex: 1 1 auto;
-  min-height: 0;
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
   margin-top: 0.5em;
 }
 
-/* Everything in the card except .preview (segment count/buttons, the
-   chart, the render log/result) keeps its natural size; .preview alone
-   (the waveform comparison) is the flexible region that actually shrinks. */
+/* Everything in the card except .preview (summary, chart) keeps its
+   natural size; .preview alone (the waveform comparison) takes the room
+   left over. */
 .segments-result > :not(.preview),
 .analysis-card > :not(.segments-result) {
   flex: 0 0 auto;
 }
 
+/* The chart sits next to the summary while it has room to stay legible,
+   and moves under it (full width) otherwise. */
 .analysis-top {
   display: flex;
-  gap: 1.5em;
+  flex-wrap: wrap;
+  gap: 0.8em 1.5em;
   align-items: flex-start;
 }
 
 .analysis-summary {
-  flex: 0 0 auto;
-  min-width: 14em;
+  flex: 0 1 16em;
+  min-width: 12em;
 }
 
 .analysis-top .segment-chart {
-  flex: 1 1 0;
+  flex: 1 1 440px;
   min-width: 0;
   max-width: none;
   margin: 0;
 }
 
 .preview {
-  flex: 1 1 auto;
-  min-height: 0;
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
   margin-top: 0.7em;
@@ -440,14 +446,20 @@ button:focus-visible {
   flex: 0 0 auto;
 }
 
-.preview-segment-picks {
+.preview-toolbar {
   flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4em 1em;
+  font-size: 0.85em;
+}
+
+.preview-segment-picks {
   display: flex;
   align-items: center;
   gap: 0.5em;
   flex-wrap: wrap;
-  font-size: 0.85em;
-  margin-bottom: 0.5em;
   color: var(--text-muted);
 }
 
@@ -566,8 +578,15 @@ button:focus-visible {
   font-size: 0.85em;
 }
 
+/* No cell breaks mid-word ("truehd", "ANALYSER") in the narrow column of
+   a small window. */
+.field-tracks th,
+.field-tracks td {
+  white-space: nowrap;
+}
+
 .field-tracks th {
-  padding: 0.4em;
+  padding: 0.4em 0.3em;
   text-align: center;
   font-size: 0.75em;
   font-weight: 700;
@@ -579,7 +598,7 @@ button:focus-visible {
 }
 
 .field-tracks td {
-  padding: 0.5em 0.4em;
+  padding: 0.5em 0.3em;
   text-align: center;
   border: 1px solid var(--border);
 }

@@ -387,7 +387,8 @@ function App() {
           {analyzedTracks.length === 0 && (
             <p className="placeholder">Coche une ou plusieurs pistes à corriger, puis clique sur « Analyser ».</p>
           )}
-          {analyzedTracks.length > 0 && (
+          {/* A single analyzed track needs no tab: its card's title names it. */}
+          {analyzedTracks.length > 1 && (
             <div className="analysis-tabs">
               {analyzedTracks.map((t) => {
                 const entry = analyses[t.index];

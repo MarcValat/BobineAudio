@@ -3,6 +3,7 @@ import type { SegmentOut } from "./api";
 import {
   LOW_CONFIDENCE_THRESHOLD,
   describeJump,
+  useShortWindow,
   formatOffsetMs,
   formatTime,
   offsetTicks,
@@ -13,11 +14,12 @@ import { type TimeView, WHEEL_ZOOM_IN_FACTOR, WHEEL_ZOOM_OUT_FACTOR, useWheel, z
 import { TrackPreview, type TrackPreviewHandle } from "./TrackPreview";
 import "./SegmentEditor.css";
 
-const WIDTH = 900;
-const HEIGHT = 340;
+// The chart is drawn at its real on-screen width (measured) and a fixed
+// height, so its text keeps one size on any window (see SegmentChart);
+// lower on a short window, so the segment table below stays in view.
+const HEIGHT = 300;
+const COMPACT_HEIGHT = 240;
 const MARGIN = { top: 20, right: 20, bottom: 32, left: 64 };
-const PLOT_W = WIDTH - MARGIN.left - MARGIN.right;
-const PLOT_H = HEIGHT - MARGIN.top - MARGIN.bottom;
 // Must match engine/src/syncaudio/segments.py's _DRIFT_EPS_S: the editor
 // recomputes is_drift live as the user edits offset values (rather than
 // trusting the segments' original is_drift, which goes stale the moment
@@ -183,6 +185,17 @@ export function SegmentEditor({
   // as "move the playback position here".
   const movedRef = useRef(false);
   const svgRef = useRef<SVGSVGElement>(null);
+  const [chartWidth, setChartWidth] = useState(900);
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const observer = new ResizeObserver(([entry]) => setChartWidth(Math.max(300, Math.round(entry.contentRect.width))));
+    observer.observe(svg);
+    return () => observer.disconnect();
+  }, []);
+  const chartHeight = useShortWindow() ? COMPACT_HEIGHT : HEIGHT;
+  const PLOT_W = chartWidth - MARGIN.left - MARGIN.right;
+  const PLOT_H = chartHeight - MARGIN.top - MARGIN.bottom;
 
   /** Record the current state as the one to come back to on undo. */
   function remember() {
@@ -310,13 +323,13 @@ export function SegmentEditor({
 
   function timeFromClientX(clientX: number): number {
     const rect = svgRef.current!.getBoundingClientRect();
-    const svgX = ((clientX - rect.left) / rect.width) * WIDTH;
+    const svgX = ((clientX - rect.left) / rect.width) * chartWidth;
     return xInv(svgX - MARGIN.left);
   }
 
   function offsetFromClientY(clientY: number): number {
     const rect = svgRef.current!.getBoundingClientRect();
-    const svgY = ((clientY - rect.top) / rect.height) * HEIGHT - MARGIN.top;
+    const svgY = ((clientY - rect.top) / rect.height) * chartHeight - MARGIN.top;
     return minOffset + ((PLOT_H - svgY) / PLOT_H) * (maxOffset - minOffset);
   }
 
@@ -456,7 +469,8 @@ export function SegmentEditor({
             <svg
               ref={svgRef}
               className={`editor-chart${preview ? " editor-chart-listenable" : ""}${dragging ? " editor-chart-dragging" : ""}`}
-              viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+              viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+              style={{ height: chartHeight }}
               role="img"
               onClick={handleChartClick}
               onDoubleClick={handleChartDoubleClick}
@@ -572,8 +586,8 @@ export function SegmentEditor({
                     <th>#</th>
                     <th>Début (s)</th>
                     <th>Fin (s)</th>
-                    <th>Décalage début (ms)</th>
-                    <th>Décalage fin (ms)</th>
+                    <th title="Décalage au début du segment, en millisecondes">Décal. début (ms)</th>
+                    <th title="Décalage à la fin du segment, en millisecondes">Décal. fin (ms)</th>
                     <th>Confiance</th>
                     <th>Actions</th>
                   </tr>

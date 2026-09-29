@@ -586,43 +586,45 @@ export function TrackPreview({
 
   return (
     <div className="preview">
-      {segments.length > 1 && (
-        <div className="preview-segment-picks">
-          Aller à :
-          {segments.map((seg, i) => (
-            <button key={i} className="small-button" onClick={() => goToSegment(seg)}>
-              {formatTime(seg.start_s)}–{formatTime(seg.end_s)} ({segmentOffsetLabel(seg)})
-            </button>
-          ))}
+      {/* One wrapping row (zoom, segment shortcuts, legend): height is what a
+          small screen lacks. */}
+      <div className="preview-toolbar">
+        <div className="waveform-zoom-controls">
+          <span>Zoom :</span>
+          <button className="small-button" onClick={() => zoomAt(0.5, previewStart)}>
+            + (zoomer)
+          </button>
+          <button className="small-button" onClick={() => zoomAt(2, previewStart)}>
+            − (dézoomer)
+          </button>
+          <button className="small-button" onClick={resetZoom}>
+            Piste entière
+          </button>
+          <InfoTip>
+            Molette sur une forme d'onde : zoomer ou dézoomer sous le curseur. Clic : placer la lecture à cet endroit.
+          </InfoTip>
         </div>
-      )}
-
-      <div className="waveform-zoom-controls">
-        <span>Zoom :</span>
-        <button className="small-button" onClick={() => zoomAt(0.5, previewStart)}>
-          + (zoomer)
-        </button>
-        <button className="small-button" onClick={() => zoomAt(2, previewStart)}>
-          − (dézoomer)
-        </button>
-        <button className="small-button" onClick={resetZoom}>
-          Piste entière
-        </button>
-        <InfoTip>
-          Molette sur une forme d'onde : zoomer ou dézoomer sous le curseur. Clic : placer la lecture à cet endroit.
-        </InfoTip>
+        {segments.length > 1 && (
+          <div className="preview-segment-picks">
+            Aller à :
+            {segments.map((seg, i) => (
+              <button key={i} className="small-button" onClick={() => goToSegment(seg)}>
+                {formatTime(seg.start_s)}–{formatTime(seg.end_s)} ({segmentOffsetLabel(seg)})
+              </button>
+            ))}
+          </div>
+        )}
+        {(removedHighlight.length > 0 || addedHighlight.length > 0) && (
+          <span className="waveform-legend">
+            <span>
+              <span className="waveform-legend-swatch removed" /> sera supprimé
+            </span>
+            <span>
+              <span className="waveform-legend-swatch added" /> sera ajouté (silence)
+            </span>
+          </span>
+        )}
       </div>
-
-      {(removedHighlight.length > 0 || addedHighlight.length > 0) && (
-        <div className="waveform-legend">
-          <span>
-            <span className="waveform-legend-swatch removed" /> sera supprimé
-          </span>
-          <span>
-            <span className="waveform-legend-swatch added" /> sera ajouté (silence)
-          </span>
-        </div>
-      )}
 
       {waveformError && <p className="error">{waveformError}</p>}
 

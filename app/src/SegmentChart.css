@@ -8,8 +8,8 @@
 }
 
 .segment-chart svg {
+  display: block;
   width: 100%;
-  height: auto;
 }
 
 .zero-line {
