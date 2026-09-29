@@ -101,8 +101,20 @@ function App() {
 
   async function handleOpenFile() {
     const selected = await pickMediaFiles(false);
-    if (!selected) return;
+    if (selected) await openFile(selected);
+  }
 
+  // Dev only (stripped from production builds): `?open=<path>` opens a file
+  // without the system dialog, for automated layout screenshots in a plain
+  // browser, where Tauri's dialog doesn't exist.
+  useEffect(() => {
+    if (!import.meta.env.DEV || engineStatus !== "ready") return;
+    const path = new URLSearchParams(window.location.search).get("open");
+    if (path) openFile(path);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engineStatus]);
+
+  async function openFile(selected: string) {
     setFilePath(selected);
     setTracks(null);
     setReferenceIndex(null);
