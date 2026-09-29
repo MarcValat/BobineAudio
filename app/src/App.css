@@ -457,6 +457,27 @@ button:focus-visible {
   cursor: auto;
 }
 
+/* The subtitle tracks retimed with this audio track, one checkbox each. */
+.result-subs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2em 0.8em;
+  margin-top: 0.35em;
+  font-size: 0.9em;
+  cursor: auto;
+}
+
+.result-subs-label {
+  color: var(--text-muted);
+}
+
+.result-subs label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+}
+
 /* The export of the whole file, at the bottom of the analyzed tracks. */
 .export-box {
   flex: 0 0 auto;

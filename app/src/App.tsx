@@ -6,6 +6,7 @@ import {
   startPrefetchJob,
   startSegmentedRenderJob,
   connectJobWS,
+  type SubtitleInfo,
   type TrackInfo,
   type SegmentsResponse,
   type PrefetchResponse,
@@ -20,6 +21,7 @@ import { BatchView } from "./BatchView";
 import { UpdateBanner } from "./UpdateBanner";
 import { pickMediaFiles, pickOutputFile, syncedFileName } from "./mediaDialog";
 import { basename } from "./paths";
+import { UNSHIFTABLE_HINT, subtitleLabel, subtitlesFor } from "./subtitles";
 import { useElementSize } from "./useElementSize";
 import "./App.css";
 
@@ -67,6 +69,10 @@ function App() {
   const [engineStatus, setEngineStatus] = useState<EngineStatus>("starting");
   const [filePath, setFilePath] = useState<string | null>(null);
   const [tracks, setTracks] = useState<TrackInfo[] | null>(null);
+  const [subtitles, setSubtitles] = useState<SubtitleInfo[]>([]);
+  // Subtitle tracks picked by hand for an analyzed track (by its index);
+  // absent: its language's forced subtitles (see subsByTrack).
+  const [subsChoice, setSubsChoice] = useState<Record<number, number[]>>({});
   const [referenceIndex, setReferenceIndex] = useState<number | null>(null);
   const [targetIndices, setTargetIndices] = useState<number[]>([]);
   const [probeError, setProbeError] = useState<string | null>(null);
@@ -138,10 +144,13 @@ function App() {
     setActiveAnalysisTab(null);
     setExportExcluded([]);
     setExportState(IDLE_EXPORT);
+    setSubtitles([]);
+    setSubsChoice({});
 
     try {
       const res = await probe(selected);
       setTracks(res.tracks);
+      setSubtitles(res.subtitles ?? []);
       if (res.tracks.length >= 2) {
         setReferenceIndex(res.tracks[0].index);
         setTargetIndices(res.tracks.slice(1).map((t) => t.index));
@@ -230,7 +239,18 @@ function App() {
   const anySelectedRunning = targetIndices.some((i) => analyses[i]?.status === "running");
   const analyzedTracks = (tracks ?? []).filter((t) => analyses[t.index]);
   const exportableTracks = analyzedTracks.filter((t) => analyses[t.index].result);
+  // The subtitle tracks retimed with each analyzed track: those picked by
+  // hand, or by default its language's forced ones. One subtitle track goes
+  // with one audio track at most (the first to claim it).
+  const subsByTrack: Record<number, number[]> = {};
+  const claimedSubs = new Set<number>();
+  for (const t of analyzedTracks) {
+    const wanted = subsChoice[t.index] ?? subtitlesFor(subtitles, t.language, "forced");
+    subsByTrack[t.index] = wanted.filter((i) => !claimedSubs.has(i));
+    subsByTrack[t.index].forEach((i) => claimedSubs.add(i));
+  }
   const exportTracks = exportableTracks.filter((t) => !exportExcluded.includes(t.index));
+  const retimedSubs = exportTracks.flatMap((t) => subsByTrack[t.index] ?? []);
   // One output file has one reference track: tracks analyzed against
   // different references (the reference was changed in between) can't be
   // exported together.
@@ -255,7 +275,11 @@ function App() {
       const jobId = await startSegmentedRenderJob(
         filePath,
         exportReference,
-        exportTracks.map((t) => ({ trackIndex: t.index, segments: analyses[t.index].result!.segments })),
+        exportTracks.map((t) => ({
+          trackIndex: t.index,
+          segments: analyses[t.index].result!.segments,
+          subtitles: subsByTrack[t.index] ?? [],
+        })),
         outputPath,
       );
       connectJobWS<RenderResponse>(jobId, (event) => {
@@ -433,6 +457,36 @@ function App() {
                         </span>
                       </div>
                       {entry.error && <p className="error">{entry.error}</p>}
+                      {entry.result && subtitles.length > 0 && (
+                        <div className="result-subs" onClick={(e) => e.stopPropagation()}>
+                          <span className="result-subs-label">Sous-titres recalés avec cette piste :</span>
+                          {subtitles.map((s) => {
+                            const elsewhere = Object.entries(subsByTrack).some(
+                              ([track, subs]) => Number(track) !== t.index && subs.includes(s.index),
+                            );
+                            const mine = subsByTrack[t.index] ?? [];
+                            return (
+                              <label
+                                key={s.index}
+                                title={!s.shiftable ? UNSHIFTABLE_HINT : elsewhere ? "Déjà recalés avec une autre piste" : undefined}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={mine.includes(s.index)}
+                                  disabled={!s.shiftable || elsewhere || exportState.running}
+                                  onChange={() =>
+                                    setSubsChoice((c) => ({
+                                      ...c,
+                                      [t.index]: mine.includes(s.index) ? mine.filter((i) => i !== s.index) : [...mine, s.index],
+                                    }))
+                                  }
+                                />
+                                {subtitleLabel(s)}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
                       <div onClick={(e) => e.stopPropagation()}>
                         <LogPanel lines={entry.log} />
                       </div>
@@ -452,8 +506,12 @@ function App() {
                   <p className="export-summary">
                     Contiendra la vidéo, la référence @{exportReferenceTrack.index} ({exportReferenceTrack.language ?? "?"}),{" "}
                     {exportTracks.length > 1 ? "les pistes corrigées" : "la piste corrigée"}{" "}
-                    {exportTracks.map((t) => `@${t.index} (${t.language ?? "?"})`).join(", ")} et les sous-titres.
-                    {tracks.length > exportTracks.length + 1 && " Les autres pistes audio ne sont pas incluses."}
+                    {exportTracks.map((t) => `@${t.index} (${t.language ?? "?"})`).join(", ")} et les sous-titres
+                    {retimedSubs.length > 0 &&
+                      ` (piste${retimedSubs.length > 1 ? "s" : ""} de sous-titres ${retimedSubs.map((i) => `@${i}`).join(", ")} recalée${
+                        retimedSubs.length > 1 ? "s" : ""
+                      } avec l'audio)`}
+                    .{tracks.length > exportTracks.length + 1 && " Les autres pistes audio ne sont pas incluses."}
                   </p>
                 )}
                 <LogPanel lines={exportState.log} />

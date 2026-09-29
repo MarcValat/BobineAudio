@@ -6,6 +6,7 @@ import {
   startSegmentsJob,
   type RenderResponse,
   type SegmentsResponse,
+  type SubtitleInfo,
   type TrackInfo,
 } from "./api";
 import { FileCell, languageLabel, LanguageSelect, OutputChooser, runJob, type RunStatus } from "./batchShared";
@@ -15,9 +16,11 @@ import { outputPathFor, pickMediaFiles } from "./mediaDialog";
 import { basename } from "./paths";
 import { describeSegments } from "./SegmentChart";
 import { SegmentEditor } from "./SegmentEditor";
+import { SUBTITLE_MODES, subtitlesFor, type SubtitleMode } from "./subtitles";
 
 interface FileProbe {
   tracks: TrackInfo[] | null;
+  subtitles: SubtitleInfo[];
   error: string | null;
 }
 
@@ -189,6 +192,7 @@ export function MultiTrackBatch({
   const [referenceLanguage, setReferenceLanguage] = useState("");
   const [targetLanguages, setTargetLanguages] = useState<string[]>([]);
   const [choices, setChoices] = useState<Record<string, TrackChoice>>({});
+  const [subsMode, setSubsMode] = useState<SubtitleMode>("forced");
   const [runs, setRuns] = useState<Record<string, FileRun>>({});
   const [analyzing, setAnalyzing] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -210,9 +214,14 @@ export function MultiTrackBatch({
       if (requested.current.has(path)) continue;
       requested.current.add(path);
       probe(path)
-        .then((res) => setProbes((p) => ({ ...p, [path]: { tracks: res.tracks, error: null } })))
+        .then((res) =>
+          setProbes((p) => ({ ...p, [path]: { tracks: res.tracks, subtitles: res.subtitles ?? [], error: null } })),
+        )
         .catch((err) =>
-          setProbes((p) => ({ ...p, [path]: { tracks: null, error: err instanceof Error ? err.message : String(err) } })),
+          setProbes((p) => ({
+            ...p,
+            [path]: { tracks: null, subtitles: [], error: err instanceof Error ? err.message : String(err) },
+          })),
         );
     }
   }, [files]);
@@ -251,6 +260,20 @@ export function MultiTrackBatch({
       return [f, tracks ? resolve(tracks, referenceLanguage, targetLanguages, choices[f]) : null];
     }),
   );
+
+  /** The subtitle tracks retimed with each of a file's corrected tracks (by
+   * track index), per the subtitle setting: one subtitle track goes with
+   * one audio track at most. */
+  function subsOf(path: string, targets: TrackInfo[]): Record<number, number[]> {
+    const subtitles = probes[path]?.subtitles ?? [];
+    const claimed = new Set<number>();
+    const out: Record<number, number[]> = {};
+    for (const t of targets) {
+      out[t.index] = subtitlesFor(subtitles, t.language, subsMode).filter((i) => !claimed.has(i));
+      out[t.index].forEach((i) => claimed.add(i));
+    }
+    return out;
+  }
 
   /** This file's analyses, if made against its current reference. */
   function runOf(path: string): FileRun | null {
@@ -318,12 +341,21 @@ export function MultiTrackBatch({
       const done = run ? Object.entries(run.targets).filter(([, t]) => t.status === "done" && t.result) : [];
       if (!run || done.length === 0) continue;
       updateRun(path, (r) => ({ ...r, exportStatus: "running", exportLog: [], exportError: null }));
+      const tracks = probes[path]?.tracks ?? [];
+      const subs = subsOf(
+        path,
+        done.map(([track]) => tracks.find((t) => t.index === Number(track))).filter((t): t is TrackInfo => !!t),
+      );
       try {
         const result = await runJob<RenderResponse>(
           startSegmentedRenderJob(
             path,
             run.referenceIndex,
-            done.map(([track, t]) => ({ trackIndex: Number(track), segments: t.result!.segments })),
+            done.map(([track, t]) => ({
+              trackIndex: Number(track),
+              segments: t.result!.segments,
+              subtitles: subs[Number(track)] ?? [],
+            })),
             outputPathFor(path, outputDir),
           ),
           (message) => updateRun(path, (r) => ({ ...r, exportLog: [...r.exportLog, message] })),
@@ -383,10 +415,21 @@ export function MultiTrackBatch({
               </label>
             ))}
         </span>
+        <label>
+          Sous-titres :
+          <select value={subsMode} onChange={(e) => setSubsMode(e.target.value as SubtitleMode)} disabled={busy}>
+            {SUBTITLE_MODES.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <InfoTip>
           Chaque fichier contient déjà la référence et les pistes à corriger. Les pistes sont choisies par langue, pour
           tous les fichiers : un fichier où une langue manque ou apparaît plusieurs fois est signalé ⚠, et « Choisir »
-          permet de fixer ses pistes à la main.
+          permet de fixer ses pistes à la main. Les sous-titres choisis (texte seulement : SRT, ASS) sont recalés avec la
+          piste audio de leur langue ; les autres sont gardés tels quels.
         </InfoTip>
       </div>
 
@@ -468,7 +511,13 @@ export function MultiTrackBatch({
                             <span className="batch-tracks-summary">
                               {res.reference ? `@${res.reference.index} ${res.reference.language ?? "?"}` : "?"} →{" "}
                               {res.targets.length > 0
-                                ? res.targets.map((t) => `@${t.index} ${t.language ?? "?"}`).join(", ")
+                                ? res.targets
+                                    .map((t) => {
+                                      const subs = subsOf(path, res.targets)[t.index] ?? [];
+                                      const retimed = subs.length ? ` + ST ${subs.map((i) => `@${i}`).join(" ")}` : "";
+                                      return `@${t.index} ${t.language ?? "?"}${retimed}`;
+                                    })
+                                    .join(", ")
                                 : "rien"}
                               {res.manual && <span className="batch-track-status"> (manuel)</span>}
                             </span>

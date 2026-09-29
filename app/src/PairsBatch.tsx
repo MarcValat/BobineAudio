@@ -15,6 +15,7 @@ import { SegmentEditor } from "./SegmentEditor";
 import { LogPanel } from "./LogPanel";
 import { outputPathFor, pickMediaFiles } from "./mediaDialog";
 import { basename } from "./paths";
+import { SUBTITLE_MODES, subtitlesFor, type SubtitleMode } from "./subtitles";
 
 
 interface PairAnalysis {
@@ -243,6 +244,7 @@ export function PairsBatch({
   // "" keeps the corrected track's own language; a code tags it with that one
   // instead (a bare .wav has none).
   const [candidateLanguage, setCandidateLanguage] = useState("");
+  const [subsMode, setSubsMode] = useState<SubtitleMode>("forced");
   const [analyses, setAnalyses] = useState<PairAnalysis[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -347,6 +349,11 @@ export function PairsBatch({
       if (entry.status !== "done" || !entry.result) continue;
       updatePair(i, { exportStatus: "running", exportLog: [] });
       try {
+        // The candidate file's subtitles in its audio's language come along,
+        // retimed with it (per the subtitle setting).
+        const candidate = subsMode === "none" ? null : await probe(candidateFiles[i]);
+        const audioLanguage =
+          candidate?.tracks.find((t) => t.index === candidateTrackIndex)?.language || candidateLanguage || null;
         const result = await runJob<RenderResponse>(
           startCrossFileSegmentedRenderJob(
             referenceFiles[i],
@@ -354,7 +361,11 @@ export function PairsBatch({
             candidateFiles[i],
             candidateTrackIndex,
             entry.result.segments,
-            { outputPath: outputPathFor(referenceFiles[i], outputDir), language: candidateLanguage || null },
+            {
+              outputPath: outputPathFor(referenceFiles[i], outputDir),
+              language: candidateLanguage || null,
+              subtitles: candidate ? subtitlesFor(candidate.subtitles ?? [], audioLanguage, subsMode) : [],
+            },
           ),
           (message) => updatePair(i, (a) => ({ exportLog: [...a.exportLog, message] })),
         );
@@ -400,9 +411,20 @@ export function PairsBatch({
             disabled={busy}
           />
         </label>
+        <label>
+          Sous-titres :
+          <select value={subsMode} onChange={(e) => setSubsMode(e.target.value as SubtitleMode)} disabled={busy}>
+            {SUBTITLE_MODES.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <InfoTip>
           Pistes proposées d'après le 1er fichier de chaque colonne, puis appliquées à toutes les paires. « Vérifier
-          toutes les pistes » montre celles de chaque fichier.
+          toutes les pistes » montre celles de chaque fichier. Les sous-titres choisis du fichier à corriger (texte
+          seulement : SRT, ASS) sont importés et recalés avec sa piste audio.
         </InfoTip>
         <button className="small-button" onClick={() => setShowTracksModal(true)} disabled={rowCount === 0}>
           Vérifier toutes les pistes

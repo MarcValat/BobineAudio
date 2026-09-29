@@ -16,9 +16,21 @@ export interface TrackInfo {
   start_time: number;
 }
 
+export interface SubtitleInfo {
+  index: number; // among the file's subtitle tracks
+  codec: string;
+  language: string | null;
+  title: string | null;
+  forced: boolean;
+  // Text subtitles (srt, ass/ssa) can be retimed along with their audio;
+  // image ones (PGS, VobSub) can't.
+  shiftable: boolean;
+}
+
 export interface ProbeResponse {
   path: string;
   tracks: TrackInfo[];
+  subtitles: SubtitleInfo[];
 }
 
 export interface SegmentOut {
@@ -189,6 +201,9 @@ export interface TrackSegments {
   segments: SegmentOut[];
   /** Tag the corrected track with this language instead of its own. */
   language?: string | null;
+  /** Subtitle tracks of the same file timed on this audio: retimed with it,
+   * segment by segment. */
+  subtitles?: number[];
 }
 
 /**
@@ -219,6 +234,12 @@ export async function startSegmentedRenderJob(
         segments: t.segments,
         language: t.language ?? null,
       })),
+      subs: tracks.flatMap((t) =>
+        (t.subtitles ?? []).map((index) => ({
+          subs: { path: inputPath, index },
+          audio: { path: inputPath, index: t.trackIndex },
+        })),
+      ),
     }),
   });
   if (!resp.ok) throw new Error(await readErrorDetail(resp));
@@ -241,7 +262,7 @@ export async function startCrossFileSegmentedRenderJob(
   candidatePath: string,
   candidateIndex: number,
   segments: SegmentOut[],
-  options: { outputPath?: string; language?: string | null } = {},
+  options: { outputPath?: string; language?: string | null; subtitles?: number[] } = {},
 ): Promise<string> {
   const resp = await fetch(`${BASE_URL}/jobs/render`, {
     method: "POST",
@@ -256,6 +277,12 @@ export async function startCrossFileSegmentedRenderJob(
       segment_overrides: [
         { track: { path: candidatePath, index: candidateIndex }, segments, language: options.language ?? null },
       ],
+      // The candidate file's own subtitles timed on its audio, imported and
+      // retimed along with it.
+      subs: (options.subtitles ?? []).map((index) => ({
+        subs: { path: candidatePath, index },
+        audio: { path: candidatePath, index: candidateIndex },
+      })),
     }),
   });
   if (!resp.ok) throw new Error(await readErrorDetail(resp));
