@@ -16,7 +16,9 @@ progress instead of a frozen spinner.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+import threading
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import numpy as np
@@ -25,7 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from syncaudio import analysis_cache, waveform_cache
+from syncaudio import analysis_cache, dsp, waveform_cache
 from syncaudio.analysis_cache import ANALYSIS_SAMPLE_RATE
 from syncaudio.ffmpeg_backend import FFmpegError, extract_wav_clip, probe_audio_streams, probe_stream_start_time
 from syncaudio.jobs import get_job, start_job
@@ -40,7 +42,16 @@ from syncaudio.render import (
 )
 from syncaudio.segments import DEFAULT_HOP_S, DEFAULT_MARGIN_S, DEFAULT_WINDOW_S, Segment, detect_segments
 
-app = FastAPI(title="SyncAudio", version="0.1.0")
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    # The computation libraries load in the background once the server is
+    # up: /health answers (and the app opens) right away, and they're ready
+    # well before anyone has picked a file to analyze.
+    threading.Thread(target=dsp.warm_up, name="syncaudio-warm-up", daemon=True).start()
+    yield
+
+
+app = FastAPI(title="SyncAudio", version="0.1.0", lifespan=_lifespan)
 
 # The sidecar only ever binds to 127.0.0.1 (see `syncaudio serve`), so it's
 # never reachable from outside the machine -- wide-open CORS here just lets

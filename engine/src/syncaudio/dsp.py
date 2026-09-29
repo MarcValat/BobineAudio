@@ -16,7 +16,21 @@ from __future__ import annotations
 import warnings
 
 import numpy as np
-from scipy import fft as sp_fft
+
+
+def _sp_fft():
+    """``scipy.fft``, imported on first use rather than with this module: it's
+    most of the engine's startup time (~0.4s), which the server spends before
+    it can answer at all. The server loads it in the background once up
+    instead (see ``warm_up``)."""
+    from scipy import fft
+
+    return fft
+
+
+def warm_up() -> None:
+    """Load what the computations need ahead of the first one."""
+    _sp_fft()
 
 
 def _hann_periodic(m: int) -> np.ndarray:
@@ -60,7 +74,7 @@ def stft_magnitude(x: np.ndarray, nperseg: int, noverlap: int, *, boundary: bool
     scale = np.sqrt(1.0 / win.sum() ** 2)
 
     frames = np.lib.stride_tricks.sliding_window_view(x, window_shape=nperseg, axis=-1, writeable=True)[0::nstep]
-    result = sp_fft.rfft((win * frames).real, n=nperseg)
+    result = _sp_fft().rfft((win * frames).real, n=nperseg)
     result *= scale
     return np.abs(np.moveaxis(result.astype(outdtype), -1, 0))
 
@@ -70,6 +84,7 @@ def fftconvolve_full(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     if a.shape[0] == 1 or b.shape[0] == 1:
         return a * b  # scipy broadcasts a length-1 axis instead of transforming it
     shape = a.shape[0] + b.shape[0] - 1
+    sp_fft = _sp_fft()
     fshape = [sp_fft.next_fast_len(shape, True)]
     sp1 = sp_fft.rfftn(a, fshape, axes=[0])
     sp2 = sp_fft.rfftn(b, fshape, axes=[0])
