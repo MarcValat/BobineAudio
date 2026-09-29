@@ -10,6 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
+from syncaudio.cancellation import Cancelled, current_cancel_event
 from syncaudio.models import AudioStreamInfo, AudioTrackSpec, SubtitleStreamInfo
 
 # A packaged sidecar build has no console of its own (see
@@ -24,9 +25,44 @@ _SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 
 
 
 def _run(*args, **kwargs) -> subprocess.CompletedProcess:
-    """`subprocess.run`, but never flashes a console window on Windows."""
+    """`subprocess.run`, but never flashes a console window on Windows, and
+    stops (raising ``Cancelled``) as soon as the job running it is cancelled."""
     kwargs.setdefault("creationflags", _SUBPROCESS_FLAGS)
-    return subprocess.run(*args, **kwargs)
+    event = current_cancel_event()
+    if event is None:
+        return subprocess.run(*args, **kwargs)
+    return _run_cancellable(event, *args, **kwargs)
+
+
+# How often a running ffmpeg checks for a cancellation.
+_CANCEL_POLL_S = 0.2
+
+
+def _run_cancellable(event, cmd, *, capture_output=False, check=False, input=None, **kwargs) -> subprocess.CompletedProcess:
+    """``subprocess.run(cmd, ...)``, killing the process once ``event`` is set."""
+    if event.is_set():
+        raise Cancelled()
+    if capture_output:
+        kwargs["stdout"] = kwargs["stderr"] = subprocess.PIPE
+    if input is not None:
+        kwargs["stdin"] = subprocess.PIPE
+    with subprocess.Popen(cmd, **kwargs) as proc:
+        pending = input
+        while True:
+            try:
+                out, err = proc.communicate(pending, timeout=_CANCEL_POLL_S)
+                break
+            except subprocess.TimeoutExpired:
+                # Already sent: retrying only goes on reading, nothing is lost.
+                pending = None
+                if event.is_set():
+                    proc.kill()
+                    proc.communicate()
+                    raise Cancelled() from None
+    result = subprocess.CompletedProcess(cmd, proc.returncode, out, err)
+    if check:
+        result.check_returncode()
+    return result
 
 _STREAM_RE = re.compile(
     r"^\s*Stream #\d+:(?P<index>\d+)(?:\((?P<lang>[^)]+)\))?:\s*Audio:\s*"

@@ -18,7 +18,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-JobStatus = Literal["running", "done", "error"]
+from syncaudio.cancellation import Cancelled, bind_cancel_event
+
+JobStatus = Literal["running", "done", "error", "cancelled"]
 
 
 @dataclass
@@ -29,6 +31,12 @@ class Job:
     result: Any = None
     error: str | None = None
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    # Set to stop the job: its ffmpeg runs watch it (see cancellation.py).
+    _cancel: threading.Event = field(default_factory=threading.Event, repr=False)
+
+    def cancel(self) -> None:
+        """Ask the job to stop; it ends as "cancelled" shortly after."""
+        self._cancel.set()
 
     def log(self, message: str) -> None:
         with self._lock:
@@ -49,6 +57,10 @@ class Job:
             self.error = error
             self.status = "error"
 
+    def mark_cancelled(self) -> None:
+        with self._lock:
+            self.status = "cancelled"
+
 
 _jobs: dict[str, Job] = {}
 _jobs_lock = threading.Lock()
@@ -61,9 +73,12 @@ def start_job(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Job:
         _jobs[job.id] = job
 
     def runner() -> None:
+        bind_cancel_event(job._cancel)
         try:
             result = fn(*args, log=job.log, **kwargs)
             job.finish(result)
+        except Cancelled:
+            job.mark_cancelled()
         except Exception as exc:  # noqa: BLE001 - a background thread has no other way to surface a failure
             # An HTTPException's str() is "400: <detail>"; the user only needs the detail.
             job.fail(str(getattr(exc, "detail", None) or exc))

@@ -237,3 +237,27 @@ def test_probe_is_redone_when_the_file_changes(tmp_path: Path) -> None:
     assert probe_audio_streams(str(path))[0].sample_rate == 44100
     _write_wav(path, sr=22050, freq=440.0, duration_s=1.5)
     assert probe_audio_streams(str(path))[0].sample_rate == 22050
+
+
+def test_a_cancelled_job_stops_its_running_ffmpeg() -> None:
+    """An ffmpeg run of a cancelled job is killed right away, not waited for."""
+    import contextvars
+    import threading
+    import time
+
+    from syncaudio.cancellation import Cancelled, bind_cancel_event
+    from syncaudio.ffmpeg_backend import _run
+
+    event = threading.Event()
+    # -re: 60s of generated audio played in real time, i.e. a run of about a minute.
+    cmd = [resolve_ffmpeg(), "-hide_banner", "-re", "-f", "lavfi", "-i", "sine=duration=60", "-f", "null", "-"]
+
+    def job() -> None:
+        bind_cancel_event(event)
+        _run(cmd, capture_output=True)
+
+    threading.Timer(0.5, event.set).start()
+    start = time.monotonic()
+    with pytest.raises(Cancelled):
+        contextvars.copy_context().run(job)
+    assert time.monotonic() - start < 3.0

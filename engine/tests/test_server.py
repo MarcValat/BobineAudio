@@ -230,7 +230,7 @@ def _drain_job_ws(job_id: str) -> list[dict]:
         while True:
             event = ws.receive_json()
             events.append(event)
-            if event["type"] in ("done", "error"):
+            if event["type"] in ("done", "error", "cancelled"):
                 break
     return events
 
@@ -398,3 +398,46 @@ def test_prefetch_warms_the_cache_for_a_later_detection(offset_mkv: tuple[Path, 
     assert not any("[extraction]" in m for m in _logs(events))
     assert any("[cache]" in m for m in _logs(events))
     assert abs(events[-1]["result"]["segments"][0]["offset_start"] - offset_s) < 0.5
+
+
+def test_a_cancelled_job_reports_it_and_its_ffmpeg_stops() -> None:
+    from syncaudio.ffmpeg_backend import _run
+    from syncaudio.jobs import start_job
+
+    cmd = [resolve_ffmpeg(), "-hide_banner", "-re", "-f", "lavfi", "-i", "sine=duration=60", "-f", "null", "-"]
+    job = start_job(lambda log: _run(cmd, capture_output=True))
+    assert client.post(f"/jobs/{job.id}/cancel").status_code == 200
+    events = _drain_job_ws(job.id)
+    assert events[-1]["type"] == "cancelled"
+
+
+def test_cancel_unknown_job_returns_404() -> None:
+    assert client.post("/jobs/does-not-exist/cancel").status_code == 404
+
+
+def test_a_cancelled_export_leaves_no_partial_file(offset_mkv: tuple[Path, float], monkeypatch: pytest.MonkeyPatch) -> None:
+    import syncaudio.server as server
+    from syncaudio.cancellation import Cancelled
+
+    mkv, _ = offset_mkv
+    output_path = mkv.with_name("out.partial.mkv")
+
+    def render_cut_short(*args, **kwargs):
+        output_path.write_bytes(b"half a file")
+        raise Cancelled()
+
+    monkeypatch.setattr(server, "render_tracks", render_cut_short)
+    segment = {"start_s": 0.0, "end_s": 30.0, "offset_start": 3.0, "offset_end": 3.0, "is_drift": False}
+    events = _run_job(
+        "/jobs/render",
+        {
+            "input_path": str(mkv),
+            "reference_index": 0,
+            "track_indices": [1],
+            "output_path": str(output_path),
+            "segmented": True,
+            "segment_overrides": [{"track": {"path": str(mkv), "index": 1}, "segments": [segment]}],
+        },
+    )
+    assert events[-1]["type"] == "cancelled"
+    assert not output_path.exists()

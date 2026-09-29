@@ -28,6 +28,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from syncaudio import analysis_cache, dsp, waveform_cache
+from syncaudio.cancellation import Cancelled
 from syncaudio.analysis_cache import ANALYSIS_SAMPLE_RATE
 from syncaudio.ffmpeg_backend import (
     FFmpegError,
@@ -96,7 +97,7 @@ class JobStarted(BaseModel):
 
 @app.websocket("/jobs/{job_id}/ws")
 async def job_ws(websocket: WebSocket, job_id: str) -> None:
-    """Stream a job's progress messages as they happen, ending with its result or error."""
+    """Stream a job's progress messages as they happen, ending with its result, its error or its cancellation."""
     await websocket.accept()
     job = get_job(job_id)
     if job is None:
@@ -113,6 +114,8 @@ async def job_ws(websocket: WebSocket, job_id: str) -> None:
             if status != "running":
                 if status == "done":
                     await websocket.send_json({"type": "done", "result": result})
+                elif status == "cancelled":
+                    await websocket.send_json({"type": "cancelled"})
                 else:
                     await websocket.send_json({"type": "error", "message": error})
                 break
@@ -120,6 +123,17 @@ async def job_ws(websocket: WebSocket, job_id: str) -> None:
     except WebSocketDisconnect:
         return
     await websocket.close()
+
+
+@app.post("/jobs/{job_id}/cancel")
+def cancel_job(job_id: str) -> dict[str, bool]:
+    """Stop a running job (an export started too early...): its ffmpeg run is
+    killed and it ends as "cancelled", leaving no half-written file behind."""
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(404, f"Job inconnu : {job_id}")
+    job.cancel()
+    return {"cancelled": True}
 
 
 class TrackInfo(BaseModel):
@@ -530,6 +544,10 @@ def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> Rend
             ]
     except FFmpegError as exc:
         raise _http_error(exc) from exc
+    except Cancelled:
+        # Stopped midway: what's on disk is a truncated, unplayable file.
+        Path(output_path).unlink(missing_ok=True)
+        raise
 
     return RenderResponse(written=written, corrections=corrections_out)
 
