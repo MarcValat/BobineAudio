@@ -1,13 +1,30 @@
+import { useEffect, useState } from "react";
 import type { SegmentOut } from "./api";
+import { useElementSize } from "./useElementSize";
 import "./SegmentChart.css";
 
-const WIDTH = 760;
-const HEIGHT = 140;
-const MARGIN = { top: 14, right: 16, bottom: 26, left: 70 };
-const PLOT_W = WIDTH - MARGIN.left - MARGIN.right;
-const PLOT_H = HEIGHT - MARGIN.top - MARGIN.bottom;
+// Drawn at its real on-screen width and a fixed height, so its text stays
+// the same size on any window, instead of scaling a fixed picture (too tall
+// on a wide window, unreadably small on a narrow one). A bit lower on a
+// short window, where the waveforms below need the room.
+const HEIGHT = 150;
+const COMPACT_HEIGHT = 120;
+const SHORT_WINDOW = "(max-height: 850px)";
 
-// A segment below this is flagged in the UI and eligible for "Ignorer les
+/** Whether the window is short enough for charts to take less height. */
+export function useShortWindow(): boolean {
+  const [short, setShort] = useState(() => window.matchMedia(SHORT_WINDOW).matches);
+  useEffect(() => {
+    const query = window.matchMedia(SHORT_WINDOW);
+    const onChange = () => setShort(query.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+  return short;
+}
+const MARGIN = { top: 14, right: 16, bottom: 26, left: 70 };
+
+// A segment below this is flagged in the UI and eligible for "Retirer les
 // segments peu fiables" -- see engine/segments.py's _segment_confidence,
 // which discounts a segment whose supporting windows don't agree with each
 // other and/or a segment built from too few of them. Picked as "clearly
@@ -88,8 +105,17 @@ export function formatTime(seconds: number): string {
  * same geometry `render.segment_correction_filter` uses to compute the
  * correction, made visible.
  */
-export function SegmentChart({ segments, onEdit }: { segments: SegmentOut[]; onEdit?: () => void }) {
+/** `fill`: take all the height its container gives it (a tab of its own)
+ * instead of its usual fixed one. */
+export function SegmentChart({ segments, fill = false }: { segments: SegmentOut[]; fill?: boolean }) {
+  const [boxRef, box] = useElementSize<HTMLDivElement>();
+  const compact = useShortWindow();
+
   if (segments.length === 0) return null;
+  const width = Math.max(200, box.width || 760);
+  const height = fill ? Math.max(COMPACT_HEIGHT, box.height || HEIGHT) : compact ? COMPACT_HEIGHT : HEIGHT;
+  const PLOT_W = width - MARGIN.left - MARGIN.right;
+  const PLOT_H = height - MARGIN.top - MARGIN.bottom;
 
   const totalDuration = segments[segments.length - 1].end_s;
   const offsets = segments.flatMap((s) => [s.offset_start, s.offset_end]);
@@ -110,15 +136,10 @@ export function SegmentChart({ segments, onEdit }: { segments: SegmentOut[]; onE
   const timeTickValues = Array.from({ length: timeTicks + 1 }, (_, i) => (totalDuration * i) / timeTicks);
 
   return (
-    <div className="segment-chart">
-      {/* aspect-ratio (not just viewBox + CSS height:auto) is needed inside
-          a flex container: a flex item's height-from-width-via-aspect-ratio
-          isn't reliably resolved from viewBox alone before layout runs,
-          which was making this chart render tiny once its parent became a
-          flex column (see App.css's analysis-card chain). */}
+    <div className={fill ? "segment-chart segment-chart-fill" : "segment-chart"}>
+      <div className="segment-chart-box" ref={boxRef} style={fill ? undefined : { height }}>
       <svg
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        style={{ aspectRatio: `${WIDTH} / ${HEIGHT}` }}
+        viewBox={`0 0 ${width} ${height}`}
         role="img"
         aria-label="Décalage en fonction du temps"
       >
@@ -178,6 +199,7 @@ export function SegmentChart({ segments, onEdit }: { segments: SegmentOut[]; onE
           })}
         </g>
       </svg>
+      </div>
       <div className="segment-chart-footer">
         <div className="segment-chart-legend">
           <span className="legend-item">
@@ -192,11 +214,6 @@ export function SegmentChart({ segments, onEdit }: { segments: SegmentOut[]; onE
             </span>
           )}
         </div>
-        {onEdit && (
-          <button className="small-button" onClick={onEdit}>
-            Modifier les segments
-          </button>
-        )}
       </div>
     </div>
   );

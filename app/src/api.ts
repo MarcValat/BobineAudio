@@ -16,9 +16,21 @@ export interface TrackInfo {
   start_time: number;
 }
 
+export interface SubtitleInfo {
+  index: number; // among the file's subtitle tracks
+  codec: string;
+  language: string | null;
+  title: string | null;
+  forced: boolean;
+  // Text subtitles (srt, ass/ssa) can be retimed along with their audio;
+  // image ones (PGS, VobSub) can't.
+  shiftable: boolean;
+}
+
 export interface ProbeResponse {
   path: string;
   tracks: TrackInfo[];
+  subtitles: SubtitleInfo[];
 }
 
 export interface SegmentOut {
@@ -70,6 +82,18 @@ export async function probe(path: string): Promise<ProbeResponse> {
   const resp = await fetch(`${BASE_URL}/probe?path=${encodeURIComponent(path)}`);
   if (!resp.ok) throw new Error(await readErrorDetail(resp));
   return resp.json();
+}
+
+/** Which of `paths` already exist, in order. */
+export async function pathsExist(paths: string[]): Promise<boolean[]> {
+  if (paths.length === 0) return [];
+  const resp = await fetch(`${BASE_URL}/paths/exist`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paths }),
+  });
+  if (!resp.ok) throw new Error(await readErrorDetail(resp));
+  return (await resp.json()).exists;
 }
 
 export interface PrefetchResponse {
@@ -187,6 +211,11 @@ export async function startSegmentsJob(
 export interface TrackSegments {
   trackIndex: number;
   segments: SegmentOut[];
+  /** Tag the corrected track with this language instead of its own. */
+  language?: string | null;
+  /** Subtitle tracks of the same file timed on this audio: retimed with it,
+   * segment by segment. */
+  subtitles?: number[];
 }
 
 /**
@@ -212,7 +241,17 @@ export async function startSegmentedRenderJob(
       track_indices: tracks.map((t) => t.trackIndex),
       output_path: outputPath,
       segmented: true,
-      segment_overrides: tracks.map((t) => ({ track: { path: inputPath, index: t.trackIndex }, segments: t.segments })),
+      segment_overrides: tracks.map((t) => ({
+        track: { path: inputPath, index: t.trackIndex },
+        segments: t.segments,
+        language: t.language ?? null,
+      })),
+      subs: tracks.flatMap((t) =>
+        (t.subtitles ?? []).map((index) => ({
+          subs: { path: inputPath, index },
+          audio: { path: inputPath, index: t.trackIndex },
+        })),
+      ),
     }),
   });
   if (!resp.ok) throw new Error(await readErrorDetail(resp));
@@ -235,6 +274,7 @@ export async function startCrossFileSegmentedRenderJob(
   candidatePath: string,
   candidateIndex: number,
   segments: SegmentOut[],
+  options: { outputPath?: string; language?: string | null; subtitles?: number[] } = {},
 ): Promise<string> {
   const resp = await fetch(`${BASE_URL}/jobs/render`, {
     method: "POST",
@@ -244,8 +284,17 @@ export async function startCrossFileSegmentedRenderJob(
       reference_index: referenceIndex,
       only_imports: true,
       import_audio: [{ path: candidatePath, index: candidateIndex }],
+      output_path: options.outputPath ?? null,
       segmented: true,
-      segment_overrides: [{ track: { path: candidatePath, index: candidateIndex }, segments }],
+      segment_overrides: [
+        { track: { path: candidatePath, index: candidateIndex }, segments, language: options.language ?? null },
+      ],
+      // The candidate file's own subtitles timed on its audio, imported and
+      // retimed along with it.
+      subs: (options.subtitles ?? []).map((index) => ({
+        subs: { path: candidatePath, index },
+        audio: { path: candidatePath, index: candidateIndex },
+      })),
     }),
   });
   if (!resp.ok) throw new Error(await readErrorDetail(resp));
@@ -256,7 +305,16 @@ export async function startCrossFileSegmentedRenderJob(
 export type JobEvent<TResult> =
   | { type: "log"; message: string }
   | { type: "done"; result: TResult }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "cancelled" };
+
+/** Stop a running job (an export started too early...): the engine kills
+ * its ffmpeg run, removes a half-written file, and the job's WebSocket
+ * ends with a "cancelled" event. */
+export async function cancelJob(jobId: string): Promise<void> {
+  const resp = await fetch(`${BASE_URL}/jobs/${jobId}/cancel`, { method: "POST" });
+  if (!resp.ok) throw new Error(await readErrorDetail(resp));
+}
 
 /**
  * Connects to a job's progress WebSocket; returns a function to close it early.
@@ -272,7 +330,7 @@ export function connectJobWS<TResult>(jobId: string, onEvent: (event: JobEvent<T
 
   ws.onmessage = (ev) => {
     const event: JobEvent<TResult> = JSON.parse(ev.data);
-    if (event.type === "done" || event.type === "error") settled = true;
+    if (event.type === "done" || event.type === "error" || event.type === "cancelled") settled = true;
     onEvent(event);
   };
   ws.onerror = () => {

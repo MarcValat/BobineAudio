@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   checkHealth,
   probe,
@@ -6,6 +6,8 @@ import {
   startPrefetchJob,
   startSegmentedRenderJob,
   connectJobWS,
+  cancelJob,
+  type SubtitleInfo,
   type TrackInfo,
   type SegmentsResponse,
   type PrefetchResponse,
@@ -13,6 +15,7 @@ import {
 } from "./api";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { SegmentChart, describeSegments } from "./SegmentChart";
+import { InfoTip } from "./InfoTip";
 import { LogPanel } from "./LogPanel";
 import { SegmentEditor } from "./SegmentEditor";
 import { TrackPreview } from "./TrackPreview";
@@ -20,11 +23,16 @@ import { BatchView } from "./BatchView";
 import { UpdateBanner } from "./UpdateBanner";
 import { pickMediaFiles, pickOutputFile, syncedFileName } from "./mediaDialog";
 import { basename } from "./paths";
+import { UNSHIFTABLE_HINT, subtitleDetails, subtitleLabel, subtitlesFor } from "./subtitles";
+import { useElementSize } from "./useElementSize";
 import "./App.css";
 
 type EngineStatus = "starting" | "ready" | "unreachable";
 
-const HEALTH_POLL_ATTEMPTS = 40; // 40 * 500ms = 20s before giving up
+// Asked often, so the app opens as soon as the engine answers (it's up in
+// about a second); a tiny local request, only while starting.
+const HEALTH_POLL_INTERVAL_MS = 100;
+const HEALTH_POLL_ATTEMPTS = 200; // 200 * 100ms = 20s before giving up
 
 /**
  * Per-track analysis + export state, keyed by track index. There used to be
@@ -47,18 +55,38 @@ interface TrackAnalysis {
  * the same output, so exporting never overwrites another track's export. */
 interface ExportState {
   running: boolean;
+  // The running export's job, to cancel it ("Annuler l'export").
+  jobId: string | null;
+  cancelling: boolean;
+  cancelled: boolean;
   log: string[];
   written: string | null;
   error: string | null;
 }
 
-const IDLE_EXPORT: ExportState = { running: false, log: [], written: null, error: null };
+const IDLE_EXPORT: ExportState = {
+  running: false,
+  jobId: null,
+  cancelling: false,
+  cancelled: false,
+  log: [],
+  written: null,
+  error: null,
+};
+
+// Height of the analysis panel's content below which the chart and the
+// waveforms are shown one at a time (see compactAnalysis).
+const COMPACT_ANALYSIS_HEIGHT = 520;
 
 function App() {
   const [mode, setMode] = useState<"single" | "batch">("single");
   const [engineStatus, setEngineStatus] = useState<EngineStatus>("starting");
   const [filePath, setFilePath] = useState<string | null>(null);
   const [tracks, setTracks] = useState<TrackInfo[] | null>(null);
+  const [subtitles, setSubtitles] = useState<SubtitleInfo[]>([]);
+  // Subtitle tracks picked by hand for an analyzed track (by its index);
+  // absent: its language's forced subtitles (see subsByTrack).
+  const [subsChoice, setSubsChoice] = useState<Record<number, number[]>>({});
   const [referenceIndex, setReferenceIndex] = useState<number | null>(null);
   const [targetIndices, setTargetIndices] = useState<number[]>([]);
   const [probeError, setProbeError] = useState<string | null>(null);
@@ -74,6 +102,12 @@ function App() {
   // is included by default, so a new analysis joins the export on its own).
   const [exportExcluded, setExportExcluded] = useState<number[]>([]);
   const [exportState, setExportState] = useState<ExportState>(IDLE_EXPORT);
+  const [analysisViewRef, analysisViewSize] = useElementSize<HTMLDivElement>();
+  const [analysisView, setAnalysisView] = useState<"segments" | "listen">("listen");
+  // Bumped each time a file is opened: a job started for the previous file
+  // (analysis, prefetch) that answers afterwards is ignored instead of
+  // landing in the new file's view.
+  const fileGenRef = useRef(0);
 
   const pollHealth = useCallback(() => {
     let cancelled = false;
@@ -89,7 +123,7 @@ function App() {
         if (!cancelled) setEngineStatus("unreachable");
         return;
       }
-      if (!cancelled) setTimeout(poll, 500);
+      if (!cancelled) setTimeout(poll, HEALTH_POLL_INTERVAL_MS);
     }
     poll();
     return () => {
@@ -101,8 +135,24 @@ function App() {
 
   async function handleOpenFile() {
     const selected = await pickMediaFiles(false);
-    if (!selected) return;
+    if (selected) await openFile(selected);
+  }
 
+  // Dev only (stripped from production builds): `?open=<path>` opens a file
+  // without the system dialog, and `?mode=batch` starts on batch mode, for
+  // automated layout screenshots in a plain browser, where Tauri's dialog
+  // doesn't exist.
+  useEffect(() => {
+    if (!import.meta.env.DEV || engineStatus !== "ready") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("mode") === "batch") setMode("batch");
+    const path = params.get("open");
+    if (path) openFile(path);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engineStatus]);
+
+  async function openFile(selected: string) {
+    const gen = ++fileGenRef.current;
     setFilePath(selected);
     setTracks(null);
     setReferenceIndex(null);
@@ -113,17 +163,21 @@ function App() {
     setActiveAnalysisTab(null);
     setExportExcluded([]);
     setExportState(IDLE_EXPORT);
+    setSubtitles([]);
+    setSubsChoice({});
 
     try {
       const res = await probe(selected);
+      if (gen !== fileGenRef.current) return;
       setTracks(res.tracks);
+      setSubtitles(res.subtitles ?? []);
       if (res.tracks.length >= 2) {
         setReferenceIndex(res.tracks[0].index);
         setTargetIndices(res.tracks.slice(1).map((t) => t.index));
         prefetchTracks(selected, res.tracks.map((t) => t.index));
       }
     } catch (err) {
-      setProbeError(err instanceof Error ? err.message : String(err));
+      if (gen === fileGenRef.current) setProbeError(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -131,14 +185,18 @@ function App() {
    * doesn't pay the ~7s-per-track extraction cost that's otherwise
    * unavoidable on a cold cache (see api.ts's startPrefetchJob). */
   function prefetchTracks(path: string, trackIndices: number[]) {
+    const gen = fileGenRef.current;
+    const done = () => {
+      if (gen === fileGenRef.current) setPrefetching(false);
+    };
     setPrefetching(true);
     startPrefetchJob(path, trackIndices)
       .then((jobId) => {
         connectJobWS<PrefetchResponse>(jobId, (event) => {
-          if (event.type !== "log") setPrefetching(false);
+          if (event.type !== "log") done();
         });
       })
-      .catch(() => setPrefetching(false));
+      .catch(done);
   }
 
   function handleReferenceChange(index: number) {
@@ -164,6 +222,10 @@ function App() {
 
   async function analyzeTrack(trackIndex: number, refIndex: number) {
     if (!filePath) return;
+    const gen = fileGenRef.current;
+    const update: typeof updateAnalysis = (index, patch) => {
+      if (gen === fileGenRef.current) updateAnalysis(index, patch);
+    };
     setAnalyses((current) => ({
       ...current,
       [trackIndex]: {
@@ -178,15 +240,15 @@ function App() {
       const jobId = await startSegmentsJob(filePath, refIndex, filePath, trackIndex);
       connectJobWS<SegmentsResponse>(jobId, (event) => {
         if (event.type === "log") {
-          updateAnalysis(trackIndex, (e) => ({ log: [...e.log, event.message] }));
+          update(trackIndex, (e) => ({ log: [...e.log, event.message] }));
         } else if (event.type === "done") {
-          updateAnalysis(trackIndex, { status: "done", result: event.result });
+          update(trackIndex, { status: "done", result: event.result });
         } else if (event.type === "error") {
-          updateAnalysis(trackIndex, { status: "error", error: event.message });
+          update(trackIndex, { status: "error", error: event.message });
         }
       });
     } catch (err) {
-      updateAnalysis(trackIndex, { status: "error", error: err instanceof Error ? err.message : String(err) });
+      update(trackIndex, { status: "error", error: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -205,13 +267,45 @@ function App() {
   const anySelectedRunning = targetIndices.some((i) => analyses[i]?.status === "running");
   const analyzedTracks = (tracks ?? []).filter((t) => analyses[t.index]);
   const exportableTracks = analyzedTracks.filter((t) => analyses[t.index].result);
+  // The subtitle tracks retimed with each analyzed track: those picked by
+  // hand, or by default its language's forced ones. One subtitle track goes
+  // with one audio track at most (the first to claim it).
+  const subsByTrack: Record<number, number[]> = {};
+  const claimedSubs = new Set<number>();
+  for (const t of analyzedTracks) {
+    const wanted = subsChoice[t.index] ?? subtitlesFor(subtitles, t.language, "forced");
+    subsByTrack[t.index] = wanted.filter((i) => !claimedSubs.has(i));
+    subsByTrack[t.index].forEach((i) => claimedSubs.add(i));
+  }
   const exportTracks = exportableTracks.filter((t) => !exportExcluded.includes(t.index));
+  const retimedSubs = exportTracks.flatMap((t) => subsByTrack[t.index] ?? []);
+  // What an export would contain now: once it changes (another analysis, a
+  // track or subtitle unticked, segments edited), the last export's outcome
+  // no longer describes it.
+  const exportContent = JSON.stringify(
+    exportTracks.map((t) => [t.index, analyses[t.index].result?.segments, subsByTrack[t.index]]),
+  );
+  useEffect(() => {
+    setExportState((s) => (s.running ? s : IDLE_EXPORT));
+  }, [exportContent]);
   // One output file has one reference track: tracks analyzed against
   // different references (the reference was changed in between) can't be
   // exported together.
   const exportReferences = [...new Set(exportTracks.map((t) => analyses[t.index].referenceIndex))];
   const exportReference = exportReferences.length === 1 ? exportReferences[0] : null;
   const exportReferenceTrack = tracks?.find((t) => t.index === exportReference);
+  const plural = (n: number, one: string, many: string) => (n > 1 ? many : one);
+  const exportSummary =
+    exportReferenceTrack &&
+    `Contiendra la vidéo, la référence @${exportReferenceTrack.index} (${exportReferenceTrack.language ?? "?"}), ${plural(
+      exportTracks.length,
+      "la piste corrigée",
+      "les pistes corrigées",
+    )} ${exportTracks.map((t) => `@${t.index} (${t.language ?? "?"})`).join(", ")} et les sous-titres${
+      retimedSubs.length > 0
+        ? ` (${retimedSubs.map((i) => `@${i}`).join(", ")} ${plural(retimedSubs.length, "recalé", "recalés")} avec l'audio)`
+        : ""
+    }.${(tracks?.length ?? 0) > exportTracks.length + 1 ? " Les autres pistes audio ne sont pas incluses." : ""}`;
 
   function toggleExportTrack(index: number) {
     setExportExcluded((current) => (current.includes(index) ? current.filter((i) => i !== index) : [...current, index]));
@@ -230,23 +324,48 @@ function App() {
       const jobId = await startSegmentedRenderJob(
         filePath,
         exportReference,
-        exportTracks.map((t) => ({ trackIndex: t.index, segments: analyses[t.index].result!.segments })),
+        exportTracks.map((t) => ({
+          trackIndex: t.index,
+          segments: analyses[t.index].result!.segments,
+          subtitles: subsByTrack[t.index] ?? [],
+        })),
         outputPath,
       );
+      setExportState((s) => ({ ...s, jobId }));
       connectJobWS<RenderResponse>(jobId, (event) => {
         if (event.type === "log") {
           setExportState((s) => ({ ...s, log: [...s.log, event.message] }));
         } else if (event.type === "done") {
           setExportState((s) => ({ ...s, running: false, written: event.result.written[0] ?? outputPath }));
         } else if (event.type === "error") {
-          setExportState((s) => ({ ...s, running: false, error: event.message }));
+          setExportState((s) => ({ ...s, running: false, jobId: null, error: event.message }));
+        } else if (event.type === "cancelled") {
+          setExportState((s) => ({ ...s, running: false, jobId: null, cancelling: false, cancelled: true }));
         }
       });
     } catch (err) {
       setExportState((s) => ({ ...s, running: false, error: err instanceof Error ? err.message : String(err) }));
     }
   }
+
+  /** Stop the running export: the engine kills it and removes the
+   * half-written file; the export can then be started again. */
+  async function cancelExport() {
+    if (!exportState.jobId) return;
+    setExportState((s) => ({ ...s, cancelling: true }));
+    try {
+      await cancelJob(exportState.jobId);
+    } catch (err) {
+      setExportState((s) => ({ ...s, cancelling: false, error: err instanceof Error ? err.message : String(err) }));
+    }
+  }
   const editingEntry = editingTrack !== null ? analyses[editingTrack] : null;
+  const shownTrack = analyzedTracks.find((t) => t.index === activeAnalysisTab) ?? null;
+  const shownEntry = shownTrack ? analyses[shownTrack.index] : null;
+  const shownReference = shownEntry ? tracks?.find((t) => t.index === shownEntry.referenceIndex) : undefined;
+  // Below this height, the chart and three readable waveforms don't fit
+  // together in the analysis panel: they become two tabs instead.
+  const compactAnalysis = analysisViewSize.height > 0 && analysisViewSize.height < COMPACT_ANALYSIS_HEIGHT;
 
   // Nothing in the app is usable before the sidecar answers -- a full-screen
   // splash instead of a text banner over an inert shell makes that obvious
@@ -261,7 +380,7 @@ function App() {
           </>
         ) : (
           <>
-            <p className="startup-text error">Moteur injoignable — le sidecar a-t-il démarré ? (voir la console)</p>
+            <p className="startup-text error">Le moteur d'analyse ne répond pas. Réessaie, ou redémarre l'application.</p>
             <button onClick={pollHealth}>Réessayer</button>
           </>
         )}
@@ -293,7 +412,12 @@ function App() {
       {mode === "single" && (
       <main className="app-main">
         <div className="left-column">
-          <button className="primary-button file-open-button" onClick={handleOpenFile}>
+          <button
+            className="primary-button file-open-button"
+            onClick={handleOpenFile}
+            disabled={exportState.running}
+            title={exportState.running ? "Un export est en cours : attends sa fin ou annule-le." : undefined}
+          >
             Ouvrir un fichier
           </button>
 
@@ -305,8 +429,8 @@ function App() {
               </p>
             )}
             {prefetching && (
-              <p className="prefetch-status" title="Analyse des pistes en arrière-plan pour accélérer le premier clic sur Analyser.">
-                Analyse audio en cours...
+              <p className="prefetch-status" title="Lecture des pistes audio en arrière-plan, pour que l'analyse démarre plus vite.">
+                Préparation des pistes...
               </p>
             )}
             {!tracks && !probeError && <p className="placeholder">Ouvre un fichier pour voir ses pistes.</p>}
@@ -316,7 +440,7 @@ function App() {
             )}
             {tracks && tracks.length >= 2 && (
               <>
-                <div className="tracks-table-wrap">
+                <div className="tracks-table-wrap list-scroll">
                   <table>
                     <thead>
                       <tr>
@@ -324,7 +448,7 @@ function App() {
                         <th>Langue</th>
                         <th>Codec</th>
                         <th>Réf.</th>
-                        <th>Analyser</th>
+                        <th>À corriger</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -368,102 +492,106 @@ function App() {
               </>
             )}
           </section>
-        </div>
 
-        <section className="panel field-analysis">
-          <h2>Analyse</h2>
-          {analyzedTracks.length === 0 && (
-            <p className="placeholder">Coche une ou plusieurs pistes à corriger, puis clique sur « Analyser ».</p>
-          )}
-          {analyzedTracks.length > 0 && (
-            <div className="analysis-tabs">
-              {analyzedTracks.map((t) => {
-                const entry = analyses[t.index];
-                return (
-                  <button
-                    key={t.index}
-                    className={`analysis-tab status-${entry.status}${activeAnalysisTab === t.index ? " active" : ""}`}
-                    onClick={() => setActiveAnalysisTab(t.index)}
-                  >
-                    Piste @{t.index}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          {analyzedTracks
-            .filter((t) => t.index === activeAnalysisTab)
-            .map((t) => {
-              const entry = analyses[t.index];
-              return (
-                <div className={`analysis-card status-${entry.status}`} key={t.index}>
-                  <div className="analysis-top">
-                    <div className="analysis-summary">
-                      <h3>
-                        Piste @{t.index} ({t.language ?? "?"})
-                      </h3>
-                      <LogPanel lines={entry.log} />
-                      {entry.error && <p className="error">{entry.error}</p>}
-                      {entry.status === "running" && !entry.result && (
-                        <p className="placeholder">Analyse en cours...</p>
-                      )}
-                      {entry.result && <p className="analysis-description">{describeSegments(entry.result.segments)}</p>}
-                    </div>
-                    {entry.result && (
-                      <SegmentChart segments={entry.result.segments} onEdit={() => setEditingTrack(t.index)} />
-                    )}
-                  </div>
-                  {entry.result && (
-                    <div className="segments-result">
-                      {/* Not while this track is being edited: the editor has its
-                          own preview, and two playing at once would overlap. */}
-                      {filePath && editingTrack !== t.index && (
-                        <TrackPreview
-                          referenceFilePath={filePath}
-                          candidateFilePath={filePath}
-                          referenceIndex={entry.referenceIndex}
-                          trackIndex={t.index}
-                          segments={entry.result.segments}
-                          referenceStartTime={tracks?.find((tr) => tr.index === entry.referenceIndex)?.start_time ?? 0}
-                          trackStartTime={t.start_time}
+          {analyzedTracks.length > 0 && tracks && (
+            <section className="panel field-results">
+              <h2>Pistes analysées</h2>
+              {/* One row per analyzed track: clicking it shows that track on
+                  the right; its checkbox puts it in the export below. */}
+              <ul className="result-list list-scroll">
+                {analyzedTracks.map((t) => {
+                  const entry = analyses[t.index];
+                  return (
+                    <li
+                      key={t.index}
+                      className={`result-row status-${entry.status}${activeAnalysisTab === t.index ? " active" : ""}`}
+                      onClick={() => setActiveAnalysisTab(t.index)}
+                    >
+                      <div className="result-row-head">
+                        <input
+                          type="checkbox"
+                          title="Inclure cette piste corrigée dans l'export"
+                          checked={entry.result !== null && !exportExcluded.includes(t.index)}
+                          disabled={entry.result === null || exportState.running}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => toggleExportTrack(t.index)}
                         />
+                        <span className="result-name">
+                          @{t.index} ({t.language ?? "?"})
+                        </span>
+                        <span className="result-status">
+                          {entry.status === "running" && "Analyse en cours..."}
+                          {entry.status === "error" && "Échec"}
+                          {entry.result && describeSegments(entry.result.segments)}
+                        </span>
+                      </div>
+                      {entry.error && <p className="error">{entry.error}</p>}
+                      {entry.result && subtitles.length > 0 && (
+                        <div className="result-subs" onClick={(e) => e.stopPropagation()}>
+                          <span className="result-subs-label">
+                            Recaler aussi ces sous-titres{" "}
+                            <InfoTip>
+                              Coche les pistes de sous-titres calées sur cette piste audio (typiquement les sous-titres
+                              forcés de sa langue, pré-cochés) : elles subiront les mêmes sauts et la même dérive à
+                              l'export. Les pistes décochées sont copiées telles quelles, calées sur la vidéo. Les
+                              sous-titres image (PGS, VobSub) ne peuvent pas être recalés.
+                            </InfoTip>
+                            :
+                          </span>
+                          {subtitles.map((s) => {
+                            const elsewhere = Object.entries(subsByTrack).some(
+                              ([track, subs]) => Number(track) !== t.index && subs.includes(s.index),
+                            );
+                            const mine = subsByTrack[t.index] ?? [];
+                            return (
+                              <label
+                                key={s.index}
+                                title={
+                                  !s.shiftable
+                                    ? UNSHIFTABLE_HINT
+                                    : elsewhere
+                                      ? "Déjà recalés avec une autre piste audio"
+                                      : subtitleDetails(s)
+                                }
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={mine.includes(s.index)}
+                                  disabled={!s.shiftable || elsewhere || exportState.running}
+                                  onChange={() =>
+                                    setSubsChoice((c) => ({
+                                      ...c,
+                                      [t.index]: mine.includes(s.index) ? mine.filter((i) => i !== s.index) : [...mine, s.index],
+                                    }))
+                                  }
+                                />
+                                {subtitleLabel(s)}
+                              </label>
+                            );
+                          })}
+                        </div>
                       )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <LogPanel lines={entry.log} />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
 
-          {exportableTracks.length > 0 && tracks && (
-            <div className="export-bar">
-              <div className="export-details">
-                <div className="export-choice">
-                  <span className="export-label">Pistes corrigées à inclure :</span>
-                  {exportableTracks.map((t) => (
-                    <label key={t.index} className="export-track">
-                      <input
-                        type="checkbox"
-                        checked={!exportExcluded.includes(t.index)}
-                        disabled={exportState.running}
-                        onChange={() => toggleExportTrack(t.index)}
-                      />
-                      @{t.index} ({t.language ?? "?"})
-                    </label>
-                  ))}
-                </div>
+              <div className="export-box">
+                {exportableTracks.length > 0 && exportTracks.length === 0 && (
+                  <p className="placeholder">Coche au moins une piste analysée pour l'inclure dans l'export.</p>
+                )}
                 {exportTracks.length > 0 && exportReference === null && (
                   <p className="error">
                     Ces pistes ont été analysées avec des références différentes : relance l'analyse avec une seule
                     référence pour les exporter ensemble.
                   </p>
                 )}
-                {exportReferenceTrack && (
-                  <p className="export-summary">
-                    Le fichier contiendra la vidéo, la référence @{exportReferenceTrack.index} (
-                    {exportReferenceTrack.language ?? "?"}),{" "}
-                    {exportTracks.length > 1 ? "les pistes corrigées" : "la piste corrigée"}{" "}
-                    {exportTracks.map((t) => `@${t.index} (${t.language ?? "?"})`).join(", ")} et les sous-titres.
-                    {tracks.length > exportTracks.length + 1 && " Les autres pistes audio ne sont pas incluses."}
+                {exportSummary && (
+                  <p className="export-summary" title={exportSummary}>
+                    {exportSummary}
                   </p>
                 )}
                 <LogPanel lines={exportState.log} />
@@ -478,16 +606,99 @@ function App() {
                     </button>
                   </div>
                 )}
+                {exportState.cancelled && <p className="export-cancelled">Export annulé : aucun fichier n'a été écrit.</p>}
+                {exportState.running ? (
+                  <div className="export-running">
+                    <span className="export-running-label">Export en cours...</span>
+                    <button
+                      className="export-cancel"
+                      onClick={cancelExport}
+                      disabled={!exportState.jobId || exportState.cancelling}
+                    >
+                      {exportState.cancelling ? "Annulation..." : "Annuler l'export"}
+                    </button>
+                  </div>
+                ) : (
+                  <button className="primary-button export-button" onClick={exportFile} disabled={exportReference === null}>
+                    Exporter le fichier synchronisé
+                  </button>
+                )}
               </div>
-              <button
-                className="primary-button export-button"
-                onClick={exportFile}
-                disabled={exportState.running || exportReference === null}
-              >
-                {exportState.running ? "Export en cours..." : "Exporter le fichier synchronisé"}
-              </button>
-            </div>
+            </section>
           )}
+        </div>
+
+        <section className="panel field-analysis">
+          <div className="analysis-header">
+            <h2>
+              {shownTrack && shownEntry
+                ? `Piste @${shownTrack.index} (${shownTrack.language ?? "?"}) · référence @${shownEntry.referenceIndex} (${shownReference?.language ?? "?"})`
+                : "Analyse"}
+            </h2>
+            {/* Too little height for the chart and readable waveforms at
+                once: one at a time, as tabs. */}
+            {compactAnalysis && shownEntry?.result && (
+              <div className="view-tabs" role="tablist">
+                <button
+                  role="tab"
+                  aria-selected={analysisView === "segments"}
+                  className={analysisView === "segments" ? "active" : ""}
+                  onClick={() => setAnalysisView("segments")}
+                >
+                  Segments
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={analysisView === "listen"}
+                  className={analysisView === "listen" ? "active" : ""}
+                  onClick={() => setAnalysisView("listen")}
+                >
+                  Écoute
+                </button>
+              </div>
+            )}
+            {shownTrack && shownEntry?.result && (
+              <button className="small-button analysis-edit" onClick={() => setEditingTrack(shownTrack.index)}>
+                Modifier les segments
+              </button>
+            )}
+          </div>
+          <div className="analysis-view" ref={analysisViewRef}>
+            {!shownEntry && (
+              <p className="placeholder">Coche une ou plusieurs pistes à corriger, puis clique sur « Analyser ».</p>
+            )}
+            {shownEntry?.status === "running" && !shownEntry.result && <p className="placeholder">Analyse en cours...</p>}
+            {shownEntry?.status === "error" && <p className="error">{shownEntry.error}</p>}
+            {shownTrack && shownEntry?.result && (
+              <>
+                <div
+                  className={
+                    !compactAnalysis ? "analysis-chart" : analysisView === "segments" ? "analysis-chart analysis-chart-fill" : "view-hidden"
+                  }
+                >
+                  <SegmentChart segments={shownEntry.result.segments} fill={compactAnalysis} />
+                </div>
+                {/* Hidden rather than unmounted while on the other tab, so
+                    playback and zoom survive switching. Not while this track
+                    is being edited: the editor has its own preview, and two
+                    playing at once would overlap. */}
+                {filePath && editingTrack !== shownTrack.index && (
+                  <div className={compactAnalysis && analysisView !== "listen" ? "view-hidden" : "segments-result"}>
+                    <TrackPreview
+                      key={shownTrack.index}
+                      referenceFilePath={filePath}
+                      candidateFilePath={filePath}
+                      referenceIndex={shownEntry.referenceIndex}
+                      trackIndex={shownTrack.index}
+                      segments={shownEntry.result.segments}
+                      referenceStartTime={shownReference?.start_time ?? 0}
+                      trackStartTime={shownTrack.start_time}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </section>
       </main>
       )}

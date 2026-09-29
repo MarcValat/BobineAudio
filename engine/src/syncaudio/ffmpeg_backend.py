@@ -10,7 +10,8 @@ from pathlib import Path
 
 import numpy as np
 
-from syncaudio.models import AudioStreamInfo, AudioTrackSpec
+from syncaudio.cancellation import Cancelled, current_cancel_event
+from syncaudio.models import AudioStreamInfo, AudioTrackSpec, SubtitleStreamInfo
 
 # A packaged sidecar build has no console of its own (see
 # engine/packaging/ -- built windowed, so the app doesn't flash a terminal
@@ -24,9 +25,44 @@ _SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 
 
 
 def _run(*args, **kwargs) -> subprocess.CompletedProcess:
-    """`subprocess.run`, but never flashes a console window on Windows."""
+    """`subprocess.run`, but never flashes a console window on Windows, and
+    stops (raising ``Cancelled``) as soon as the job running it is cancelled."""
     kwargs.setdefault("creationflags", _SUBPROCESS_FLAGS)
-    return subprocess.run(*args, **kwargs)
+    event = current_cancel_event()
+    if event is None:
+        return subprocess.run(*args, **kwargs)
+    return _run_cancellable(event, *args, **kwargs)
+
+
+# How often a running ffmpeg checks for a cancellation.
+_CANCEL_POLL_S = 0.2
+
+
+def _run_cancellable(event, cmd, *, capture_output=False, check=False, input=None, **kwargs) -> subprocess.CompletedProcess:
+    """``subprocess.run(cmd, ...)``, killing the process once ``event`` is set."""
+    if event.is_set():
+        raise Cancelled()
+    if capture_output:
+        kwargs["stdout"] = kwargs["stderr"] = subprocess.PIPE
+    if input is not None:
+        kwargs["stdin"] = subprocess.PIPE
+    with subprocess.Popen(cmd, **kwargs) as proc:
+        pending = input
+        while True:
+            try:
+                out, err = proc.communicate(pending, timeout=_CANCEL_POLL_S)
+                break
+            except subprocess.TimeoutExpired:
+                # Already sent: retrying only goes on reading, nothing is lost.
+                pending = None
+                if event.is_set():
+                    proc.kill()
+                    proc.communicate()
+                    raise Cancelled() from None
+    result = subprocess.CompletedProcess(cmd, proc.returncode, out, err)
+    if check:
+        result.check_returncode()
+    return result
 
 _STREAM_RE = re.compile(
     r"^\s*Stream #\d+:(?P<index>\d+)(?:\((?P<lang>[^)]+)\))?:\s*Audio:\s*"
@@ -36,6 +72,9 @@ _DURATION_RE = re.compile(r"Duration:\s*(?P<h>\d+):(?P<m>\d+):(?P<s>\d+(?:\.\d+)
 _DURATION_START_RE = re.compile(r"Duration:\s*\d+:\d+:\d+(?:\.\d+)?,\s*start:\s*(?P<start>-?\d+(?:\.\d+)?)")
 _SUBTITLE_STREAM_RE = re.compile(r"^\s*Stream #\d+:(?P<index>\d+)(?:\([^)]+\))?:\s*Subtitle:\s*(?P<codec>\S+)")
 _BITRATE_RE = re.compile(r"(?P<kbps>\d+)\s*kb/s")
+# The container's codec tag ffmpeg appends to some codec names, e.g.
+# "pcm_s16le ([1][0][0][0] / 0x0001)" for a .wav: noise to anyone reading it.
+_CODEC_TAG_RE = re.compile(r"\s*\(\[[^()]*/ 0x[0-9A-Fa-f]+\)")
 
 
 class FFmpegError(RuntimeError):
@@ -128,7 +167,7 @@ def probe_audio_streams(path: str) -> list[AudioStreamInfo]:
         streams.append(
             AudioStreamInfo(
                 index=len(streams),
-                codec=match.group("codec").strip(),
+                codec=_CODEC_TAG_RE.sub("", match.group("codec")).strip(),
                 language=match.group("lang"),
                 channels=channels,
                 sample_rate=int(match.group("rate")),
@@ -247,6 +286,30 @@ def probe_stream_tags(path: str, kind: str) -> list[dict[str, str]]:
         elif current is not None and (title := _TITLE_TAG_RE.match(line)):
             current.setdefault("title", title["title"])
     return tags
+
+
+_FORCED_TITLE_RE = re.compile(r"forc", re.IGNORECASE)
+
+
+def probe_subtitle_streams(path: str) -> list[SubtitleStreamInfo]:
+    """List the subtitle streams of a media file, indexed like ffmpeg's ``0:s:N``."""
+    tags = probe_stream_tags(path, "Subtitle")
+    streams: list[SubtitleStreamInfo] = []
+    for match in _list_subtitle_streams(path):
+        line = match.string
+        tag = tags[len(streams)] if len(streams) < len(tags) else {}
+        title = tag.get("title")
+        streams.append(
+            SubtitleStreamInfo(
+                index=len(streams),
+                codec=match["codec"],
+                language=tag.get("language"),
+                title=title,
+                forced="(forced)" in line or bool(title and _FORCED_TITLE_RE.search(title)),
+                default="(default)" in line,
+            )
+        )
+    return streams
 
 
 def probe_subtitle_count(path: str) -> int:

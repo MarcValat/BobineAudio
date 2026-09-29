@@ -1,72 +1,22 @@
 /* Not just .app-main plus overrides: relying on cascade order between two
    same-specificity classes from two different stylesheets is fragile (it
    silently depends on CSS import/bundling order) -- .batch-main instead
-   defines everything it needs on its own. Single column: the pairing row
-   below lays its own three pieces out itself (see .batch-pairing-row), so
-   config/pairing-row/results just stack. No min-height:0 trick on the
-   pairing row -- it's allowed to grow past its 1fr share when there are
-   many files, and this container's own overflow: auto scrolls the whole
-   view together at that point (config bar and results included) rather
-   than each piece scrolling independently, which is what keeps the
-   floating pairing arrows lined up with both tables (see
-   usePairArrowTops in BatchView.tsx). */
+   defines everything it needs on its own. Fits the window like the
+   single-file view: settings on top, the pairs table taking the height
+   left (and scrolling in its own frame when long), actions at the bottom.
+   Nothing else scrolls. */
 .batch-main {
   flex: 1 1 auto;
   min-height: 0;
   padding: 1em;
-  display: grid;
-  grid-template-columns: 1fr;
-  grid-template-rows: auto 1fr auto;
-  gap: 1em;
-  overflow: auto;
-}
-
-.batch-pairing-row {
-  position: relative;
   display: flex;
-  align-items: stretch;
+  flex-direction: column;
   gap: 1em;
-}
-
-.batch-pairing-row > .batch-file-list {
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-/* A sibling of both panels, not a descendant of either -- see
-   usePairArrowTops in BatchView.tsx for why. Spans the exact box of
-   .batch-pairing-row (both panels + the gap between them), so `left: 50%`
-   on an arrow lands exactly in the middle of that gap (the two panels are
-   equal width, so the row's own horizontal center is the gap's center). */
-.batch-arrows-overlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 2;
-}
-
-.batch-pair-arrow {
-  position: absolute;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.7em;
-  height: 1.7em;
-  border-radius: 50%;
-  background: var(--surface-alt);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  font-size: 0.8em;
-}
-
-.batch-pair-arrow-warn {
-  color: var(--danger);
-  border-color: var(--danger);
+  overflow: hidden;
 }
 
 .batch-config {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 1.2em;
@@ -85,28 +35,49 @@
   padding: 0.35em 0.5em;
 }
 
-.batch-config-hint {
-  font-size: 0.8em;
-  color: var(--text-muted);
-  flex: 1 1 auto;
+/* "Vérifier toutes les pistes" at the far right. */
+.batch-config > button:last-child {
+  margin-left: auto;
 }
 
-.batch-file-list {
+.batch-jobs {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: 0.6em;
 }
 
-.batch-hint {
-  margin: -0.3em 0 0;
-  font-size: 0.8em;
+.batch-jobs-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5em;
+  margin-bottom: 0.7em;
+}
+
+.batch-jobs-header h2 {
+  margin: 0 auto 0 0;
+}
+
+.batch-footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+  padding-top: 0.7em;
+  padding-bottom: 0.7em;
+}
+
+.batch-progress {
+  flex: 1 1 auto;
   color: var(--text-muted);
+  font-size: 0.9em;
 }
 
 .batch-table-wrap {
+  flex: 0 1 auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  overflow: hidden;
 }
 
 /* table-layout: fixed makes the filename column (the only one below with
@@ -120,7 +91,11 @@
   font-size: 0.85em;
 }
 
+/* Headers stay in view when the table scrolls (.list-scroll). */
 .batch-table-wrap th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   padding: 0.4em;
   text-align: left;
   font-size: 0.75em;
@@ -137,14 +112,17 @@
   border-bottom: 1px solid var(--border);
 }
 
+/* Vertical rules between columns, for reading a wide row across. */
+.batch-table-wrap th + th,
+.batch-table-wrap td + td {
+  border-left: 1px solid var(--border);
+}
+
 .batch-table-wrap tr:last-child td {
   border-bottom: none;
 }
 
-/* Same row index gets the same tint in both tables (zebra striping keyed
-   by index, not just alternation) -- a lightweight visual aid to eyeball
-   which row of one table lines up with which row of the other. */
-.batch-table-wrap tr:nth-child(even) {
+.batch-table-wrap tbody tr:nth-child(even) {
   background: var(--surface-alt);
 }
 
@@ -152,8 +130,63 @@
   width: 2.5em;
 }
 
+.batch-col-status {
+  width: 20%;
+}
+
 .batch-col-actions {
-  width: 8em;
+  width: 10.5em;
+}
+
+.batch-table-wrap td {
+  vertical-align: top;
+}
+
+/* A file of a pair: its name (cut short with "…" when needed, the full
+   path on hover) and the buttons that move it within its column. */
+.batch-file-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  min-width: 0;
+}
+
+.batch-file-inner .batch-filename {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.batch-file-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.15em;
+}
+
+.batch-file-actions button {
+  padding: 0.1em 0.4em;
+}
+
+/* A column's name with its "+ Ajouter" button. */
+.batch-th-add {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+}
+
+.batch-th-add button {
+  padding: 0.15em 0.6em;
+  font-size: 1.15em;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.batch-file-missing {
+  color: var(--text-muted);
+}
+
+/* A row one column has no file for: nothing to pair it with yet. */
+.batch-row-unpaired td.batch-status {
+  color: var(--danger);
 }
 
 .batch-index {
@@ -222,6 +255,10 @@ td.batch-index {
 
 .batch-status-error {
   color: var(--danger);
+}
+
+.batch-status-cancelled {
+  color: var(--text-muted);
 }
 
 /* "Vérifier toutes les pistes" modal -- same fixed/centered/dark-backdrop
@@ -341,4 +378,160 @@ td.batch-index {
 .batch-tracks-table td {
   padding: 0.3em 0.5em;
   border-bottom: 1px solid var(--border);
+}
+
+/* Fichiers multipistes / Paires de fichiers, first in the settings bar. */
+.batch-mode {
+  margin-right: 0.6em;
+}
+
+/* The languages to correct, one checkbox each. */
+.batch-languages {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3em 0.9em;
+  font-size: 0.9em;
+}
+
+.batch-languages label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+}
+
+.batch-col-tracks {
+  width: 24%;
+}
+
+.batch-col-folder {
+  width: 6.5em;
+}
+
+/* A file's tracks: which are used, what's off (⚠), and "Choisir". */
+.batch-tracks-cell {
+  font-size: 0.95em;
+}
+
+/* The tracks used, with "Choisir" at the right of the same line. */
+.batch-tracks-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.batch-tracks-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-mono);
+}
+
+.batch-issues {
+  display: block;
+  color: var(--danger);
+  font-size: 0.9em;
+}
+
+.batch-tracks-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.3em;
+}
+
+.batch-tracks-actions button,
+.batch-target button {
+  padding: 0.1em 0.5em;
+}
+
+/* One line per corrected track of a file. */
+.batch-target + .batch-target {
+  margin-top: 0.3em;
+}
+
+.batch-target-name {
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+
+.batch-target button {
+  margin-left: 0.4em;
+}
+
+.batch-row-flagged td.batch-index {
+  color: var(--danger);
+}
+
+/* Where the exports go, left of the progress line. */
+.batch-output {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: 0.9em;
+}
+
+.batch-output-label {
+  color: var(--text-muted);
+}
+
+.batch-output-dir {
+  min-width: 0;
+  max-width: 22em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+
+.batch-output button {
+  flex: 0 0 auto;
+  padding: 0.25em 0.7em;
+}
+
+.batch-footer {
+  flex-wrap: wrap;
+}
+
+/* "Choisir": a file's tracks, picked by hand. */
+.batch-choice-panel {
+  max-width: 640px;
+}
+
+.batch-choice-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1em;
+}
+
+/* "Choisir": the subtitle tracks retimed with each corrected track. */
+.batch-choice-subs {
+  margin-top: 1em;
+}
+
+.batch-choice-subs h3 {
+  margin: 0 0 0.5em;
+  font-size: 0.8em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.batch-choice-subs-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3em 0.9em;
+  font-size: 0.9em;
+}
+
+.batch-choice-subs-row + .batch-choice-subs-row {
+  margin-top: 0.4em;
+}
+
+.batch-choice-subs-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
 }

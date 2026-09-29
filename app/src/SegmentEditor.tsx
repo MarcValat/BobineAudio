@@ -11,13 +11,15 @@ import {
 import { InfoTip } from "./InfoTip";
 import { type TimeView, WHEEL_ZOOM_IN_FACTOR, WHEEL_ZOOM_OUT_FACTOR, useWheel, zoomView } from "./timeView";
 import { TrackPreview, type TrackPreviewHandle } from "./TrackPreview";
+import { useElementSize } from "./useElementSize";
 import "./SegmentEditor.css";
 
-const WIDTH = 900;
-const HEIGHT = 340;
+// The chart is drawn at the size its box actually gets (measured), so its
+// text keeps one size on any window (see SegmentChart).
+const MIN_CHART_HEIGHT = 160;
+// Narrower than this, the editor shows its two columns as tabs.
+const NARROW_EDITOR_WIDTH = 1000;
 const MARGIN = { top: 20, right: 20, bottom: 32, left: 64 };
-const PLOT_W = WIDTH - MARGIN.left - MARGIN.right;
-const PLOT_H = HEIGHT - MARGIN.top - MARGIN.bottom;
 // Must match engine/src/syncaudio/segments.py's _DRIFT_EPS_S: the editor
 // recomputes is_drift live as the user edits offset values (rather than
 // trusting the segments' original is_drift, which goes stale the moment
@@ -121,10 +123,10 @@ type Drag =
   // A whole segment, up or down: both its ends move together, so a drift keeps its slope.
   | { kind: "segment"; index: number; grabOffset: number; offsetStart: number; offsetEnd: number };
 
-/** "Ignorer les segments peu fiables": repeatedly merges away the first
+/** "Retirer les segments peu fiables": repeatedly merges away the first
  * remaining segment under LOW_CONFIDENCE_THRESHOLD (same merge -- absorb
  * into the next segment, or the previous one if it's the last -- a manual
- * "Fusionner" click already does), until none are left below the
+ * "Retirer" click already does), until none are left below the
  * threshold or only one segment remains. Repeats rather than a single
  * pass because merging shifts every later index and can change which
  * segment is now "last". */
@@ -183,6 +185,25 @@ export function SegmentEditor({
   // as "move the playback position here".
   const movedRef = useRef(false);
   const svgRef = useRef<SVGSVGElement>(null);
+  const [chartBoxRef, chartBox] = useElementSize<HTMLDivElement>();
+  const chartWidth = Math.max(300, chartBox.width || 900);
+  const chartHeight = Math.max(MIN_CHART_HEIGHT, chartBox.height || 300);
+  const [panelRef, panelSize] = useElementSize<HTMLDivElement>();
+  const narrow = preview !== undefined && panelSize.width > 0 && panelSize.width < NARROW_EDITOR_WIDTH;
+  const [editorView, setEditorView] = useState<"segments" | "listen">("segments");
+  // The segment whose "Retirer" button is hovered: shown on the chart, with
+  // the neighbour that would take its place.
+  const [removalPreview, setRemovalPreview] = useState<number | null>(null);
+  // "Annuler" (or Escape) with unsaved changes asks first.
+  const [confirmingClose, setConfirmingClose] = useState(false);
+  const dirty = !sameState(state, initialState);
+
+  function requestClose() {
+    if (dirty) setConfirmingClose(true);
+    else onClose();
+  }
+  const PLOT_W = chartWidth - MARGIN.left - MARGIN.right;
+  const PLOT_H = chartHeight - MARGIN.top - MARGIN.bottom;
 
   /** Record the current state as the one to come back to on undo. */
   function remember() {
@@ -222,7 +243,7 @@ export function SegmentEditor({
   }
 
   function reset() {
-    if (sameState(state, initialState)) return;
+    if (!dirty) return;
     remember();
     restore(initialState);
   }
@@ -231,6 +252,12 @@ export function SegmentEditor({
   // native undo can't follow values the editor rewrites.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (confirmingClose) setConfirmingClose(false);
+        else requestClose();
+        return;
+      }
       if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
       const key = e.key.toLowerCase();
       if (key === "z" && !e.shiftKey) {
@@ -310,13 +337,13 @@ export function SegmentEditor({
 
   function timeFromClientX(clientX: number): number {
     const rect = svgRef.current!.getBoundingClientRect();
-    const svgX = ((clientX - rect.left) / rect.width) * WIDTH;
+    const svgX = ((clientX - rect.left) / rect.width) * chartWidth;
     return xInv(svgX - MARGIN.left);
   }
 
   function offsetFromClientY(clientY: number): number {
     const rect = svgRef.current!.getBoundingClientRect();
-    const svgY = ((clientY - rect.top) / rect.height) * HEIGHT - MARGIN.top;
+    const svgY = ((clientY - rect.top) / rect.height) * chartHeight - MARGIN.top;
     return minOffset + ((PLOT_H - svgY) / PLOT_H) * (maxOffset - minOffset);
   }
 
@@ -397,6 +424,13 @@ export function SegmentEditor({
   }
 
   const segmentsPreview = useMemo(() => toSegments(state), [state]);
+  // The segment "Retirer" would leave in place of the hovered one and its neighbour.
+  const removalGhost =
+    removalPreview !== null && removalPreview < segmentsPreview.length && segmentsPreview.length > 1
+      ? toSegments(mergeSegment(state, removalPreview))[
+          removalPreview < segmentsPreview.length - 1 ? removalPreview : removalPreview - 1
+        ]
+      : null;
 
   const previewRef = useRef<TrackPreviewHandle>(null);
   const [cursor, setCursor] = useState<number | null>(null);
@@ -429,7 +463,7 @@ export function SegmentEditor({
 
   return (
     <div className="editor-overlay" role="dialog" aria-modal="true">
-      <div className={preview ? "editor-panel editor-panel-wide" : "editor-panel"}>
+      <div ref={panelRef} className={`editor-panel${preview ? " editor-panel-wide" : ""}${narrow ? " editor-narrow" : ""}`}>
         <div className="editor-header">
           <h2>
             Corriger manuellement les segments{" "}
@@ -440,23 +474,61 @@ export function SegmentEditor({
                 <li>Double-clique sur le graphe pour couper un segment à cet endroit.</li>
                 <li>Molette : zoomer ou dézoomer, en même temps que les formes d'onde.</li>
                 <li>Un segment en pointillés (⚠) est peu fiable : à vérifier à l'écoute.</li>
+                <li>
+                  « Retirer » supprime un segment (une fausse détection, par exemple) : son voisin s'étend sur sa
+                  durée, avec son propre décalage.
+                </li>
                 <li>Ctrl+Z / Ctrl+Y : défaire / refaire.</li>
                 {preview && <li>Clique sur le graphe pour placer la lecture à cet endroit.</li>}
                 <li>Décalage : + = la piste est en retard sur la référence, − = en avance.</li>
               </ul>
             </InfoTip>
           </h2>
-          <button className="small-button" onClick={onClose}>
-            Annuler
-          </button>
+          {/* Too narrow for the chart and the preview side by side: one at a time. */}
+          {narrow && (
+            <div className="view-tabs" role="tablist">
+              <button
+                role="tab"
+                aria-selected={editorView === "segments"}
+                className={editorView === "segments" ? "active" : ""}
+                onClick={() => setEditorView("segments")}
+              >
+                Segments
+              </button>
+              <button
+                role="tab"
+                aria-selected={editorView === "listen"}
+                className={editorView === "listen" ? "active" : ""}
+                onClick={() => setEditorView("listen")}
+              >
+                Écoute
+              </button>
+            </div>
+          )}
+          {confirmingClose ? (
+            <div className="editor-confirm-close" role="alertdialog">
+              <span>Abandonner les modifications non enregistrées ?</span>
+              <button className="small-button export-cancel" onClick={onClose}>
+                Abandonner
+              </button>
+              <button className="small-button" onClick={() => setConfirmingClose(false)}>
+                Continuer l'édition
+              </button>
+            </div>
+          ) : (
+            <button className="small-button" onClick={requestClose} title="Fermer sans enregistrer (Échap)">
+              Annuler
+            </button>
+          )}
         </div>
 
         <div className="editor-columns">
-          <div className="editor-primary">
+          <div className={narrow && editorView !== "segments" ? "editor-primary view-hidden" : "editor-primary"}>
+            <div className="editor-chart-box" ref={chartBoxRef}>
             <svg
               ref={svgRef}
               className={`editor-chart${preview ? " editor-chart-listenable" : ""}${dragging ? " editor-chart-dragging" : ""}`}
-              viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+              viewBox={`0 0 ${chartWidth} ${chartHeight}`}
               role="img"
               onClick={handleChartClick}
               onDoubleClick={handleChartDoubleClick}
@@ -501,7 +573,7 @@ export function SegmentEditor({
                         y2={yEnd}
                         className={`segment-line ${seg.is_drift ? "drift" : "constant"}${
                           seg.confidence < LOW_CONFIDENCE_THRESHOLD ? " low-confidence" : ""
-                        }`}
+                        }${removalPreview === i ? " removal-target" : ""}`}
                       />
                       {/* A wide invisible stroke on top: the visible line is too thin to grab. */}
                       <line
@@ -532,6 +604,17 @@ export function SegmentEditor({
                     </g>
                   );
                 })}
+
+                {/* "Retirer" hovered: what the neighbour would become once stretched over the removed segment. */}
+                {removalGhost && (
+                  <line
+                    x1={x(removalGhost.start_s)}
+                    y1={y(removalGhost.is_drift ? removalGhost.offset_start : (removalGhost.offset_start + removalGhost.offset_end) / 2)}
+                    x2={x(removalGhost.end_s)}
+                    y2={y(removalGhost.is_drift ? removalGhost.offset_end : (removalGhost.offset_start + removalGhost.offset_end) / 2)}
+                    className="segment-line removal-ghost"
+                  />
+                )}
 
                 {/* What the render does at each jump: cut extra content, or fill missing content with silence. */}
                 {segmentsPreview.slice(1).map((seg, k) => {
@@ -564,16 +647,17 @@ export function SegmentEditor({
                 })}
               </g>
             </svg>
+            </div>
 
-            <div className="editor-table-wrap">
+            <div className="editor-table-wrap list-scroll">
               <table className="editor-table">
                 <thead>
                   <tr>
                     <th>#</th>
                     <th>Début (s)</th>
                     <th>Fin (s)</th>
-                    <th>Décalage début (ms)</th>
-                    <th>Décalage fin (ms)</th>
+                    <th title="Décalage au début du segment, en millisecondes">Décal. début (ms)</th>
+                    <th title="Décalage à la fin du segment, en millisecondes">Décal. fin (ms)</th>
                     <th>Confiance</th>
                     <th>Actions</th>
                   </tr>
@@ -622,7 +706,7 @@ export function SegmentEditor({
                       </td>
                       <td
                         className={seg.confidence < LOW_CONFIDENCE_THRESHOLD ? "editor-confidence-cell low" : "editor-confidence-cell"}
-                        title="À quel point cette détection (décalage et classification dérive/constant) est fiable -- voir engine/segments.py:_segment_confidence. Un score bas vient de fenêtres d'analyse qui ne s'accordent pas entre elles et/ou de trop peu de fenêtres en soutien, pas forcément d'une erreur certaine."
+                        title="Fiabilité de cette détection (décalage, dérive ou constant). Un score bas vient de mesures qui ne s'accordent pas entre elles, ou trop peu nombreuses : à vérifier à l'écoute, sans être forcément faux."
                       >
                         {seg.confidence < LOW_CONFIDENCE_THRESHOLD ? "⚠ " : ""}
                         {Math.round(seg.confidence * 100)}%
@@ -631,10 +715,23 @@ export function SegmentEditor({
                         <button
                           className="small-button"
                           disabled={segmentsPreview.length < 2}
-                          title="Fusionne ce segment avec le suivant (ou le précédent si c'est le dernier) -- utile pour retirer un segment parasite."
-                          onClick={() => applyEdit((s) => mergeSegment(s, i))}
+                          title={
+                            segmentsPreview.length < 2
+                              ? "Le seul segment ne peut pas être retiré."
+                              : `Retire le segment ${i + 1} (une fausse détection, par exemple) : le segment ${
+                                  i < segmentsPreview.length - 1 ? i + 2 : i
+                                } s'étend sur sa durée, avec son propre décalage. Aperçu en pointillés verts sur le graphe.`
+                          }
+                          onMouseEnter={() => setRemovalPreview(i)}
+                          onMouseLeave={() => setRemovalPreview(null)}
+                          onFocus={() => setRemovalPreview(i)}
+                          onBlur={() => setRemovalPreview(null)}
+                          onClick={() => {
+                            setRemovalPreview(null);
+                            applyEdit((s) => mergeSegment(s, i));
+                          }}
                         >
-                          {i < segmentsPreview.length - 1 ? "Fusionner ↓" : "Fusionner ↑"}
+                          Retirer
                         </button>
                       </td>
                     </tr>
@@ -645,7 +742,7 @@ export function SegmentEditor({
           </div>
 
           {preview && (
-            <div className="editor-preview">
+            <div className={narrow && editorView !== "listen" ? "editor-preview view-hidden" : "editor-preview"}>
               <TrackPreview
                 referenceFilePath={preview.referenceFilePath}
                 candidateFilePath={preview.candidateFilePath}
@@ -674,7 +771,7 @@ export function SegmentEditor({
             <button
               className="small-button"
               onClick={reset}
-              disabled={sameState(state, initialState)}
+              disabled={!dirty}
               title="Revient aux segments tels qu'à l'ouverture de l'éditeur."
             >
               Réinitialiser
@@ -683,10 +780,10 @@ export function SegmentEditor({
           <button
             className="small-button"
             disabled={!state.confidences.some((c) => c < LOW_CONFIDENCE_THRESHOLD)}
-            title="Fusionne automatiquement chaque segment dont la confiance est sous le seuil avec son voisin (même effet que cliquer sur Fusionner pour chacun) -- ex. une fausse dérive détectée sur des fenêtres d'analyse qui ne s'accordent pas entre elles."
+            title="Retire chaque segment peu fiable (⚠), comme « Retirer » sur chacun : son voisin s'étend sur sa durée."
             onClick={() => applyEdit(ignoreLowConfidenceSegments)}
           >
-            Ignorer les segments peu fiables
+            Retirer les segments peu fiables
           </button>
           <button
             className="primary-button"

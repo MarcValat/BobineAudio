@@ -6,7 +6,7 @@
   align-items: center;
   justify-content: center;
   z-index: 50;
-  padding: 2em;
+  padding: 1em;
   box-sizing: border-box;
 }
 
@@ -18,8 +18,12 @@
   padding: 1.2em 1.4em;
   width: 100%;
   max-width: 960px;
-  max-height: 100%;
-  overflow-y: auto;
+  /* The whole window (bar the backdrop's margin), fitted rather than
+     scrolled: the chart takes the height left over, the segment table
+     scrolls in its own frame when long. */
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   box-sizing: border-box;
   text-align: left;
 }
@@ -38,18 +42,28 @@
 }
 
 .editor-columns {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   align-items: stretch;
-  flex-wrap: wrap;
   gap: 1.4em;
 }
 
 .editor-primary {
-  flex: 1 1 520px;
-  min-width: 460px;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8em;
+}
+
+.editor-chart-box {
+  flex: 1 1 auto;
+  min-height: 160px;
 }
 
 .editor-header {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -62,8 +76,9 @@
 }
 
 .editor-chart {
+  display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
   border: 1px solid var(--border, rgba(128, 128, 128, 0.25));
   border-radius: var(--radius-sm, 8px);
   box-sizing: border-box;
@@ -111,6 +126,25 @@
 
 .editor-chart .segment-line.low-confidence {
   stroke-dasharray: 7 5;
+}
+
+/* "Retirer" hovered: the segment going away, and its neighbour stretched over it. */
+.editor-chart .segment-line.removal-target {
+  stroke: var(--danger, #cc3333);
+  opacity: 0.45;
+}
+
+.editor-chart .segment-line.removal-ghost {
+  stroke: #2e9e5b;
+  stroke-dasharray: 6 4;
+  pointer-events: none;
+}
+
+.editor-confirm-close {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-size: 0.9em;
 }
 
 .editor-chart .segment-label {
@@ -171,10 +205,12 @@
   fill: #d33;
 }
 
+/* Its natural height up to 40% of the column, then it scrolls in its own
+   frame, headers kept in view: the chart above takes the rest. */
 .editor-table-wrap {
-  margin-top: 0.8em;
-  max-height: 14em;
-  overflow-y: auto;
+  flex: 0 1 auto;
+  max-height: 40%;
+  min-height: 5.5em;
   border: 1px solid var(--border, rgba(128, 128, 128, 0.3));
   border-radius: var(--radius-sm, 8px);
 }
@@ -193,6 +229,10 @@
 }
 
 .editor-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  white-space: nowrap;
   font-size: 0.75em;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -201,8 +241,17 @@
   background: var(--surface-alt, rgba(128, 128, 128, 0.08));
 }
 
+.editor-table td:last-child {
+  white-space: nowrap;
+}
+
+/* As wide as its column, not a fixed width: the table then fits its frame
+   instead of scrolling sideways in a narrow editor. */
 .editor-table input {
-  width: 5.5em;
+  width: 100%;
+  min-width: 4.8em;
+  max-width: 7em;
+  box-sizing: border-box;
   padding: 0.25em 0.4em;
   font-size: 0.95em;
 }
@@ -221,18 +270,12 @@
   background: color-mix(in srgb, var(--danger, #cc3333) 8%, transparent);
 }
 
-/* A concrete height (not just min-height) is the point: .preview and its
-   own children (see App.css/Waveform.css) are all `flex: 1 1 auto; min-
-   height: 0`, which only lets them shrink to whatever space a *bounded*
-   ancestor hands them -- in the main view that ancestor is the page's
-   viewport-height layout, which doesn't reach into this modal, so without
-   an explicit height here the whole chain collapsed to each element's own
-   tiny min-height (a barely-visible sliver) instead of actually filling the
-   column. */
+/* No fixed height: the waveforms keep their own readable minimum (see
+   Waveform.css), and .editor-columns scrolls when they don't fit. */
 .editor-preview {
-  flex: 1 1 420px;
-  min-width: 340px;
-  height: 520px;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   border-left: 1px solid var(--border, rgba(128, 128, 128, 0.3));
@@ -247,6 +290,7 @@
 }
 
 .editor-actions {
+  flex: 0 0 auto;
   margin-top: 1em;
   display: flex;
   justify-content: center;
@@ -258,4 +302,16 @@
   display: flex;
   gap: 0.4em;
   margin-right: auto;
+}
+
+/* Chart and preview as tabs (SegmentEditor's `narrow`): one column at a
+   time, full width. */
+.editor-narrow .editor-preview {
+  border-left: none;
+  padding-left: 0;
+}
+
+.editor-header .view-tabs {
+  margin-left: auto;
+  margin-right: 0.8em;
 }

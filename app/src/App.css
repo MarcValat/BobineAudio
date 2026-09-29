@@ -2,6 +2,9 @@
    these instead of hardcoding colors, so light/dark mode is just a second
    definition of the same variables (see the @media block at the bottom). */
 :root {
+  /* Native widgets (select popups, their scrollbars, checkboxes...) follow
+     the app's theme instead of staying light in dark mode. */
+  color-scheme: light dark;
   --accent: #396cd8;
   --accent-hover: #2f5ab8;
   --accent-fg: #ffffff;
@@ -16,6 +19,8 @@
   --radius: 12px;
   --radius-sm: 8px;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.05);
+  --scrollbar-thumb: rgba(15, 15, 15, 0.22);
+  --scrollbar-thumb-hover: rgba(15, 15, 15, 0.4);
 
   /* Native system-font stacks, not a webfont: this is a desktop app (no
      network dependency to resolve correctly), and "Inter, Avenir, ..."
@@ -45,13 +50,59 @@
    whole page briefly overscrolls past its edge then springs back, even
    though .container itself is a fixed 100vh with overflow:hidden and never
    actually scrolls -- Chromium applies this at the top-level document/
-   viewport regardless. The universal selector covers html/body/#root (the
-   actual source of the reported bounce) *and* every inner scrollable panel
-   (.app-main, .batch-main, .editor-panel, the tracks/log panels...) in one
-   rule, rather than chasing each one by hand. Harmless on non-scrolling
-   elements. */
-* {
+   viewport regardless. Also on the elements that really scroll (lists,
+   logs), for the same bounce at their ends.
+
+   Not on every element: an element that only clips its content (overflow:
+   hidden, like a file name cut short with "...") counts as a scroll
+   container too, and with this set it swallowed the mouse wheel instead of
+   passing it on to the list around it -- the list wouldn't scroll with the
+   pointer over a file name. */
+html,
+body,
+#root,
+.list-scroll,
+.log {
   overscroll-behavior: none;
+}
+
+/* Scrollbars in the app's palette (the lists that scroll, the editor's
+   table...): thin, on a transparent track, a bit stronger under the
+   pointer. The standard properties, which WebView2's Chromium honors. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+*:hover {
+  scrollbar-color: var(--scrollbar-thumb-hover) transparent;
+}
+
+/* The same look for a WebView2 older than Chromium 121, which ignores the
+   standard properties above (newer ones ignore these instead). */
+@supports not (scrollbar-color: auto) {
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+  }
+
+  ::-webkit-scrollbar-button {
+    display: none;
+  }
 }
 
 html,
@@ -117,7 +168,11 @@ body {
   flex: 0 0 auto;
   display: flex;
   gap: 0.5em;
-  padding: 1em 1em 0;
+  padding: 0.7em 1em 0;
+}
+
+.mode-switch button {
+  padding: 0.4em 1em;
 }
 
 .update-banner {
@@ -135,21 +190,20 @@ body {
   color: inherit;
 }
 
-/* A fixed 2-column grid: tracks on the left, analysis results (one card per
-   analyzed track) on the right, both full height. Every region always
-   exists (see App.tsx's placeholders) and owns a fixed slice of the window
-   -- nothing here grows the window or the page; overflowing *content*
-   scrolls inside its own panel instead. `min-height: 0` on both the grid
-   container and each panel is load-bearing: grid/flex items default to
-   `min-height: auto`, which lets their content's natural size override the
-   track/panel size and defeats `overflow: auto` entirely -- a classic CSS
-   trap. */
+/* Nothing in the app scrolls but lists: the window is split into regions
+   that shrink and grow with it, and a list that outgrows its region (tracks,
+   analyzed tracks) scrolls inside its own frame (.list-scroll). Left, the
+   file: tracks, analyzed tracks and the export. Right, what's looked at and
+   listened to: the chart and the waveforms. `min-height: 0` on every grid/
+   flex level is load-bearing: items default to `min-height: auto`, which
+   lets content push past its region instead of shrinking into it. */
 .app-main {
   flex: 1 1 auto;
   min-height: 0;
   padding: 1em;
   display: grid;
-  grid-template-columns: minmax(320px, 440px) 1fr;
+  /* Follows the window's width instead of keeping a fixed one. */
+  grid-template-columns: clamp(290px, 24vw, 420px) minmax(0, 1fr);
   gap: 1em;
   overflow: hidden;
 }
@@ -162,16 +216,29 @@ body {
   gap: 0.8em;
 }
 
+/* Keeps its natural height (the analyzed tracks below give way first), up
+   to a point where a file with many tracks scrolls its table instead. */
 .left-column .field-tracks {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
+  flex: 0 0 auto;
+  max-height: 55%;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Flex column so the single visible tab's content (see analysis-tabs/
-   analysis-card below) can be squeezed to fit the available height instead
-   of needing to scroll -- min-height:0 is load-bearing here too, same trap
-   as .app-main above. */
+.left-column .field-results {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* A list that may hold more than its region can show: it scrolls in its own
+   frame, the only kind of scrolling in the app. */
+.list-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 .field-analysis {
   grid-column: 2;
   display: flex;
@@ -188,10 +255,7 @@ body {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 1em 1.1em;
-  /* No section scrolls internally: field-tracks' content is always small
-     (a handful of table rows), and field-analysis only ever shows one
-     analysis tab at a time, whose content shrinks to fit (see the flex
-     chain below) -- overflow is a last-resort clip, not an expected path. */
+  /* Clips to the rounded corners. */
   overflow: hidden;
   text-align: left;
   /* Windows paths have no spaces to break on -- without this, a long one
@@ -331,65 +395,191 @@ button:focus-visible {
   margin-top: 1em;
 }
 
-/* One tab per analyzed track (App.tsx only ever renders the active one's
-   card below) -- this is what lets an arbitrary number of analyzed tracks
-   never need field-analysis itself to scroll. */
-.analysis-tabs {
+/* One row per analyzed track (App.tsx): select it to show it on the right,
+   tick it to export it. A left bar gives its state at a glance. */
+.result-list {
+  flex: 0 1 auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.result-row {
+  padding: 0.45em 0.6em;
+  margin-bottom: 0.35em;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.result-row:hover {
+  background: var(--surface-alt);
+}
+
+.result-row.active {
+  background: var(--surface-alt);
+  border-color: var(--accent);
+}
+
+.result-row.status-running {
+  border-left-color: var(--accent);
+}
+
+.result-row.status-done {
+  border-left-color: var(--success);
+}
+
+.result-row.status-error {
+  border-left-color: var(--danger);
+}
+
+.result-row-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  flex-wrap: wrap;
+}
+
+.result-name {
+  font-weight: 600;
+}
+
+.result-status {
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.result-row .error,
+.result-row .log-panel {
+  margin: 0.3em 0 0;
+  cursor: auto;
+}
+
+/* The subtitle tracks retimed with this audio track, one checkbox each. */
+.result-subs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2em 0.8em;
+  margin-top: 0.35em;
+  font-size: 0.9em;
+  cursor: auto;
+}
+
+.result-subs-label {
+  color: var(--text-muted);
+}
+
+.result-subs label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+}
+
+/* The export of the whole file, at the bottom of the analyzed tracks. */
+.export-box {
+  flex: 0 0 auto;
+  margin-top: auto;
+  padding-top: 0.7em;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+
+.export-button {
+  width: 100%;
+}
+
+/* While exporting: the progress, and the way out if it was started too early. */
+.export-running {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+}
+
+.export-running-label {
+  flex: 1 1 auto;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.export-cancel {
+  flex: 0 0 auto;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.export-cancelled {
+  margin: 0;
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
+.analysis-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+  margin-bottom: 0.7em;
+}
+
+.analysis-header h2 {
+  flex: 1 1 auto;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Segments / Écoute, when the panel is too low for both at once. */
+.view-tabs {
   flex: 0 0 auto;
   display: flex;
   gap: 0.3em;
-  flex-wrap: wrap;
-  margin-bottom: 0.6em;
 }
 
-.analysis-tab {
-  padding: 0.35em 0.8em;
+.view-tabs button {
+  padding: 0.3em 0.9em;
   font-size: 0.85em;
-  border-left: 3px solid var(--border);
-  border-radius: var(--radius-sm);
-}
-.analysis-tab.status-running {
-  border-left-color: var(--accent);
-}
-.analysis-tab.status-done {
-  border-left-color: var(--success);
-}
-.analysis-tab.status-error {
-  border-left-color: var(--danger);
-}
-.analysis-tab.active {
-  background: var(--surface-alt);
-  font-weight: 700;
 }
 
-/* The single visible card, with a left accent bar reflecting its state at a
-   glance (running/done/error). A flex column itself so its content --
-   ultimately the waveforms inside .preview -- can shrink to fit whatever
-   height field-analysis has left, instead of overflowing into a scroll. */
-.analysis-card {
+.view-tabs button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+/* The chart on top, the waveforms taking every pixel left. */
+.analysis-view {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 0.2em 0 0.2em 0.9em;
-  border-left: 3px solid var(--border);
+  gap: 0.7em;
 }
 
-.analysis-card.status-running {
-  border-left-color: var(--accent);
-}
-.analysis-card.status-done {
-  border-left-color: var(--success);
-}
-.analysis-card.status-error {
-  border-left-color: var(--danger);
-}
-
-.analysis-card h3 {
+.analysis-chart {
   flex: 0 0 auto;
-  margin: 0 0 0.5em;
-  font-size: 0.95em;
-  font-weight: 600;
+}
+
+.analysis-chart .segment-chart {
+  max-width: none;
+  margin: 0;
+}
+
+/* The Segments tab: the chart alone, as tall as the panel. */
+.analysis-chart-fill {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.view-hidden {
+  display: none;
 }
 
 .segments-result {
@@ -397,33 +587,6 @@ button:focus-visible {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  margin-top: 0.5em;
-}
-
-/* Everything in the card except .preview (segment count/buttons, the
-   chart, the render log/result) keeps its natural size; .preview alone
-   (the waveform comparison) is the flexible region that actually shrinks. */
-.segments-result > :not(.preview),
-.analysis-card > :not(.segments-result) {
-  flex: 0 0 auto;
-}
-
-.analysis-top {
-  display: flex;
-  gap: 1.5em;
-  align-items: flex-start;
-}
-
-.analysis-summary {
-  flex: 0 0 auto;
-  min-width: 14em;
-}
-
-.analysis-top .segment-chart {
-  flex: 1 1 0;
-  min-width: 0;
-  max-width: none;
-  margin: 0;
 }
 
 .preview {
@@ -431,23 +594,27 @@ button:focus-visible {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  margin-top: 0.7em;
-  padding-top: 0.6em;
-  border-top: 1px solid var(--border);
+  gap: 0.35em;
 }
 
 .preview > .error {
   flex: 0 0 auto;
 }
 
-.preview-segment-picks {
+.preview-toolbar {
   flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4em 1em;
+  font-size: 0.85em;
+}
+
+.preview-segment-picks {
   display: flex;
   align-items: center;
   gap: 0.5em;
   flex-wrap: wrap;
-  font-size: 0.85em;
-  margin-bottom: 0.5em;
   color: var(--text-muted);
 }
 
@@ -480,56 +647,23 @@ button:focus-visible {
   color: var(--danger);
 }
 
-.analysis-description {
-  margin: 0.2em 0;
-  font-size: 0.9em;
-  color: var(--text-muted);
-}
-
-/* The file's single export, pinned under the analysis tabs: it covers every
-   analyzed track at once, so it belongs to none of the cards. */
-.export-bar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: flex-end;
-  gap: 1.5em;
-  margin-top: 0.8em;
-  padding-top: 0.7em;
-  border-top: 1px solid var(--border);
-}
-
-/* What will be written, left of the button, sitting on the same bottom line. */
-.export-details {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.export-details > :last-child {
-  margin-bottom: 0;
-}
-
-.export-choice {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4em 1em;
-  font-size: 0.9em;
-}
-
-.export-label {
-  font-weight: 600;
-}
-
-.export-track {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3em;
-}
-
 .export-summary {
-  margin: 0.4em 0;
+  margin: 0;
   font-size: 0.85em;
   color: var(--text-muted);
+}
+
+/* A short window leaves the analyzed tracks too little room: the summary
+   keeps two lines, the rest in its tooltip. */
+@media (max-height: 700px) {
+  .export-summary {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 .export-written {
@@ -539,7 +673,7 @@ button:focus-visible {
   gap: 0.6em;
 }
 
-.export-written .render-success {
+.render-success {
   margin-top: 0;
 }
 
@@ -557,7 +691,13 @@ button:focus-visible {
 .tracks-table-wrap {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  overflow: hidden;
+}
+
+/* Headers stay in view when the table scrolls (.list-scroll). */
+.field-tracks th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .field-tracks table {
@@ -566,8 +706,15 @@ button:focus-visible {
   font-size: 0.85em;
 }
 
+/* No cell breaks mid-word ("truehd", "ANALYSER") in the narrow column of
+   a small window. */
+.field-tracks th,
+.field-tracks td {
+  white-space: nowrap;
+}
+
 .field-tracks th {
-  padding: 0.4em;
+  padding: 0.4em 0.3em;
   text-align: center;
   font-size: 0.75em;
   font-weight: 700;
@@ -579,7 +726,7 @@ button:focus-visible {
 }
 
 .field-tracks td {
-  padding: 0.5em 0.4em;
+  padding: 0.5em 0.3em;
   text-align: center;
   border: 1px solid var(--border);
 }
@@ -625,5 +772,7 @@ button:focus-visible {
     --text-muted: rgba(242, 242, 242, 0.6);
     --danger: #ff6b6b;
     --success: #57c785;
+    --scrollbar-thumb: rgba(255, 255, 255, 0.2);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.38);
   }
 }

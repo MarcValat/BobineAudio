@@ -13,7 +13,12 @@ from syncaudio.align import estimate_offset
 from syncaudio.features import extract_envelope
 from syncaudio.ffmpeg_backend import FFmpegError, extract_pcm, parse_track_spec, probe_audio_streams
 from syncaudio.models import AudioTrackSpec
-from syncaudio.render import plan_corrections, plan_segmented_correction, render as render_tracks
+from syncaudio.render import (
+    default_output_path,
+    plan_corrections,
+    plan_segmented_correction,
+    render as render_tracks,
+)
 from syncaudio.segments import (
     DEFAULT_HOP_S,
     DEFAULT_MARGIN_S,
@@ -360,10 +365,7 @@ def render(
             return
 
         if output_path is None:
-            stem = Path(input_path)
-            while stem.suffix:
-                stem = stem.with_suffix("")
-            output_path = str(stem) + ".synced.mkv"
+            output_path = default_output_path(input_path)
 
         try:
             written = render_tracks(
@@ -410,10 +412,7 @@ def render(
         return
 
     if output_path is None:
-        stem = Path(input_path)
-        while stem.suffix:
-            stem = stem.with_suffix("")
-        output_path = str(stem) + ".synced.mkv"
+        output_path = default_output_path(input_path)
 
     try:
         written = render_tracks(

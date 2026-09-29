@@ -306,6 +306,14 @@ def corrected_clip(
     return proc.stdout
 
 
+def default_output_path(input_path: str) -> str:
+    """Where a render of ``input_path`` goes when no output path is given: next
+    to it, its last extension replaced -- "Show.S01E01.mkv" becomes
+    "Show.S01E01.synced.mkv". Only the last one: stripping them all made every
+    episode of a series named like that write the same "Show.synced.mkv"."""
+    return str(Path(input_path).with_suffix("")) + ".synced.mkv"
+
+
 def plan_corrections(
     reference: AudioTrackSpec,
     candidates: Sequence[AudioTrackSpec],
@@ -598,7 +606,11 @@ def render(
         if filter_complex_parts:
             cmd += ["-filter_complex", ";".join(filter_complex_parts)]
         # "?": an audio-only input (.mka, .wav, .flac...) has no video to carry over.
-        cmd += ["-map", "0:v:0?", *audio_map_args, *native_sub_map_args, "-map", "0:t?", *sub_map_args]
+        # Attachments (an .ass track's fonts...) last: mapped before the
+        # subtitles of another input, ffmpeg 7 hands their packets to an
+        # attachment stream and the mux fails ("Received a packet for an
+        # attachment stream") as soon as a filtered track is involved too.
+        cmd += ["-map", "0:v:0?", *audio_map_args, *native_sub_map_args, *sub_map_args, "-map", "0:t?"]
         cmd += ["-c:v", "copy", *audio_codec_args, "-c:s", "copy", *metadata_args]
         if len(inputs) > 1:
             # A track built from a *donor* file (batch mode's case: reference

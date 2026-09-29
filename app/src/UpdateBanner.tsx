@@ -3,7 +3,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 
-type Phase = "idle" | "available" | "downloading" | "ready" | "error";
+// "error": the download failed, the app still works; "failed": the install
+// did, after the engine was stopped.
+type Phase = "idle" | "available" | "downloading" | "ready" | "error" | "failed";
 
 /**
  * Checks GitHub Releases (see src-tauri/tauri.conf.json's
@@ -40,26 +42,36 @@ export function UpdateBanner() {
     if (!update) return;
     setPhase("downloading");
     setError(null);
+    // Downloaded first, with the engine still running: a failed download
+    // (network...) leaves the app fully usable, and it can be retried.
     try {
-      // Real bug: the installer failed to overwrite the sidecar's own exe
-      // ("Error opening file for writing") because it was still running --
-      // Tauri's updater closes/replaces the main app for us, but has no
-      // idea this separately-managed child process exists. Stop it first
-      // so its file is free by the time the installer gets to it;
-      // relaunch() below starts a fresh app (and sidecar) regardless, so
-      // there's nothing left needing it alive in between.
-      await invoke("stop_sidecar");
-      await update.downloadAndInstall((event) => {
+      await update.download((event) => {
         if (event.event === "Started") {
           setProgress({ downloaded: 0, total: event.data.contentLength ?? null });
         } else if (event.event === "Progress") {
           setProgress((p) => ({ downloaded: p.downloaded + event.data.chunkLength, total: p.total }));
         }
       });
-      setPhase("ready");
-      await relaunch();
     } catch (err) {
       setPhase("error");
+      setError(err instanceof Error ? err.message : String(err));
+      return;
+    }
+    setPhase("ready");
+    try {
+      // Real bug: the installer failed to overwrite the sidecar's own exe
+      // ("Error opening file for writing") because it was still running --
+      // Tauri's updater closes/replaces the main app for us, but has no
+      // idea this separately-managed child process exists. Stop it only
+      // now, right before installing, so its file is free by the time the
+      // installer gets to it; relaunch() below starts a fresh app (and
+      // sidecar) regardless.
+      await invoke("stop_sidecar");
+      await update.install();
+      await relaunch();
+    } catch (err) {
+      // The engine is stopped by now: only a restart brings it back.
+      setPhase("failed");
       setError(err instanceof Error ? err.message : String(err));
     }
   }
@@ -73,14 +85,33 @@ export function UpdateBanner() {
       {phase === "available" && (
         <>
           <span>Mise à jour disponible : v{update.version}</span>
-          <button className="small-button" onClick={install}>
+          <button
+            className="small-button"
+            onClick={install}
+            title="L'application redémarre une fois la mise à jour téléchargée : une analyse ou un export en cours sera interrompu."
+          >
             Installer et redémarrer
           </button>
         </>
       )}
       {phase === "downloading" && <span>Téléchargement de la mise à jour... {percent !== null ? `${percent}%` : ""}</span>}
-      {phase === "ready" && <span>Installé, redémarrage...</span>}
-      {phase === "error" && <span className="error">Échec de la mise à jour : {error}</span>}
+      {phase === "ready" && <span>Installation, redémarrage...</span>}
+      {phase === "error" && (
+        <>
+          <span className="error">Échec du téléchargement de la mise à jour : {error}</span>
+          <button className="small-button" onClick={install}>
+            Réessayer
+          </button>
+        </>
+      )}
+      {phase === "failed" && (
+        <>
+          <span className="error">Échec de l'installation : {error}</span>
+          <button className="small-button" onClick={() => relaunch()}>
+            Redémarrer l'application
+          </button>
+        </>
+      )}
     </div>
   );
 }

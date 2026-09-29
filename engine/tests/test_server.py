@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 import syncaudio.analysis_cache as analysis_cache
 import syncaudio.waveform_cache as waveform_cache
-from syncaudio.ffmpeg_backend import resolve_ffmpeg
+from syncaudio.ffmpeg_backend import probe_audio_streams, resolve_ffmpeg
 from syncaudio.server import app
 
 client = TestClient(app)
@@ -125,6 +125,34 @@ def test_probe_reports_container_level_track_delay(tmp_path: Path) -> None:
     assert abs(body["tracks"][1]["start_time"] - 1.0) < 0.05
 
 
+def test_probe_lists_subtitle_tracks(offset_mkv: tuple[Path, float], tmp_path: Path) -> None:
+    mkv, _ = offset_mkv
+    srt = tmp_path / "subs.srt"
+    srt.write_text("1\n00:00:01,000 --> 00:00:02,000\nBonjour\n", encoding="utf-8")
+    with_subs = tmp_path / "with_subs.mkv"
+    subprocess.run(
+        [
+            resolve_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y",
+            "-i", str(mkv), "-i", str(srt), "-i", str(srt), "-i", str(srt),
+            "-map", "0", "-map", "1", "-map", "2", "-map", "3", "-c", "copy", "-c:s", "srt",
+            "-metadata:s:s:0", "language=fre", "-metadata:s:s:0", "title=Français",
+            "-metadata:s:s:1", "language=fre", "-disposition:s:1", "forced",
+            "-metadata:s:s:2", "language=eng", "-metadata:s:s:2", "title=English Forced",
+            str(with_subs),
+        ],
+        check=True, capture_output=True,
+    )
+    resp = client.get("/probe", params={"path": str(with_subs)})
+    assert resp.status_code == 200
+    subs = resp.json()["subtitles"]
+    assert [(s["index"], s["language"], s["forced"], s["shiftable"]) for s in subs] == [
+        (0, "fre", False, True),
+        (1, "fre", True, True),  # by disposition
+        (2, "eng", True, True),  # by title only
+    ]
+    assert subs[0]["title"] == "Français"
+
+
 def test_probe_missing_file_returns_400() -> None:
     resp = client.get("/probe", params={"path": "does-not-exist.mkv"})
     assert resp.status_code == 400
@@ -202,7 +230,7 @@ def _drain_job_ws(job_id: str) -> list[dict]:
         while True:
             event = ws.receive_json()
             events.append(event)
-            if event["type"] in ("done", "error"):
+            if event["type"] in ("done", "error", "cancelled"):
                 break
     return events
 
@@ -306,6 +334,30 @@ def test_job_render_segmented_uses_supplied_segment_override(offset_mkv: tuple[P
     assert any("segments fournis" in m for m in _logs(events))
 
 
+def test_job_render_tags_an_imported_audio_file_with_the_given_language(offset_mkv: tuple[Path, float]) -> None:
+    """A bare .wav has no language: the one given with its segments is what
+    the corrected track gets in the output."""
+    mkv, _ = offset_mkv
+    wav = mkv.with_name("cand.wav")
+    output_path = str(mkv.with_name("out.imported.mkv"))
+    segment = {"start_s": 0.0, "end_s": 30.0, "offset_start": 3.0, "offset_end": 3.0, "is_drift": False}
+    events = _run_job(
+        "/jobs/render",
+        {
+            "input_path": str(mkv),
+            "reference_index": 0,
+            "only_imports": True,
+            "import_audio": [{"path": str(wav), "index": 0}],
+            "output_path": output_path,
+            "segmented": True,
+            "segment_overrides": [{"track": {"path": str(wav), "index": 0}, "segments": [segment], "language": "ger"}],
+        },
+    )
+    assert events[-1]["type"] == "done", events[-1]
+    streams = probe_audio_streams(output_path)
+    assert [s.language for s in streams] == ["jpn", "ger"]
+
+
 def test_job_render_unknown_track_reports_a_readable_error(offset_mkv: tuple[Path, float]) -> None:
     mkv, _ = offset_mkv
     events = _run_job("/jobs/render", {"input_path": str(mkv), "reference_index": 0, "track_indices": [7]})
@@ -346,3 +398,54 @@ def test_prefetch_warms_the_cache_for_a_later_detection(offset_mkv: tuple[Path, 
     assert not any("[extraction]" in m for m in _logs(events))
     assert any("[cache]" in m for m in _logs(events))
     assert abs(events[-1]["result"]["segments"][0]["offset_start"] - offset_s) < 0.5
+
+
+def test_a_cancelled_job_reports_it_and_its_ffmpeg_stops() -> None:
+    from syncaudio.ffmpeg_backend import _run
+    from syncaudio.jobs import start_job
+
+    cmd = [resolve_ffmpeg(), "-hide_banner", "-re", "-f", "lavfi", "-i", "sine=duration=60", "-f", "null", "-"]
+    job = start_job(lambda log: _run(cmd, capture_output=True))
+    assert client.post(f"/jobs/{job.id}/cancel").status_code == 200
+    events = _drain_job_ws(job.id)
+    assert events[-1]["type"] == "cancelled"
+
+
+def test_cancel_unknown_job_returns_404() -> None:
+    assert client.post("/jobs/does-not-exist/cancel").status_code == 404
+
+
+def test_paths_exist_answers_in_order(tmp_path: Path) -> None:
+    taken = tmp_path / "Episode 1.mkv"
+    taken.write_bytes(b"")
+    resp = client.post("/paths/exist", json={"paths": [str(tmp_path / "Episode 2.mkv"), str(taken)]})
+    assert resp.status_code == 200
+    assert resp.json() == {"exists": [False, True]}
+
+
+def test_a_cancelled_export_leaves_no_partial_file(offset_mkv: tuple[Path, float], monkeypatch: pytest.MonkeyPatch) -> None:
+    import syncaudio.server as server
+    from syncaudio.cancellation import Cancelled
+
+    mkv, _ = offset_mkv
+    output_path = mkv.with_name("out.partial.mkv")
+
+    def render_cut_short(*args, **kwargs):
+        output_path.write_bytes(b"half a file")
+        raise Cancelled()
+
+    monkeypatch.setattr(server, "render_tracks", render_cut_short)
+    segment = {"start_s": 0.0, "end_s": 30.0, "offset_start": 3.0, "offset_end": 3.0, "is_drift": False}
+    events = _run_job(
+        "/jobs/render",
+        {
+            "input_path": str(mkv),
+            "reference_index": 0,
+            "track_indices": [1],
+            "output_path": str(output_path),
+            "segmented": True,
+            "segment_overrides": [{"track": {"path": str(mkv), "index": 1}, "segments": [segment]}],
+        },
+    )
+    assert events[-1]["type"] == "cancelled"
+    assert not output_path.exists()

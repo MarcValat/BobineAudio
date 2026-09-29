@@ -182,6 +182,13 @@ export interface TrackPreviewHandle {
   seekTo(t: number): void;
 }
 
+// Above this many segments, "Aller à" is a dropdown instead of a row of buttons.
+const MAX_SEGMENT_BUTTONS = 4;
+
+function segmentPickLabel(seg: SegmentOut): string {
+  return `${formatTime(seg.start_s)}–${formatTime(seg.end_s)} (${segmentOffsetLabel(seg)})`;
+}
+
 // After the segments change while playing, the loaded "Résultat final" clip
 // no longer matches them: it's reloaded once edits pause for this long.
 const RELOAD_AFTER_EDIT_MS = 400;
@@ -586,43 +593,66 @@ export function TrackPreview({
 
   return (
     <div className="preview">
-      {segments.length > 1 && (
-        <div className="preview-segment-picks">
-          Aller à :
-          {segments.map((seg, i) => (
-            <button key={i} className="small-button" onClick={() => goToSegment(seg)}>
-              {formatTime(seg.start_s)}–{formatTime(seg.end_s)} ({segmentOffsetLabel(seg)})
-            </button>
-          ))}
+      {/* One wrapping row (zoom, segment shortcuts, legend): height is what a
+          small screen lacks. */}
+      <div className="preview-toolbar">
+        <div className="waveform-zoom-controls">
+          <span>Zoom :</span>
+          <button className="small-button" onClick={() => zoomAt(0.5, previewStart)}>
+            + (zoomer)
+          </button>
+          <button className="small-button" onClick={() => zoomAt(2, previewStart)}>
+            − (dézoomer)
+          </button>
+          <button className="small-button" onClick={resetZoom}>
+            Piste entière
+          </button>
+          <InfoTip>
+            Molette sur une forme d'onde : zoomer ou dézoomer sous le curseur. Clic : placer la lecture à cet endroit.
+          </InfoTip>
         </div>
-      )}
-
-      <div className="waveform-zoom-controls">
-        <span>Zoom :</span>
-        <button className="small-button" onClick={() => zoomAt(0.5, previewStart)}>
-          + (zoomer)
-        </button>
-        <button className="small-button" onClick={() => zoomAt(2, previewStart)}>
-          − (dézoomer)
-        </button>
-        <button className="small-button" onClick={resetZoom}>
-          Piste entière
-        </button>
-        <InfoTip>
-          Molette sur une forme d'onde : zoomer ou dézoomer sous le curseur. Clic : placer la lecture à cet endroit.
-        </InfoTip>
+        {/* A few segments: one button each. More: a list, so the row
+            doesn't wrap and eat the waveforms' height. */}
+        {segments.length > 1 && segments.length <= MAX_SEGMENT_BUTTONS && (
+          <div className="preview-segment-picks">
+            Aller à :
+            {segments.map((seg, i) => (
+              <button key={i} className="small-button" onClick={() => goToSegment(seg)}>
+                {segmentPickLabel(seg)}
+              </button>
+            ))}
+          </div>
+        )}
+        {segments.length > MAX_SEGMENT_BUTTONS && (
+          <label className="preview-segment-picks">
+            Aller à :
+            <select
+              value=""
+              onChange={(e) => {
+                const seg = segments[Number(e.target.value)];
+                if (seg) goToSegment(seg);
+              }}
+            >
+              <option value="">un segment ({segments.length})…</option>
+              {segments.map((seg, i) => (
+                <option key={i} value={i}>
+                  {i + 1}. {segmentPickLabel(seg)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {(removedHighlight.length > 0 || addedHighlight.length > 0) && (
+          <span className="waveform-legend">
+            <span>
+              <span className="waveform-legend-swatch removed" /> sera supprimé
+            </span>
+            <span>
+              <span className="waveform-legend-swatch added" /> sera ajouté (silence)
+            </span>
+          </span>
+        )}
       </div>
-
-      {(removedHighlight.length > 0 || addedHighlight.length > 0) && (
-        <div className="waveform-legend">
-          <span>
-            <span className="waveform-legend-swatch removed" /> sera supprimé
-          </span>
-          <span>
-            <span className="waveform-legend-swatch added" /> sera ajouté (silence)
-          </span>
-        </div>
-      )}
 
       {waveformError && <p className="error">{waveformError}</p>}
 
@@ -654,7 +684,7 @@ export function TrackPreview({
             onSeek={handleWaveformSeek}
             onZoom={zoomAt}
             highlights={removedHighlight}
-            label="Piste corrigée (originale)"
+            label="Piste à corriger (telle quelle)"
             className="waveform-candidate"
           />
           <Waveform
@@ -728,7 +758,7 @@ export function TrackPreview({
               })
             }
           />
-          Piste corrigée (originale)
+          Piste à corriger (telle quelle)
         </label>
         <label>
           <input
@@ -746,7 +776,7 @@ export function TrackPreview({
         </label>
         <span className="preview-offset">Décalage à cette position : {formatOffsetMs(appliedOffset)}</span>
         {hasContainerDelay && (
-          <span className="preview-offset" title="Le décalage ci-dessus (utilisé pour la lecture et l'export) est mesuré sur la piste brute, sans son délai de conteneur -- ce nombre est juste informatif.">
+          <span className="preview-offset" title="Le décalage ci-dessus (utilisé pour l'écoute et l'export) est mesuré sur la piste brute, sans le délai que le fichier lui applique déjà. Ce nombre est seulement informatif.">
             (dont {formatOffsetMs(trackStartTime)} déjà présents dans le conteneur pour cette piste ; décalage restant dans un lecteur ≈ {formatOffsetMs(presentationOffset)})
           </span>
         )}

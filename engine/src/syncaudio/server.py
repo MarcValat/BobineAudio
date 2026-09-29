@@ -16,7 +16,9 @@ progress instead of a frozen spinner.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+import threading
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import numpy as np
@@ -25,22 +27,40 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from syncaudio import analysis_cache, waveform_cache
+from syncaudio import analysis_cache, dsp, waveform_cache
+from syncaudio.cancellation import Cancelled
 from syncaudio.analysis_cache import ANALYSIS_SAMPLE_RATE
-from syncaudio.ffmpeg_backend import FFmpegError, extract_wav_clip, probe_audio_streams, probe_stream_start_time
+from syncaudio.ffmpeg_backend import (
+    FFmpegError,
+    extract_wav_clip,
+    probe_audio_streams,
+    probe_stream_start_time,
+    probe_subtitle_streams,
+)
 from syncaudio.jobs import get_job, start_job
 from syncaudio.models import AudioTrackSpec
 from syncaudio.render import (
     SegmentedTrackCorrection,
     TrackCorrection,
     corrected_clip,
+    default_output_path,
     plan_corrections,
     plan_segmented_correction,
     render as render_tracks,
 )
 from syncaudio.segments import DEFAULT_HOP_S, DEFAULT_MARGIN_S, DEFAULT_WINDOW_S, Segment, detect_segments
+from syncaudio.subtitles import is_shiftable
 
-app = FastAPI(title="SyncAudio", version="0.1.0")
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    # The computation libraries load in the background once the server is
+    # up: /health answers (and the app opens) right away, and they're ready
+    # well before anyone has picked a file to analyze.
+    threading.Thread(target=dsp.warm_up, name="syncaudio-warm-up", daemon=True).start()
+    yield
+
+
+app = FastAPI(title="SyncAudio", version="0.1.0", lifespan=_lifespan)
 
 # The sidecar only ever binds to 127.0.0.1 (see `syncaudio serve`), so it's
 # never reachable from outside the machine -- wide-open CORS here just lets
@@ -77,7 +97,7 @@ class JobStarted(BaseModel):
 
 @app.websocket("/jobs/{job_id}/ws")
 async def job_ws(websocket: WebSocket, job_id: str) -> None:
-    """Stream a job's progress messages as they happen, ending with its result or error."""
+    """Stream a job's progress messages as they happen, ending with its result, its error or its cancellation."""
     await websocket.accept()
     job = get_job(job_id)
     if job is None:
@@ -94,6 +114,8 @@ async def job_ws(websocket: WebSocket, job_id: str) -> None:
             if status != "running":
                 if status == "done":
                     await websocket.send_json({"type": "done", "result": result})
+                elif status == "cancelled":
+                    await websocket.send_json({"type": "cancelled"})
                 else:
                     await websocket.send_json({"type": "error", "message": error})
                 break
@@ -101,6 +123,32 @@ async def job_ws(websocket: WebSocket, job_id: str) -> None:
     except WebSocketDisconnect:
         return
     await websocket.close()
+
+
+@app.post("/jobs/{job_id}/cancel")
+def cancel_job(job_id: str) -> dict[str, bool]:
+    """Stop a running job (an export started too early...): its ffmpeg run is
+    killed and it ends as "cancelled", leaving no half-written file behind."""
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(404, f"Job inconnu : {job_id}")
+    job.cancel()
+    return {"cancelled": True}
+
+
+class PathsRequest(BaseModel):
+    paths: list[str]
+
+
+class PathsExistResponse(BaseModel):
+    exists: list[bool]
+
+
+@app.post("/paths/exist", response_model=PathsExistResponse)
+def paths_exist(req: PathsRequest) -> PathsExistResponse:
+    """Which of these paths are already taken, in order: the GUI names a
+    batch export after its original only where that overwrites nothing."""
+    return PathsExistResponse(exists=[Path(p).exists() for p in req.paths])
 
 
 class TrackInfo(BaseModel):
@@ -117,9 +165,21 @@ class TrackInfo(BaseModel):
     start_time: float
 
 
+class SubtitleInfo(BaseModel):
+    index: int  # among the file's subtitle tracks
+    codec: str
+    language: str | None
+    title: str | None
+    forced: bool
+    # Text subtitles (srt, ass/ssa) can be retimed segment by segment along
+    # with their audio; image ones (PGS, VobSub) can't.
+    shiftable: bool
+
+
 class ProbeResponse(BaseModel):
     path: str
     tracks: list[TrackInfo]
+    subtitles: list[SubtitleInfo] = []
 
 
 @app.get("/probe", response_model=ProbeResponse)
@@ -140,6 +200,17 @@ def probe(path: str) -> ProbeResponse:
                 start_time=probe_stream_start_time(path, s.index),
             )
             for s in streams
+        ],
+        subtitles=[
+            SubtitleInfo(
+                index=s.index,
+                codec=s.codec,
+                language=s.language,
+                title=s.title,
+                forced=s.forced,
+                shiftable=is_shiftable(s.codec),
+            )
+            for s in probe_subtitle_streams(path)
         ],
     )
 
@@ -344,6 +415,9 @@ class SegmentOverride(BaseModel):
 
     track: TrackRef
     segments: list[SegmentOut]
+    # Language to tag the corrected track with instead of its own -- for a
+    # track that has none (a bare .wav, .flac...) or a wrong one.
+    language: str | None = None
 
 
 class RenderRequest(BaseModel):
@@ -430,27 +504,25 @@ def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> Rend
             )
         subs_positions.append(candidate_keys.index(key))
 
-    if req.output_path is None:
-        stem = Path(req.input_path)
-        while stem.suffix:
-            stem = stem.with_suffix("")
-        output_path = str(stem) + ".synced.mkv"
-    else:
-        output_path = req.output_path
+    output_path = req.output_path if req.output_path is not None else default_output_path(req.input_path)
 
     try:
         if req.segmented:
-            overrides = {_track_key(o.track.to_spec()): o.segments for o in req.segment_overrides}
+            overrides = {_track_key(o.track.to_spec()): o for o in req.segment_overrides}
             seg_corrections: list[SegmentedTrackCorrection] = []
             for spec in candidates:
                 override = overrides.get(_track_key(spec))
                 if override is not None:
-                    idx = spec.stream_index if spec.stream_index is not None else 0
-                    streams = {s.index: s for s in probe_audio_streams(spec.path)}
-                    language = streams[idx].language if idx in streams else None
+                    language = override.language
+                    if language is None:
+                        idx = spec.stream_index if spec.stream_index is not None else 0
+                        streams = {s.index: s for s in probe_audio_streams(spec.path)}
+                        language = streams[idx].language if idx in streams else None
                     log(f"[segments] {spec.raw} : utilisation des segments fournis (édités manuellement)")
                     seg_corrections.append(
-                        SegmentedTrackCorrection(track=spec, language=language, segments=[s.to_segment() for s in override])
+                        SegmentedTrackCorrection(
+                            track=spec, language=language, segments=[s.to_segment() for s in override.segments]
+                        )
                     )
                 else:
                     seg_corrections.append(
@@ -487,6 +559,10 @@ def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> Rend
             ]
     except FFmpegError as exc:
         raise _http_error(exc) from exc
+    except Cancelled:
+        # Stopped midway: what's on disk is a truncated, unplayable file.
+        Path(output_path).unlink(missing_ok=True)
+        raise
 
     return RenderResponse(written=written, corrections=corrections_out)
 
