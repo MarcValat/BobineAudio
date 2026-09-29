@@ -25,7 +25,10 @@ import "./App.css";
 
 type EngineStatus = "starting" | "ready" | "unreachable";
 
-const HEALTH_POLL_ATTEMPTS = 40; // 40 * 500ms = 20s before giving up
+// Asked often, so the app opens as soon as the engine answers (it's up in
+// about a second); a tiny local request, only while starting.
+const HEALTH_POLL_INTERVAL_MS = 100;
+const HEALTH_POLL_ATTEMPTS = 200; // 200 * 100ms = 20s before giving up
 
 /**
  * Per-track analysis + export state, keyed by track index. There used to be
@@ -96,7 +99,7 @@ function App() {
         if (!cancelled) setEngineStatus("unreachable");
         return;
       }
-      if (!cancelled) setTimeout(poll, 500);
+      if (!cancelled) setTimeout(poll, HEALTH_POLL_INTERVAL_MS);
     }
     poll();
     return () => {
