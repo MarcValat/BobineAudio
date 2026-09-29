@@ -2,6 +2,9 @@
    these instead of hardcoding colors, so light/dark mode is just a second
    definition of the same variables (see the @media block at the bottom). */
 :root {
+  /* Native widgets (select popups, their scrollbars, checkboxes...) follow
+     the app's theme instead of staying light in dark mode. */
+  color-scheme: light dark;
   --accent: #396cd8;
   --accent-hover: #2f5ab8;
   --accent-fg: #ffffff;
@@ -73,6 +76,33 @@ body,
 
 *:hover {
   scrollbar-color: var(--scrollbar-thumb-hover) transparent;
+}
+
+/* The same look for a WebView2 older than Chromium 121, which ignores the
+   standard properties above (newer ones ignore these instead). */
+@supports not (scrollbar-color: auto) {
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+  }
+
+  ::-webkit-scrollbar-button {
+    display: none;
+  }
 }
 
 html,
