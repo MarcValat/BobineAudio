@@ -359,6 +359,7 @@ export function MultiTrackBatch({
               setTargetLanguages((t) => t.filter((l) => l !== lang));
             }}
             extra={languages}
+            onlyExtra
             emptyLabel="—"
             disabled={busy}
           />

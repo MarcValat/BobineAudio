@@ -122,22 +122,27 @@ export function languageLabel(code: string | null): string {
   return name ? `${name} (${code})` : code;
 }
 
-/** A language picker: the usual ones, plus any the files at hand use.
- * `emptyLabel` names the "" choice (keep the track's own, pick none...). */
+/** A language picker: the ones the files at hand use (`extra`), plus the
+ * usual ones unless `onlyExtra` -- to pick among what's there, not to tag
+ * a track with a new one. `emptyLabel` names the "" choice (keep the
+ * track's own, pick none...). */
 export function LanguageSelect({
   value,
   onChange,
   extra = [],
+  onlyExtra = false,
   emptyLabel,
   disabled,
 }: {
   value: string;
   onChange: (code: string) => void;
   extra?: (string | null)[];
+  onlyExtra?: boolean;
   emptyLabel?: string;
   disabled?: boolean;
 }) {
-  const codes = [...new Set([...extra.filter((c): c is string => !!c), ...Object.keys(LANGUAGE_NAMES)])];
+  const found = extra.filter((c): c is string => !!c);
+  const codes = [...new Set(onlyExtra ? found : [...found, ...Object.keys(LANGUAGE_NAMES)])];
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
       {emptyLabel !== undefined && <option value="">{emptyLabel}</option>}
