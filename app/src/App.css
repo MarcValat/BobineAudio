@@ -16,6 +16,8 @@
   --radius: 12px;
   --radius-sm: 8px;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.05);
+  --scrollbar-thumb: rgba(15, 15, 15, 0.22);
+  --scrollbar-thumb-hover: rgba(15, 15, 15, 0.4);
 
   /* Native system-font stacks, not a webfont: this is a desktop app (no
      network dependency to resolve correctly), and "Inter, Avenir, ..."
@@ -52,6 +54,18 @@
    elements. */
 * {
   overscroll-behavior: none;
+}
+
+/* Scrollbars in the app's palette (the lists that scroll, the editor's
+   table...): thin, on a transparent track, a bit stronger under the
+   pointer. The standard properties, which WebView2's Chromium honors. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+*:hover {
+  scrollbar-color: var(--scrollbar-thumb-hover) transparent;
 }
 
 html,
@@ -662,5 +676,7 @@ button:focus-visible {
     --text-muted: rgba(242, 242, 242, 0.6);
     --danger: #ff6b6b;
     --success: #57c785;
+    --scrollbar-thumb: rgba(255, 255, 255, 0.2);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.38);
   }
 }

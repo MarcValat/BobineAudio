@@ -169,7 +169,7 @@ function FileCell({
             disabled={disabled || index === 0}
             title="Monter"
           >
-            {"↑︎"}
+            {"\u2191\uFE0E"}
           </button>
           <button
             className="small-button"
@@ -177,7 +177,7 @@ function FileCell({
             disabled={disabled || index === files.length - 1}
             title="Descendre"
           >
-            {"↓︎"}
+            {"\u2193\uFE0E"}
           </button>
           <button
             className="small-button"
