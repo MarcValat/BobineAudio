@@ -653,6 +653,19 @@ button:focus-visible {
   color: var(--text-muted);
 }
 
+/* A short window leaves the analyzed tracks too little room: the summary
+   keeps two lines, the rest in its tooltip. */
+@media (max-height: 700px) {
+  .export-summary {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
 .export-written {
   display: flex;
   flex-wrap: wrap;

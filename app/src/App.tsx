@@ -294,6 +294,18 @@ function App() {
   const exportReferences = [...new Set(exportTracks.map((t) => analyses[t.index].referenceIndex))];
   const exportReference = exportReferences.length === 1 ? exportReferences[0] : null;
   const exportReferenceTrack = tracks?.find((t) => t.index === exportReference);
+  const plural = (n: number, one: string, many: string) => (n > 1 ? many : one);
+  const exportSummary =
+    exportReferenceTrack &&
+    `Contiendra la vidéo, la référence @${exportReferenceTrack.index} (${exportReferenceTrack.language ?? "?"}), ${plural(
+      exportTracks.length,
+      "la piste corrigée",
+      "les pistes corrigées",
+    )} ${exportTracks.map((t) => `@${t.index} (${t.language ?? "?"})`).join(", ")} et les sous-titres${
+      retimedSubs.length > 0
+        ? ` (${retimedSubs.map((i) => `@${i}`).join(", ")} ${plural(retimedSubs.length, "recalé", "recalés")} avec l'audio)`
+        : ""
+    }.${(tracks?.length ?? 0) > exportTracks.length + 1 ? " Les autres pistes audio ne sont pas incluses." : ""}`;
 
   function toggleExportTrack(index: number) {
     setExportExcluded((current) => (current.includes(index) ? current.filter((i) => i !== index) : [...current, index]));
@@ -577,16 +589,9 @@ function App() {
                     référence pour les exporter ensemble.
                   </p>
                 )}
-                {exportReferenceTrack && (
-                  <p className="export-summary">
-                    Contiendra la vidéo, la référence @{exportReferenceTrack.index} ({exportReferenceTrack.language ?? "?"}),{" "}
-                    {exportTracks.length > 1 ? "les pistes corrigées" : "la piste corrigée"}{" "}
-                    {exportTracks.map((t) => `@${t.index} (${t.language ?? "?"})`).join(", ")} et les sous-titres
-                    {retimedSubs.length > 0 &&
-                      ` (piste${retimedSubs.length > 1 ? "s" : ""} de sous-titres ${retimedSubs.map((i) => `@${i}`).join(", ")} recalée${
-                        retimedSubs.length > 1 ? "s" : ""
-                      } avec l'audio)`}
-                    .{tracks.length > exportTracks.length + 1 && " Les autres pistes audio ne sont pas incluses."}
+                {exportSummary && (
+                  <p className="export-summary" title={exportSummary}>
+                    {exportSummary}
                   </p>
                 )}
                 <LogPanel lines={exportState.log} />
