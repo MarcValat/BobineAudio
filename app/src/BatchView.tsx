@@ -141,7 +141,8 @@ function TrackPicker({ label, tracks, loading, error, value, onChange }: TrackPi
 
 /** One file of a pair, with the buttons that move it within its column (so
  * it pairs with another row) or drop it. A dash when its column is shorter
- * than the other one. */
+ * than the other one. The arrows carry U+FE0E, which asks for the plain
+ * text glyph: Windows may otherwise draw them as colored emoji. */
 function FileCell({
   files,
   index,
@@ -168,7 +169,7 @@ function FileCell({
             disabled={disabled || index === 0}
             title="Monter"
           >
-            ↑
+            {"↑︎"}
           </button>
           <button
             className="small-button"
@@ -176,7 +177,7 @@ function FileCell({
             disabled={disabled || index === files.length - 1}
             title="Descendre"
           >
-            ↓
+            {"↓︎"}
           </button>
           <button
             className="small-button"
@@ -468,12 +469,6 @@ export function BatchView({ hidden }: { hidden: boolean }) {
       <section className="panel batch-jobs">
         <div className="batch-jobs-header">
           <h2>Paires</h2>
-          <button className="small-button" onClick={() => addFiles(setReferenceFiles)} disabled={busy}>
-            + Références
-          </button>
-          <button className="small-button" onClick={() => addFiles(setCandidateFiles)} disabled={busy}>
-            + Fichiers à corriger
-          </button>
           <button
             className="small-button"
             onClick={() => {
@@ -492,90 +487,119 @@ export function BatchView({ hidden }: { hidden: boolean }) {
           </InfoTip>
         </div>
 
-        {rowCount === 0 ? (
-          <p className="placeholder">Ajoute les fichiers de référence et les fichiers à corriger, un par épisode.</p>
-        ) : (
-          <div className="batch-table-wrap list-scroll">
-            <table>
-              <colgroup>
-                <col className="batch-col-index" />
-                <col />
-                <col />
-                <col className="batch-col-status" />
-                <col className="batch-col-status" />
-                <col className="batch-col-actions" />
-              </colgroup>
-              <thead>
+        {/* Always shown, even empty: its column headers hold the buttons that
+            add files to each column. */}
+        <div className="batch-table-wrap list-scroll">
+          <table>
+            <colgroup>
+              <col className="batch-col-index" />
+              <col />
+              <col />
+              <col className="batch-col-status" />
+              <col className="batch-col-status" />
+              <col className="batch-col-actions" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th className="batch-index">#</th>
+                <th>
+                  <div className="batch-th-add">
+                    <span>Référence</span>
+                    <button
+                      className="small-button"
+                      onClick={() => addFiles(setReferenceFiles)}
+                      disabled={busy}
+                      title="Ajouter des fichiers de référence (piste jamais modifiée, ex. VO), un par épisode"
+                    >
+                      + Ajouter
+                    </button>
+                  </div>
+                </th>
+                <th>
+                  <div className="batch-th-add">
+                    <span>À corriger</span>
+                    <button
+                      className="small-button"
+                      onClick={() => addFiles(setCandidateFiles)}
+                      disabled={busy}
+                      title="Ajouter des fichiers dont la piste est à resynchroniser (ex. VF), un par épisode"
+                    >
+                      + Ajouter
+                    </button>
+                  </div>
+                </th>
+                <th>Analyse</th>
+                <th>Export</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rowCount === 0 && (
                 <tr>
-                  <th className="batch-index">#</th>
-                  <th>Référence</th>
-                  <th>À corriger</th>
-                  <th>Analyse</th>
-                  <th>Export</th>
-                  <th></th>
+                  <td colSpan={6} className="placeholder">
+                    Ajoute les fichiers de référence et les fichiers à corriger, un par épisode.
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: rowCount }, (_, i) => {
-                  const a = analyses[i];
-                  const written = a?.exportResult?.written[0];
-                  return (
-                    <tr key={i} className={i >= pairCount ? "batch-row-unpaired" : undefined}>
-                      <td className="batch-index">{i + 1}</td>
-                      <FileCell
-                        files={referenceFiles}
-                        index={i}
-                        disabled={busy}
-                        onChange={(update) => editList(setReferenceFiles, update)}
-                      />
-                      <FileCell
-                        files={candidateFiles}
-                        index={i}
-                        disabled={busy}
-                        onChange={(update) => editList(setCandidateFiles, update)}
-                      />
-                      <td className={`batch-status batch-status-${a?.status ?? "pending"}`}>
-                        {!a && (i < pairCount ? "—" : "⚠ Sans paire")}
-                        {a?.status === "pending" && "En attente"}
-                        {a?.status === "running" && "Analyse en cours..."}
-                        {a?.status === "done" && a.result && describeSegments(a.result.segments)}
-                        {a?.status === "error" && (a.error ?? "Erreur")}
-                        {/* Only while it runs (progress) or when it failed (why): a
-                            done row stays one line. */}
-                        {a && (a.status === "running" || a.status === "error") && <LogPanel lines={a.log} />}
-                      </td>
-                      <td className={`batch-status batch-status-${!a || a.exportStatus === "idle" ? "pending" : a.exportStatus}`}>
-                        {(!a || a.exportStatus === "idle") && "—"}
-                        {a?.exportStatus === "running" && "Export en cours..."}
-                        {a?.exportStatus === "done" && written && (
-                          <span title={written}>{basename(written)}</span>
-                        )}
-                        {a?.exportStatus === "error" && (a.exportError ?? "Erreur")}
-                        {a && (a.exportStatus === "running" || a.exportStatus === "error") && (
-                          <LogPanel lines={a.exportLog} />
-                        )}
-                      </td>
-                      <td className="batch-row-actions">
-                        <button
-                          className="small-button"
-                          onClick={() => setEditingPairIndex(i)}
-                          disabled={a?.status !== "done" || !a.result}
-                        >
-                          Modifier
+              )}
+              {Array.from({ length: rowCount }, (_, i) => {
+                const a = analyses[i];
+                const written = a?.exportResult?.written[0];
+                return (
+                  <tr key={i} className={i >= pairCount ? "batch-row-unpaired" : undefined}>
+                    <td className="batch-index">{i + 1}</td>
+                    <FileCell
+                      files={referenceFiles}
+                      index={i}
+                      disabled={busy}
+                      onChange={(update) => editList(setReferenceFiles, update)}
+                    />
+                    <FileCell
+                      files={candidateFiles}
+                      index={i}
+                      disabled={busy}
+                      onChange={(update) => editList(setCandidateFiles, update)}
+                    />
+                    <td className={`batch-status batch-status-${a?.status ?? "pending"}`}>
+                      {!a && (i < pairCount ? "—" : "⚠ Sans paire")}
+                      {a?.status === "pending" && "En attente"}
+                      {a?.status === "running" && "Analyse en cours..."}
+                      {a?.status === "done" && a.result && describeSegments(a.result.segments)}
+                      {a?.status === "error" && (a.error ?? "Erreur")}
+                      {/* Only while it runs (progress) or when it failed (why): a
+                          done row stays one line. */}
+                      {a && (a.status === "running" || a.status === "error") && <LogPanel lines={a.log} />}
+                    </td>
+                    <td className={`batch-status batch-status-${!a || a.exportStatus === "idle" ? "pending" : a.exportStatus}`}>
+                      {(!a || a.exportStatus === "idle") && "—"}
+                      {a?.exportStatus === "running" && "Export en cours..."}
+                      {a?.exportStatus === "done" && written && (
+                        <span title={written}>{basename(written)}</span>
+                      )}
+                      {a?.exportStatus === "error" && (a.exportError ?? "Erreur")}
+                      {a && (a.exportStatus === "running" || a.exportStatus === "error") && (
+                        <LogPanel lines={a.exportLog} />
+                      )}
+                    </td>
+                    <td className="batch-row-actions">
+                      <button
+                        className="small-button"
+                        onClick={() => setEditingPairIndex(i)}
+                        disabled={a?.status !== "done" || !a.result}
+                      >
+                        Modifier
+                      </button>
+                      {written && (
+                        <button className="small-button" title="Ouvrir le dossier du fichier écrit" onClick={() => revealItemInDir(written)}>
+                          Dossier
                         </button>
-                        {written && (
-                          <button className="small-button" title="Ouvrir le dossier du fichier écrit" onClick={() => revealItemInDir(written)}>
-                            Dossier
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <div className="batch-footer panel">

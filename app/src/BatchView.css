@@ -112,6 +112,12 @@
   border-bottom: 1px solid var(--border);
 }
 
+/* Vertical rules between columns, for reading a wide row across. */
+.batch-table-wrap th + th,
+.batch-table-wrap td + td {
+  border-left: 1px solid var(--border);
+}
+
 .batch-table-wrap tr:last-child td {
   border-bottom: none;
 }
@@ -158,6 +164,20 @@
 
 .batch-file-actions button {
   padding: 0.1em 0.4em;
+}
+
+/* A column's name with its "+ Ajouter" button. */
+.batch-th-add {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+}
+
+.batch-th-add button {
+  padding: 0.15em 0.6em;
+  font-size: 1.15em;
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .batch-file-missing {
