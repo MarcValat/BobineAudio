@@ -192,7 +192,9 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Option<Child> {
             }
         }
     } else {
-        let exe = match app.path().resolve("engine/syncaudio-engine.exe", BaseDirectory::Resource) {
+        // ".exe" on Windows, no extension on Linux.
+        let name = format!("engine/syncaudio-engine{}", std::env::consts::EXE_SUFFIX);
+        let exe = match app.path().resolve(name, BaseDirectory::Resource) {
             Ok(path) => path,
             Err(err) => {
                 eprintln!("[sidecar] moteur introuvable : {}", err);
