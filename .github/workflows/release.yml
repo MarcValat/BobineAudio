@@ -101,9 +101,8 @@ jobs:
       # they only need to show the build works.
       CARGO_PROFILE_RELEASE_LTO: ${{ startsWith(github.ref, 'refs/tags/v') && 'fat' || 'thin' }}
       CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '16' }}
-      # AppImage: linuxdeploy's own (old) strip fails on the engine's
-      # recently built libraries (Python, numpy, scipy); unstripped, they
-      # just take a little more room.
+      # AppImage: linuxdeploy leaves the engine's libraries (Python, numpy,
+      # scipy) exactly as PyInstaller built them instead of stripping them.
       NO_STRIP: "true"
     steps:
       - uses: actions/checkout@v7
@@ -155,6 +154,19 @@ jobs:
       - name: Install frontend dependencies
         working-directory: app
         run: npm ci
+
+      # linuxdeploy (AppImage) walks every library in the bundle, the
+      # engine's included, and looks for each one's dependencies next to it.
+      # PyInstaller puts a copy of scipy's libgfortran at the engine's root
+      # while its own dependency (libquadmath) stays in scipy.libs: fine at
+      # run time, where scipy loads them from there, but linuxdeploy fails
+      # with "Could not find dependency". It does search LD_LIBRARY_PATH.
+      - name: Let linuxdeploy find the engine's bundled libraries
+        if: runner.os == 'Linux'
+        run: |
+          dirs=$(find "$PWD/app/src-tauri/binaries/syncaudio-engine/_internal" -maxdepth 1 -type d -name '*.libs' | paste -sd: -)
+          echo "LD_LIBRARY_PATH=$dirs" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$dirs"
 
       # If a "STATIC_VCRUNTIME is deprecated" warning still shows up here on
       # Windows, that's expected and harmless -- confirmed (by comparing a
