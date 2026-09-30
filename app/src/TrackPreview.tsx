@@ -7,6 +7,7 @@ import { formatOffsetMs, formatTime, segmentOffsetLabel } from "./SegmentChart";
 import { Waveform, type HighlightRegion } from "./Waveform";
 import { WaveformNavigator } from "./WaveformNavigator";
 import { errorMessage } from "./util";
+import { MinusIcon, PlusIcon } from "./icons";
 
 const PREVIEW_DURATION_S = 12;
 const WAVEFORM_BUCKETS = 800;
@@ -600,14 +601,10 @@ export function TrackPreview({
         <div className="waveform-zoom-controls">
           <span>Zoom :</span>
           <button className="small-button zoom-button" title="Zoomer" aria-label="Zoomer" onClick={() => zoomAt(0.5, previewStart)}>
-            <svg viewBox="0 0 12 12" aria-hidden="true">
-              <path d="M6 1.5v9M1.5 6h9" />
-            </svg>
+            <PlusIcon />
           </button>
           <button className="small-button zoom-button" title="Dézoomer" aria-label="Dézoomer" onClick={() => zoomAt(2, previewStart)}>
-            <svg viewBox="0 0 12 12" aria-hidden="true">
-              <path d="M1.5 6h9" />
-            </svg>
+            <MinusIcon />
           </button>
           <button className="small-button" onClick={resetZoom}>
             Piste entière

@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import { devParam, errorMessage } from "./util";
+import { DownloadIcon } from "./icons";
 
 // "error": the download failed, the app still works; "failed": the install
 // did, after the engine was stopped.
@@ -139,11 +140,7 @@ export function UpdateButton() {
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
       >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 3v11" />
-          <path d="M7.5 9.5 12 14l4.5-4.5" />
-          <path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
-        </svg>
+        <DownloadIcon />
         <span className="update-dot" aria-hidden="true" />
       </button>
       {open && (
