@@ -1,12 +1,14 @@
+English | [Français](README.fr.md)
+
 # SyncAudio
 
-Resynchronise les pistes audio d'un contenu multi-langues (ex. un MKV avec plusieurs doublages) en se basant sur la musique et les bruitages communs, plutôt que sur les dialogues. Gère aussi bien un simple décalage constant qu'une dérive progressive ou des sauts (montage différent), avec aperçu visuel et sonore avant export.
+Resynchronizes the audio tracks of multi-language content (e.g. an MKV with several dubs) from the music and sound effects they share, rather than from the dialogue. Handles a simple constant offset as well as progressive drift or jumps (a different cut), with a visual and audio preview before export.
 
-## Structure du repo
+## Repository layout
 
-- [`engine/`](engine/README.md) — moteur Python (détection, correction/rendu, sidecar HTTP) ; utilisable seul en CLI ou comme serveur local pour l'app.
-- `app/` — GUI standalone (Tauri + React/TypeScript) : ouverture de fichier (unique ou par lot), sélection des pistes, aperçu waveform/audio avant export, édition manuelle des segments détectés, mise à jour automatique.
+- [`engine/`](engine/README.md) — Python engine (detection, correction/render, HTTP sidecar); usable on its own as a CLI or as the app's local server. Its documentation is in French.
+- `app/` — standalone GUI (Tauri + React/TypeScript): opening files (one at a time or in batches, drag and drop included), picking tracks, waveform/audio preview before export, editing the detected segments by hand, automatic updates. UI in English and French.
 
-## Statut
+## Status
 
-Fonctionnel de bout en bout : moteur (détection constante/dérive/sauts, rendu, sidecar HTTP), GUI (analyse, aperçu, édition manuelle, export) et mode batch (traiter toute une série en une passe). Empaqueté en installateur Windows avec mise à jour automatique — voir `app/README.md` pour compiler/publier une release. Voir `engine/README.md` pour l'usage détaillé du CLI et de l'API HTTP.
+Working end to end: engine (constant/drift/jump detection, render, HTTP sidecar), GUI (analysis, preview, manual editing, export) and batch mode (a whole series in one pass). Packaged as a Windows installer with automatic updates — see `app/README.md` (in French) to build and publish a release, and `engine/README.md` for detailed CLI and HTTP API usage.
