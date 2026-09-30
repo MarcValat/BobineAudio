@@ -252,6 +252,36 @@ def prefetch(
         get_envelope(spec, sample_rate, start, duration, log=log)
 
 
+def disk_usage() -> int:
+    """Bytes the on-disk cache takes (Options shows it)."""
+    directory = cache_dir()
+    if directory is None:
+        return 0
+    total = 0
+    for p in directory.glob("*.npy"):
+        try:
+            total += p.stat().st_size
+        except OSError:
+            pass
+    return total
+
+
+def clear_disk() -> None:
+    """Delete every analysis kept on disk, and in memory (Options' "Vider"):
+    the next analysis of each track redoes the work. An analysis running
+    meanwhile finishes normally and stores its result as usual."""
+    directory = cache_dir()
+    with _lock:
+        _cache.clear()
+    if directory is None:
+        return
+    for p in directory.glob("*.npy"):
+        try:
+            p.unlink()
+        except OSError:
+            pass  # in use: left for the next prune
+
+
 def clear() -> None:
     """Drop every in-memory entry (mainly for tests, to avoid cross-test leakage)."""
     with _lock:

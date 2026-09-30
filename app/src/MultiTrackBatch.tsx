@@ -27,6 +27,7 @@ import { Dialog, DialogHeader } from "./Dialog";
 import { TrackTable } from "./TrackTable";
 import { SubtitleChecks } from "./SubtitleChecks";
 import { t, useT } from "./i18n";
+import { useSubtitleDefault } from "./settings";
 
 interface FileProbe {
   tracks: TrackInfo[] | null;
@@ -193,7 +194,10 @@ export function MultiTrackBatch({
   const [referenceLanguage, setReferenceLanguage] = useState("");
   const [targetLanguages, setTargetLanguages] = useState<string[]>([]);
   const [choices, setChoices] = useState<Record<string, TrackChoice>>({});
-  const [subsMode, setSubsMode] = useState<SubtitleMode>("forced");
+  // Starts as the default setting (Options), and follows it when it changes.
+  const subtitleDefault = useSubtitleDefault();
+  const [subsMode, setSubsMode] = useState<SubtitleMode>(subtitleDefault);
+  useEffect(() => setSubsMode(subtitleDefault), [subtitleDefault]);
   const [runs, setRuns] = useState<Record<string, FileRun>>({});
   const [analyzing, setAnalyzing] = useState(false);
   const queue = useExportQueue(outputDir);

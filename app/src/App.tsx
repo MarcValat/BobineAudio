@@ -33,6 +33,7 @@ import { SubtitleChecks } from "./SubtitleChecks";
 import { JobCancelled, runJob } from "./jobs";
 import { DropOverlay, useFileDrop } from "./FileDrop";
 import { useLanguage, useT } from "./i18n";
+import { useSubtitleDefault } from "./settings";
 
 type EngineStatus = "starting" | "ready" | "unreachable";
 
@@ -279,11 +280,13 @@ function App() {
   const analyzedTracks = (tracks ?? []).filter((t) => analyses[t.index]);
   const exportableTracks = analyzedTracks.filter((t) => analyses[t.index].result);
   // The subtitle tracks retimed with each analyzed track: those picked by
-  // hand, or by default its language's forced ones. One subtitle track goes
-  // with one audio track at most (the first to claim it).
+  // hand, or per the default setting (Options; its language's forced ones
+  // unless changed). One subtitle track goes with one audio track at most
+  // (the first to claim it).
+  const subtitleDefault = useSubtitleDefault();
   const subsByTrack = assignSubtitles(
     analyzedTracks,
-    (t) => subsChoice[t.index] ?? subtitlesFor(subtitles, t.language, "forced"),
+    (t) => subsChoice[t.index] ?? subtitlesFor(subtitles, t.language, subtitleDefault),
   );
   const exportTracks = exportableTracks.filter((t) => !exportExcluded.includes(t.index));
   const retimedSubs = exportTracks.flatMap((t) => subsByTrack[t.index] ?? []);

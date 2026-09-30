@@ -47,6 +47,19 @@ export const en: Messages = {
     language: "Language",
     systemLanguage: "System",
     languageHint: "“System” follows Windows' language: French if it's in French, English otherwise.",
+    subtitles: "Default subtitles",
+    subtitlesHint:
+      "The subtitles retimed with a corrected audio track unless picked otherwise: ticked by default in single-file mode, the batch modes' starting setting.",
+    updates: "Updates",
+    checkUpdates: "Check at startup",
+    updatesHint: "At launch, the app asks GitHub whether a new version exists; nothing is installed without your consent.",
+    cache: "Analysis cache",
+    cacheSize: (megabytes) => (megabytes < 1 ? "less than 1 MB" : `${megabytes} MB`),
+    cacheEmpty: "empty",
+    clearCache: "Clear",
+    clearingCache: "Clearing...",
+    cacheHint:
+      "Analyses already made are kept on disk (512 MB at most), so reopening an analyzed file is instant. Clearing it frees the space; files are just analyzed again.",
   },
 
   update: {
@@ -128,9 +141,9 @@ export const en: Messages = {
     unreliable: "unreliable",
     cut: (amount) => `${amount} cut`,
     silence: (amount) => `${amount} of silence`,
-    segments: (n) => `${n} segment${n > 1 ? "s" : ""}`,
-    jumps: (n) => `${n} jump${n > 1 ? "s" : ""}`,
-    drifts: (n) => `${n} drift${n > 1 ? "s" : ""}`,
+    segments: (n) => `${n} segment${n === 1 ? "" : "s"}`,
+    jumps: (n) => `${n} jump${n === 1 ? "" : "s"}`,
+    drifts: (n) => `${n} drift${n === 1 ? "" : "s"}`,
     unreliableCount: (n) => `${n} unreliable`,
   },
 
@@ -224,8 +237,8 @@ export const en: Messages = {
     choose: "Choose",
     byLanguage: "By language",
     byLanguageHint: "Go back to picking by language",
-    progressFiles: (n) => `${n} file${n > 1 ? "s" : ""}`,
-    progressAnalyzed: (done, total) => ` · ${done}/${total} track${total > 1 ? "s" : ""} analyzed`,
+    progressFiles: (n) => `${n} file${n === 1 ? "" : "s"}`,
+    progressAnalyzed: (done, total) => ` · ${done}/${total} track${total === 1 ? "" : "s"} analyzed`,
     progressExported: (n) => ` · ${n} exported`,
     progressFlagged: (n) => ` · ⚠ ${n} to check`,
   },
@@ -250,10 +263,10 @@ export const en: Messages = {
     addCandidateHint: "Add files whose track needs resynchronizing (e.g. a dub), one per episode",
     empty: "Add the reference files and the files to correct, one per episode.",
     unpaired: "⚠ No pair",
-    progressPairs: (n) => `${n} pair${n > 1 ? "s" : ""}`,
+    progressPairs: (n) => `${n} pair${n === 1 ? "" : "s"}`,
     progressAnalyzed: (done, total) => ` · ${done}/${total} analyzed`,
     progressExported: (n) => ` · ${n} exported`,
-    progressUnpaired: (n) => ` · ${n} file${n > 1 ? "s" : ""} without a pair`,
+    progressUnpaired: (n) => ` · ${n} file${n === 1 ? "" : "s"} without a pair`,
   },
 
   editor: {
