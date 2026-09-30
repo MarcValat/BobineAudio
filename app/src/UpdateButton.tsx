@@ -5,6 +5,7 @@ import { check } from "@tauri-apps/plugin-updater";
 import { devParam, errorMessage } from "./util";
 import { DownloadIcon } from "./icons";
 import { useT } from "./i18n";
+import { useCheckUpdates } from "./settings";
 
 // "error": the download failed, the app still works; "failed": the install
 // did, after the engine was stopped.
@@ -48,8 +49,10 @@ export function UpdateButton() {
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
+  // Off in Options: no request to GitHub at all.
+  const checkUpdates = useCheckUpdates();
   useEffect(() => {
-    if (devUpdate()) return;
+    if (devUpdate() || !checkUpdates) return;
     let cancelled = false;
     check()
       .then((result) => {
@@ -64,7 +67,7 @@ export function UpdateButton() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [checkUpdates]);
 
   // The menu closes on a click elsewhere or Escape.
   useEffect(() => {
@@ -121,7 +124,7 @@ export function UpdateButton() {
     }
   }
 
-  if (phase === "idle" || !update) return null;
+  if (phase === "idle" || !update || (phase === "available" && !checkUpdates && !devUpdate())) return null;
 
   const percent = progress.total ? Math.round((progress.downloaded / progress.total) * 100) : null;
   const busy = phase === "downloading" || phase === "ready";

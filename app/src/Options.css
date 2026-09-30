@@ -1,20 +1,42 @@
 /* The Options dialog (see Options.tsx). */
 .options-panel {
-  max-width: 28em;
+  max-width: 34em;
 }
 
-/* One setting per row: its name, its control, its explanation tooltip. */
-.options-row {
-  display: flex;
+/* One setting per row: its name, then its control with its explanation
+   tooltip right after it -- names and controls each in their own column. */
+.options-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 1em;
+  row-gap: 0.75em;
+}
+
+.options-grid > label,
+.options-name {
+  font-weight: 600;
+}
+
+.options-control {
+  display: inline-flex;
   align-items: center;
   gap: 0.6em;
 }
 
-.options-row + .options-row {
-  margin-top: 0.75em;
+.options-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
 }
 
-.options-row label {
-  min-width: 5em;
-  font-weight: 600;
+.options-cache {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+}
+
+.options-cache-size {
+  color: var(--text-muted);
+  white-space: nowrap;
 }

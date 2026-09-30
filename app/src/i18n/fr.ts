@@ -48,6 +48,19 @@ export const fr = {
     language: "Langue",
     systemLanguage: "Système",
     languageHint: "« Système » suit la langue de Windows : français s'il est en français, anglais sinon.",
+    subtitles: "Sous-titres par défaut",
+    subtitlesHint:
+      "Les sous-titres recalés avec une piste audio corrigée, sauf choix contraire : cochés d'office en fichier unique, réglage de départ des modes batch.",
+    updates: "Mises à jour",
+    checkUpdates: "Vérifier au démarrage",
+    updatesHint: "Au lancement, l'application demande à GitHub si une nouvelle version existe ; rien n'est installé sans ton accord.",
+    cache: "Cache d'analyse",
+    cacheSize: (megabytes: number) => (megabytes < 1 ? "moins de 1 Mo" : `${megabytes} Mo`),
+    cacheEmpty: "vide",
+    clearCache: "Vider",
+    clearingCache: "Suppression...",
+    cacheHint:
+      "Les analyses déjà faites sont gardées sur le disque (512 Mo au plus) : rouvrir un fichier déjà analysé est alors immédiat. Le vider libère la place ; les fichiers seront simplement réanalysés.",
   },
 
   update: {

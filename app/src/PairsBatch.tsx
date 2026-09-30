@@ -26,6 +26,7 @@ import { devParam, errorMessage } from "./util";
 import { Dialog, DialogHeader } from "./Dialog";
 import { TrackTable } from "./TrackTable";
 import { useT } from "./i18n";
+import { useSubtitleDefault } from "./settings";
 
 
 /** One pair's analysis and export. */
@@ -233,7 +234,10 @@ export function PairsBatch({
   // "" keeps the corrected track's own language; a code tags it with that one
   // instead (a bare .wav has none).
   const [candidateLanguage, setCandidateLanguage] = useState("");
-  const [subsMode, setSubsMode] = useState<SubtitleMode>("forced");
+  // Starts as the default setting (Options), and follows it when it changes.
+  const subtitleDefault = useSubtitleDefault();
+  const [subsMode, setSubsMode] = useState<SubtitleMode>(subtitleDefault);
+  useEffect(() => setSubsMode(subtitleDefault), [subtitleDefault]);
   // Keyed by what each analysis was made of (see pairKey), not by row: moving
   // files, adding more or picking other tracks never shows a pair another
   // pair's analysis, and one that comes back finds its own again.

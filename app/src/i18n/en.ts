@@ -47,6 +47,19 @@ export const en: Messages = {
     language: "Language",
     systemLanguage: "System",
     languageHint: "“System” follows Windows' language: French if it's in French, English otherwise.",
+    subtitles: "Default subtitles",
+    subtitlesHint:
+      "The subtitles retimed with a corrected audio track unless picked otherwise: ticked by default in single-file mode, the batch modes' starting setting.",
+    updates: "Updates",
+    checkUpdates: "Check at startup",
+    updatesHint: "At launch, the app asks GitHub whether a new version exists; nothing is installed without your consent.",
+    cache: "Analysis cache",
+    cacheSize: (megabytes) => (megabytes < 1 ? "less than 1 MB" : `${megabytes} MB`),
+    cacheEmpty: "empty",
+    clearCache: "Clear",
+    clearingCache: "Clearing...",
+    cacheHint:
+      "Analyses already made are kept on disk (512 MB at most), so reopening an analyzed file is instant. Clearing it frees the space; files are just analyzed again.",
   },
 
   update: {

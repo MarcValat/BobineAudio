@@ -85,6 +85,20 @@ export async function probe(path: string): Promise<ProbeResponse> {
   return resp.json();
 }
 
+/** How many bytes the engine's analysis cache takes on disk. */
+export async function getCacheSize(): Promise<number> {
+  const resp = await fetch(`${BASE_URL}/cache`);
+  if (!resp.ok) throw new Error(await readErrorDetail(resp));
+  return (await resp.json()).bytes;
+}
+
+/** Empties the analysis cache; resolves to what's left, in bytes. */
+export async function clearCache(): Promise<number> {
+  const resp = await fetch(`${BASE_URL}/cache`, { method: "DELETE" });
+  if (!resp.ok) throw new Error(await readErrorDetail(resp));
+  return (await resp.json()).bytes;
+}
+
 /** The language of the engine's messages (job logs, errors). */
 export async function setEngineLanguage(language: string): Promise<void> {
   const resp = await fetch(`${BASE_URL}/language`, {
