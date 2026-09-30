@@ -1,0 +1,41 @@
+/* The Options dialog (see Options.tsx), over the whole app like the batch dialogs. */
+.options-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  padding: 2em;
+  box-sizing: border-box;
+}
+
+.options-panel {
+  width: min(28em, 100%);
+  text-align: left;
+}
+
+.options-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.4em;
+}
+
+/* More specific than App.css's `.panel h2` and its bottom margin. */
+.panel .options-header h2 {
+  margin: 0;
+}
+
+/* One setting per row: its name, its control, its explanation tooltip. */
+.options-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+}
+
+.options-row label {
+  min-width: 5em;
+  font-weight: 600;
+}

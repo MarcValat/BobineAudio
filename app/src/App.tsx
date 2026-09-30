@@ -20,7 +20,8 @@ import { LogPanel } from "./LogPanel";
 import { SegmentEditor } from "./SegmentEditor";
 import { TrackPreview } from "./TrackPreview";
 import { BatchView } from "./BatchView";
-import { UpdateBanner } from "./UpdateBanner";
+import { OptionsButton } from "./Options";
+import { UpdateButton } from "./UpdateButton";
 import { pickMediaFiles, pickOutputFile, syncedFileName } from "./mediaDialog";
 import { basename } from "./paths";
 import { UNSHIFTABLE_HINT, subtitleDetails, subtitleLabel, subtitlesFor } from "./subtitles";
@@ -390,14 +391,19 @@ function App() {
 
   return (
     <div className="container">
-      <UpdateBanner />
-      <div className="mode-switch">
-        <button className={mode === "single" ? "primary-button" : ""} onClick={() => setMode("single")}>
-          Fichier unique
-        </button>
-        <button className={mode === "batch" ? "primary-button" : ""} onClick={() => setMode("batch")}>
-          Batch
-        </button>
+      <div className="top-bar">
+        <div className="mode-switch">
+          <button className={mode === "single" ? "primary-button" : ""} onClick={() => setMode("single")}>
+            Fichier unique
+          </button>
+          <button className={mode === "batch" ? "primary-button" : ""} onClick={() => setMode("batch")}>
+            Batch
+          </button>
+        </div>
+        <div className="top-actions">
+          <UpdateButton />
+          <OptionsButton />
+        </div>
       </div>
 
       {/* Always mounted, just hidden -- unmounting on tab switch (as a
@@ -536,7 +542,6 @@ function App() {
                               l'export. Les pistes décochées sont copiées telles quelles, calées sur la vidéo. Les
                               sous-titres image (PGS, VobSub) ne peuvent pas être recalés.
                             </InfoTip>
-                            :
                           </span>
                           {subtitles.map((s) => {
                             const elsewhere = Object.entries(subsByTrack).some(
@@ -590,8 +595,8 @@ function App() {
                   </p>
                 )}
                 {exportSummary && (
-                  <p className="export-summary" title={exportSummary}>
-                    {exportSummary}
+                  <p className="export-summary">
+                    Contenu de l'export <InfoTip>{exportSummary}</InfoTip>
                   </p>
                 )}
                 <LogPanel lines={exportState.log} />

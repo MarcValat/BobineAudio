@@ -654,10 +654,18 @@ export function SegmentEditor({
                 <thead>
                   <tr>
                     <th>#</th>
-                    <th>Début (s)</th>
-                    <th>Fin (s)</th>
-                    <th title="Décalage au début du segment, en millisecondes">Décal. début (ms)</th>
-                    <th title="Décalage à la fin du segment, en millisecondes">Décal. fin (ms)</th>
+                    <th>
+                      Début <span className="th-unit">(s)</span>
+                    </th>
+                    <th>
+                      Fin <span className="th-unit">(s)</span>
+                    </th>
+                    <th title="Décalage au début du segment, en millisecondes">
+                      Décal. début <span className="th-unit">(ms)</span>
+                    </th>
+                    <th title="Décalage à la fin du segment, en millisecondes">
+                      Décal. fin <span className="th-unit">(ms)</span>
+                    </th>
                     <th>Confiance</th>
                     <th>Actions</th>
                   </tr>

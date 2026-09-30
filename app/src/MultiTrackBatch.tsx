@@ -152,8 +152,8 @@ function TrackChoiceModal({
               <th>Piste</th>
               <th>Langue</th>
               <th>Codec</th>
-              <th>Réf.</th>
-              <th>À corriger</th>
+              <th className="batch-choice-control">Réf.</th>
+              <th className="batch-choice-control">À corriger</th>
             </tr>
           </thead>
           <tbody>
@@ -162,7 +162,7 @@ function TrackChoiceModal({
                 <td>@{t.index}</td>
                 <td>{t.language ?? "?"}</td>
                 <td>{t.codec ?? "?"}</td>
-                <td>
+                <td className="batch-choice-control">
                   <input
                     type="radio"
                     name="choice-reference"
@@ -172,7 +172,7 @@ function TrackChoiceModal({
                     }
                   />
                 </td>
-                <td>
+                <td className="batch-choice-control">
                   <input
                     type="checkbox"
                     disabled={choice.reference === t.index}

@@ -1,26 +1,27 @@
 /* Design tokens -- one place to tune the palette; every rule below reads
-   these instead of hardcoding colors, so light/dark mode is just a second
-   definition of the same variables (see the @media block at the bottom). */
+   these instead of hardcoding colors. Each is light-dark(light, dark):
+   which one applies follows `color-scheme` -- Windows' theme by default,
+   or the one forced in Options (data-theme, see theme.ts). */
 :root {
-  /* Native widgets (select popups, their scrollbars, checkboxes...) follow
-     the app's theme instead of staying light in dark mode. */
+  /* Also makes native widgets (select popups, their scrollbars,
+     checkboxes...) follow the app's theme. */
   color-scheme: light dark;
-  --accent: #396cd8;
-  --accent-hover: #2f5ab8;
-  --accent-fg: #ffffff;
-  --bg: #f3f4f6;
-  --surface: #ffffff;
-  --surface-alt: #f0f1f4;
-  --border: rgba(15, 15, 15, 0.12);
-  --text: #0f0f0f;
-  --text-muted: rgba(15, 15, 15, 0.6);
-  --danger: #cc3333;
-  --success: #2a8c4a;
+  --accent: light-dark(#396cd8, #6d9eff);
+  --accent-hover: light-dark(#2f5ab8, #85aeff);
+  --accent-fg: light-dark(#ffffff, #10141c);
+  --bg: light-dark(#f3f4f6, #1c1d21);
+  --surface: light-dark(#ffffff, #26272c);
+  --surface-alt: light-dark(#f0f1f4, #2f3036);
+  --border: light-dark(rgba(15, 15, 15, 0.12), rgba(255, 255, 255, 0.12));
+  --text: light-dark(#0f0f0f, #f2f2f2);
+  --text-muted: light-dark(rgba(15, 15, 15, 0.6), rgba(242, 242, 242, 0.6));
+  --danger: light-dark(#cc3333, #ff6b6b);
+  --success: light-dark(#2a8c4a, #57c785);
   --radius: 12px;
   --radius-sm: 8px;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.05);
-  --scrollbar-thumb: rgba(15, 15, 15, 0.22);
-  --scrollbar-thumb-hover: rgba(15, 15, 15, 0.4);
+  --scrollbar-thumb: light-dark(rgba(15, 15, 15, 0.22), rgba(255, 255, 255, 0.2));
+  --scrollbar-thumb-hover: light-dark(rgba(15, 15, 15, 0.4), rgba(255, 255, 255, 0.38));
 
   /* Native system-font stacks, not a webfont: this is a desktop app (no
      network dependency to resolve correctly), and "Inter, Avenir, ..."
@@ -164,30 +165,113 @@ body {
   width: 100%;
 }
 
-.mode-switch {
+/* The mode switch on the left; update and Options icons on the far right. */
+.top-bar {
   flex: 0 0 auto;
   display: flex;
+  align-items: center;
   gap: 0.5em;
   padding: 0.7em 1em 0;
+}
+
+.mode-switch {
+  display: flex;
+  gap: 0.5em;
 }
 
 .mode-switch button {
   padding: 0.4em 1em;
 }
 
-.update-banner {
-  flex: 0 0 auto;
+.top-actions {
+  margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 0.8em;
-  padding: 0.5em 1em;
-  background: var(--accent);
-  color: var(--accent-fg);
-  font-size: 0.9em;
+  gap: 0.4em;
 }
 
-.update-banner .error {
-  color: inherit;
+.icon-button {
+  position: relative;
+  width: 2.3em;
+  height: 2.3em;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-button svg {
+  width: 1.2em;
+  height: 1.2em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* An update is waiting: accent color and a dot, like a notification. */
+.update-box {
+  position: relative;
+}
+
+.update-button {
+  color: var(--accent);
+}
+
+.update-button-failed {
+  color: var(--danger);
+}
+
+.update-button-busy svg {
+  animation: update-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes update-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.update-dot {
+  position: absolute;
+  top: 0.3em;
+  right: 0.3em;
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* A small menu hanging under a top-bar icon. */
+.top-menu {
+  position: absolute;
+  top: calc(100% + 0.4em);
+  right: 0;
+  z-index: 40;
+  width: 20em;
+  padding: 0.9em 1em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6em;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.top-menu p {
+  margin: 0;
+}
+
+.update-menu-title {
+  font-weight: 600;
+}
+
+.update-menu-note {
+  font-size: 0.85em;
+  color: var(--text-muted);
 }
 
 /* Nothing in the app scrolls but lists: the window is split into regions
@@ -333,6 +417,60 @@ select:hover {
   border-color: var(--accent);
 }
 
+/* The open list itself, styled like the rest of the app instead of the
+   system's square popup (customizable select, WebView2/Chromium 135+; older
+   runtimes keep the system one). Rounded on every corner and detached from
+   the field by a small gap: it opens upward when there's no room below, so
+   no single side is always the free one. */
+@supports (appearance: base-select) {
+  select,
+  ::picker(select) {
+    appearance: base-select;
+  }
+
+  /* The chevron is already drawn as the field's background image. */
+  select::picker-icon {
+    display: none;
+  }
+
+  /* Below the field, flipping above only when it doesn't fit there: the
+     default opens on whichever side has more room, i.e. above any field in
+     the lower half of the window. Capped so it can't just shrink to fit
+     below instead of flipping; a long list scrolls inside. */
+  ::picker(select) {
+    position-try-order: normal;
+    max-block-size: 60vh;
+    margin-block: 4px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  }
+
+  option {
+    padding: 0.35em 0.8em;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  option::checkmark {
+    display: none;
+  }
+
+  option:checked {
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  option:hover,
+  option:focus-visible {
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    outline: none;
+  }
+}
+
 input,
 select,
 button {
@@ -385,6 +523,11 @@ button:focus-visible {
 .small-button {
   padding: 0.3em 0.75em;
   font-size: 0.85em;
+}
+
+/* A unit in an uppercase table header: "(ms)" must not become "(MS)". */
+.th-unit {
+  text-transform: none;
 }
 
 .tracks-actions {
@@ -643,6 +786,32 @@ button:focus-visible {
   font-style: italic;
 }
 
+/* Heads the three "what plays" checkboxes; a small gap before it sets it
+   apart from the playback buttons. */
+.preview-listen-label {
+  margin-left: 0.4em;
+  color: var(--text-muted);
+}
+
+/* "+" / "−": drawn, not typed -- the font's glyphs sit at lowercase
+   height, never quite centered. Same height as the neighbouring buttons. */
+.zoom-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  min-width: 2.2em;
+  padding-block: 0;
+}
+
+.zoom-button svg {
+  width: 0.8em;
+  height: 0.8em;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
 .error {
   color: var(--danger);
 }
@@ -651,19 +820,6 @@ button:focus-visible {
   margin: 0;
   font-size: 0.85em;
   color: var(--text-muted);
-}
-
-/* A short window leaves the analyzed tracks too little room: the summary
-   keeps two lines, the rest in its tooltip. */
-@media (max-height: 700px) {
-  .export-summary {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
 }
 
 .export-written {
@@ -759,20 +915,10 @@ button:focus-visible {
   border-radius: var(--radius-sm);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --accent: #6d9eff;
-    --accent-hover: #85aeff;
-    --accent-fg: #10141c;
-    --bg: #1c1d21;
-    --surface: #26272c;
-    --surface-alt: #2f3036;
-    --border: rgba(255, 255, 255, 0.12);
-    --text: #f2f2f2;
-    --text-muted: rgba(242, 242, 242, 0.6);
-    --danger: #ff6b6b;
-    --success: #57c785;
-    --scrollbar-thumb: rgba(255, 255, 255, 0.2);
-    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.38);
-  }
+/* A theme forced in Options (see theme.ts); none: Windows' own. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }

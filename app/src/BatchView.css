@@ -55,8 +55,10 @@
   margin-bottom: 0.7em;
 }
 
-.batch-jobs-header h2 {
-  margin: 0 auto 0 0;
+/* More specific than App.css's `.panel h2`, whose bottom margin would
+   otherwise push the title above the buttons' center line. */
+.panel .batch-jobs-header h2 {
+  margin: 0;
 }
 
 .batch-footer {
@@ -380,6 +382,12 @@ td.batch-index {
   border-bottom: 1px solid var(--border);
 }
 
+/* Radio buttons and checkboxes centered under their header, as in the
+   single-file tracks table. */
+.batch-tracks-table .batch-choice-control {
+  text-align: center;
+}
+
 /* Fichiers multipistes / Paires de fichiers, first in the settings bar. */
 .batch-mode {
   margin-right: 0.6em;
@@ -423,7 +431,6 @@ td.batch-index {
 .batch-tracks-summary {
   flex: 1 1 auto;
   min-width: 0;
-  font-family: var(--font-mono);
 }
 
 .batch-issues {
@@ -449,7 +456,7 @@ td.batch-index {
 }
 
 .batch-target-name {
-  font-family: var(--font-mono);
+  font-weight: 600;
   color: var(--text);
 }
 
@@ -475,13 +482,17 @@ td.batch-index {
   color: var(--text-muted);
 }
 
+/* Monospace only for an actual folder path, not "à côté des originaux". */
+.batch-output-path {
+  font-family: var(--font-mono);
+}
+
 .batch-output-dir {
   min-width: 0;
   max-width: 22em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--font-mono);
 }
 
 .batch-output button {
