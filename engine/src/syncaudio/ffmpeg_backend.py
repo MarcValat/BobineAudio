@@ -11,6 +11,7 @@ from pathlib import Path
 import numpy as np
 
 from syncaudio.cancellation import Cancelled, current_cancel_event
+from syncaudio.i18n import tr
 from syncaudio.models import AudioStreamInfo, AudioTrackSpec, SubtitleStreamInfo
 
 # A packaged sidecar build has no console of its own (see
@@ -93,7 +94,7 @@ def resolve_ffmpeg() -> str:
         return imageio_ffmpeg.get_ffmpeg_exe()
     except Exception as exc:  # pragma: no cover - defensive
         raise FFmpegError(
-            "ffmpeg introuvable : ni sur le PATH, ni via le paquet imageio-ffmpeg."
+            tr("ffmpeg introuvable : ni sur le PATH, ni via le paquet imageio-ffmpeg.")
         ) from exc
 
 
@@ -140,7 +141,7 @@ def parse_track_spec(raw: str) -> AudioTrackSpec:
             index = int(index_str)
         except ValueError as exc:
             raise ValueError(
-                f"Index de piste invalide dans {raw!r} : {index_str!r} n'est pas un entier."
+                tr("Index de piste invalide dans {raw!r} : {index!r} n'est pas un entier.", raw=raw, index=index_str)
             ) from exc
         return AudioTrackSpec(raw=raw, path=path, stream_index=index)
     return AudioTrackSpec(raw=raw, path=raw, stream_index=None)
@@ -154,7 +155,7 @@ def probe_audio_streams(path: str) -> list[AudioStreamInfo]:
     """
     stderr = _ffmpeg_info(path)
     if "Invalid data found" in stderr or "No such file or directory" in stderr:
-        raise FFmpegError(f"Impossible de lire {path!r} :\n{stderr}")
+        raise FFmpegError(tr("Impossible de lire {path!r} :\n{details}", path=path, details=stderr))
 
     streams: list[AudioStreamInfo] = []
     for line in stderr.splitlines():
@@ -175,7 +176,7 @@ def probe_audio_streams(path: str) -> list[AudioStreamInfo]:
             )
         )
     if not streams:
-        raise FFmpegError(f"Aucune piste audio trouvée dans {path!r}.")
+        raise FFmpegError(tr("Aucune piste audio trouvée dans {path!r}.", path=path))
     return streams
 
 
@@ -183,7 +184,7 @@ def probe_duration(path: str) -> float:
     """Return the container's total duration in seconds, as reported by ffmpeg."""
     match = _DURATION_RE.search(_ffmpeg_info(path))
     if not match:
-        raise FFmpegError(f"Impossible de déterminer la durée de {path!r}.")
+        raise FFmpegError(tr("Impossible de déterminer la durée de {path!r}.", path=path))
     return int(match["h"]) * 3600 + int(match["m"]) * 60 + float(match["s"])
 
 
@@ -264,7 +265,14 @@ def probe_subtitle_codec(path: str, index: int) -> str:
     """Return the codec name (e.g. ``subrip``, ``ass``) of subtitle stream ``index`` in ``path``."""
     subtitle_streams = _list_subtitle_streams(path)
     if index >= len(subtitle_streams):
-        raise FFmpegError(f"Piste de sous-titres @{index} absente de {path!r} ({len(subtitle_streams)} trouvée(s)).")
+        raise FFmpegError(
+            tr(
+                "Piste de sous-titres @{index} absente de {path!r} ({count} trouvée(s)).",
+                index=index,
+                path=path,
+                count=len(subtitle_streams),
+            )
+        )
     return subtitle_streams[index]["codec"]
 
 
@@ -364,8 +372,11 @@ def extract_pcm(
     proc = _run(cmd, capture_output=True)
     if proc.returncode != 0:
         raise FFmpegError(
-            f"Échec de l'extraction audio pour {spec.raw!r} :\n"
-            f"{proc.stderr.decode(errors='replace')}"
+            tr(
+                "Échec de l'extraction audio pour {track!r} :\n{details}",
+                track=spec.raw,
+                details=proc.stderr.decode(errors="replace"),
+            )
         )
     return _pcm_from_s16le(np.frombuffer(proc.stdout, dtype="<i2"))
 
@@ -392,7 +403,13 @@ def decode_tracks_to_files(path: str, stream_indices: list[int], sample_rate: in
         outputs.append(out)
     proc = _run(cmd, capture_output=True)
     if proc.returncode != 0:
-        raise FFmpegError(f"Échec de l'extraction audio pour {path!r} :\n{proc.stderr.decode(errors='replace')}")
+        raise FFmpegError(
+            tr(
+                "Échec de l'extraction audio pour {track!r} :\n{details}",
+                track=path,
+                details=proc.stderr.decode(errors="replace"),
+            )
+        )
     return outputs
 
 
@@ -454,7 +471,10 @@ def extract_wav_clip(spec: AudioTrackSpec, start: float, duration: float, sample
     proc = _run(cmd, capture_output=True)
     if proc.returncode != 0:
         raise FFmpegError(
-            f"Échec de l'extraction du clip pour {spec.raw!r} :\n"
-            f"{proc.stderr.decode(errors='replace')}"
+            tr(
+                "Échec de l'extraction du clip pour {track!r} :\n{details}",
+                track=spec.raw,
+                details=proc.stderr.decode(errors="replace"),
+            )
         )
     return proc.stdout

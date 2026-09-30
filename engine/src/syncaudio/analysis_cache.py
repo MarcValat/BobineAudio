@@ -35,6 +35,7 @@ import numpy as np
 
 from syncaudio.features import DEFAULT_HOP, DEFAULT_N_FFT, ENVELOPE_VERSION, extract_envelope
 from syncaudio.ffmpeg_backend import _file_identity, decode_tracks_to_files, extract_pcm, load_pcm_file
+from syncaudio.i18n import tr
 from syncaudio.models import AudioTrackSpec
 
 # The one sample rate every analysis path (align, segments, render) uses --
@@ -170,7 +171,7 @@ def _release(key: _CacheKey, result: _Result | None) -> None:
 
 
 def _analyze(spec: AudioTrackSpec, pcm: np.ndarray, sample_rate: int, log: Callable[[str], None]) -> _Result:
-    log(f"[analyse] {spec.raw} : calcul du spectrogramme et de l'enveloppe...")
+    log(tr("[analyse] {track} : calcul du spectrogramme et de l'enveloppe...", track=spec.raw))
     return extract_envelope(pcm, sample_rate)
 
 
@@ -188,17 +189,17 @@ def get_envelope(
         if claim is None:
             break
         if isinstance(claim, threading.Event):
-            log(f"[cache] {spec.raw} : analyse déjà en cours ailleurs, attente...")
+            log(tr("[cache] {track} : analyse déjà en cours ailleurs, attente...", track=spec.raw))
             claim.wait()
             # Loop back around: the owner either populated the cache (common
             # case) or failed (rare), in which case we become the new owner.
             continue
-        log(f"[cache] {spec.raw} déjà analysée, réutilisation")
+        log(tr("[cache] {track} déjà analysée, réutilisation", track=spec.raw))
         return claim
 
     result = None
     try:
-        log(f"[extraction] {spec.raw} ...")
+        log(tr("[extraction] {track} ...", track=spec.raw))
         pcm = extract_pcm(spec, sample_rate=sample_rate, start=start or None, duration=duration)
         result = _analyze(spec, pcm, sample_rate, log)
         return result
@@ -232,7 +233,7 @@ def prefetch(
         pending = {key for _, key in group}
         try:
             with tempfile.TemporaryDirectory(prefix="syncaudio-decode-") as tmp:
-                log(f"[extraction] {path} : {len(group)} piste(s) en une seule passe...")
+                log(tr("[extraction] {path} : {count} piste(s) en une seule passe...", path=path, count=len(group)))
                 files = decode_tracks_to_files(path, [_stream_index(s) for s, _ in group], sample_rate, Path(tmp))
                 for (spec, key), file in zip(group, files):
                     pending.discard(key)
@@ -242,7 +243,7 @@ def prefetch(
                     finally:
                         _release(key, result)
         except Exception as exc:
-            log(f"[extraction] passe groupée impossible, pistes une par une ({exc})")
+            log(tr("[extraction] passe groupée impossible, pistes une par une ({error})", error=exc))
         finally:
             for key in pending:
                 _release(key, None)

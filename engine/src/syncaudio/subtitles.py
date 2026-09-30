@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 
+from syncaudio.i18n import tr
 from syncaudio.segments import Segment
 
 # Matches SRT ("00:01:23,450") and ASS/SSA ("0:01:23.45") timestamps
@@ -30,7 +31,10 @@ def format_for_codec(codec: str) -> str:
     fmt = _CODEC_TO_FORMAT.get(codec.strip().lower())
     if fmt is None:
         raise ValueError(
-            f"Format de sous-titres non supporté pour --segmented : {codec!r} (seuls srt/ass/ssa le sont)."
+            tr(
+                "Format de sous-titres non supporté pour --segmented : {codec!r} (seuls srt/ass/ssa le sont).",
+                codec=codec,
+            )
         )
     return fmt
 
@@ -98,7 +102,7 @@ def shift_subtitle_text(text: str, segments: Sequence[Segment], fmt: str) -> str
     elif fmt == "ass":
         parse, render_time, pattern = _parse_ass_time, _format_ass_time, _ASS_TS
     else:
-        raise ValueError(f"Format de sous-titres inconnu : {fmt!r}")
+        raise ValueError(tr("Format de sous-titres inconnu : {fmt!r}", fmt=fmt))
 
     def repl(match: re.Match[str]) -> str:
         return render_time(remap_time(parse(match.group(0)), segments))

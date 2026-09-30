@@ -18,6 +18,7 @@ from syncaudio.ffmpeg_backend import (
     probe_subtitle_count,
     resolve_ffmpeg,
 )
+from syncaudio.i18n import tr
 from syncaudio.models import AudioStreamInfo, AudioTrackSpec
 from syncaudio.segments import DEFAULT_HOP_S, DEFAULT_MARGIN_S, DEFAULT_WINDOW_S, Segment, detect_segments
 from syncaudio.subtitles import format_for_codec, shift_subtitle_text
@@ -167,7 +168,7 @@ _PITCH_PRESERVING_MIN_DRIFT = 0.003
 def _stretch_filter(factor: float) -> str:
     """Play ``factor`` times faster (rubberband, see ``_PITCH_PRESERVING_MIN_DRIFT``)."""
     if factor <= 0:
-        raise ValueError(f"Facteur d'étirement invalide : {factor}")
+        raise ValueError(tr("Facteur d'étirement invalide : {factor}", factor=factor))
     if abs(factor - 1.0) < _PITCH_PRESERVING_MIN_DRIFT:
         return f"rubberband=tempo={factor:.9f}:pitch={factor:.9f}"
     return f"rubberband=tempo={factor:.9f}"
@@ -280,7 +281,7 @@ def corrected_clip(
     """
     clipped, played_before = _clip_segments(segments, start, start + duration)
     if not clipped:
-        raise ValueError("Aucun segment ne couvre cet extrait.")
+        raise ValueError(tr("Aucun segment ne couvre cet extrait."))
     earliest = min(seg.start_s + seg.offset_start for seg in clipped) + start
     latest = max(seg.end_s + seg.offset_end for seg in clipped) + start
     # Candidate time `seek` becomes the filter's 0: every offset moves by as much.
@@ -301,7 +302,11 @@ def corrected_clip(
     proc = _run_subprocess(cmd, capture_output=True)
     if proc.returncode != 0:
         raise FFmpegError(
-            f"Échec de la prévisualisation pour {spec.raw!r} :\n{proc.stderr.decode(errors='replace')}"
+            tr(
+                "Échec de la prévisualisation pour {track!r} :\n{details}",
+                track=spec.raw,
+                details=proc.stderr.decode(errors="replace"),
+            )
         )
     return proc.stdout
 
@@ -321,7 +326,14 @@ def resolve_targets(input_path: str, reference_index: int, track_indices: Sequen
     ``ValueError`` for a request that can't be met."""
     all_indices = [s.index for s in probe_audio_streams(input_path)]
     if reference_index not in all_indices:
-        raise ValueError(f"Index de référence {reference_index} absent de {input_path!r} (pistes : {all_indices}).")
+        raise ValueError(
+            tr(
+                "Index de référence {index} absent de {path!r} (pistes : {tracks}).",
+                index=reference_index,
+                path=input_path,
+                tracks=all_indices,
+            )
+        )
     if only_imports:
         targets: list[int] = []
     elif track_indices:
@@ -329,10 +341,12 @@ def resolve_targets(input_path: str, reference_index: int, track_indices: Sequen
     else:
         targets = [i for i in all_indices if i != reference_index]
     if reference_index in targets:
-        raise ValueError("La piste de référence ne peut pas aussi être une piste à corriger.")
+        raise ValueError(tr("La piste de référence ne peut pas aussi être une piste à corriger."))
     unknown = [i for i in targets if i not in all_indices]
     if unknown:
-        raise ValueError(f"Index(es) inconnu(s) : {unknown} (pistes disponibles : {all_indices}).")
+        raise ValueError(
+            tr("Index(es) inconnu(s) : {unknown} (pistes disponibles : {tracks}).", unknown=unknown, tracks=all_indices)
+        )
     return targets
 
 
@@ -341,7 +355,9 @@ def check_import_track(spec: AudioTrackSpec) -> None:
     available = sorted(s.index for s in probe_audio_streams(spec.path))
     idx = _stream_index(spec)
     if idx not in available:
-        raise ValueError(f"Index audio {idx} absent de {spec.path!r} (pistes : {available}).")
+        raise ValueError(
+            tr("Index audio {index} absent de {path!r} (pistes : {tracks}).", index=idx, path=spec.path, tracks=available)
+        )
 
 
 def track_key(spec: AudioTrackSpec) -> tuple[str, int]:
@@ -429,7 +445,9 @@ def _title_args(spec: AudioTrackSpec, kind: str, out_selector: str) -> list[str]
 def _run(cmd: list[str]) -> None:
     proc = _run_subprocess(cmd, capture_output=True)
     if proc.returncode != 0:
-        raise FFmpegError(f"Échec ffmpeg :\n{' '.join(cmd)}\n{proc.stderr.decode(errors='replace')}")
+        raise FFmpegError(
+            tr("Échec ffmpeg :\n{command}\n{details}", command=" ".join(cmd), details=proc.stderr.decode(errors="replace"))
+        )
 
 
 def _prepare_shifted_subtitle_file(ffmpeg: str, spec: AudioTrackSpec, segments: Sequence[Segment], tmp_dir: Path) -> Path:

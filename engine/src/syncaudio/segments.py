@@ -10,6 +10,7 @@ from syncaudio.align import estimate_offset
 from syncaudio.analysis_cache import ANALYSIS_SAMPLE_RATE, get_envelope
 from syncaudio.dsp import median_filter_nearest
 from syncaudio.ffmpeg_backend import extract_pcm
+from syncaudio.i18n import tr
 from syncaudio.models import AudioTrackSpec
 
 DEFAULT_WINDOW_S = 30.0
@@ -830,14 +831,14 @@ def analyze_segments(
     # window's worth of samples, irrelevant next to window_s/hop_s scale.
     total_duration_s = len(ref_env) / frame_rate
 
-    log("[analyse] fenêtres glissantes...")
+    log(tr("[analyse] fenêtres glissantes..."))
     window_args = {"window_s": window_s, "hop_s": hop_s, "margin_s": margin_s}
     windows = compensate_drift(
         ref_env, cand_env, frame_rate, windowed_offsets(ref_env, cand_env, frame_rate, **window_args), **window_args
     )
     segs = classify_segments(windows, total_duration_s)
     if len(segs) > 1:
-        log("[analyse] affinage des frontières...")
+        log(tr("[analyse] affinage des frontières..."))
         segs = refine_segments(
             ref_env, cand_env, frame_rate, segs, energy=energy_reader(reference, candidate, frame_rate, start)
         )
