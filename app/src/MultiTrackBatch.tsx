@@ -12,7 +12,6 @@ import {
   RevealButton,
   useExportQueue,
   dropBlockedReason,
-  FOLDER_DROP_HINT,
   writtenFile,
   type AnalysisRun,
   type ExportFields,
@@ -27,6 +26,7 @@ import { devParam, errorMessage, toggled } from "./util";
 import { Dialog, DialogHeader } from "./Dialog";
 import { TrackTable } from "./TrackTable";
 import { SubtitleChecks } from "./SubtitleChecks";
+import { t, useT } from "./i18n";
 
 interface FileProbe {
   tracks: TrackInfo[] | null;
@@ -73,14 +73,14 @@ function resolve(tracks: TrackInfo[], referenceLanguage: string, targetLanguages
   const withLanguage = (lang: string) => tracks.filter((t) => t.language === lang);
   const references = withLanguage(referenceLanguage);
   const reference = references[0] ?? null;
-  if (references.length === 0) issues.push(`aucune piste ${referenceLanguage}`);
-  if (references.length > 1) issues.push(`plusieurs pistes ${referenceLanguage}`);
+  if (references.length === 0) issues.push(t().multi.noTrack(referenceLanguage));
+  if (references.length > 1) issues.push(t().multi.severalTracks(referenceLanguage));
   const targets: TrackInfo[] = [];
   for (const lang of targetLanguages) {
     if (lang === referenceLanguage) continue;
     const found = withLanguage(lang).filter((t) => t !== reference);
-    if (found.length === 0) issues.push(`aucune piste ${lang}`);
-    if (found.length > 1) issues.push(`plusieurs pistes ${lang}`);
+    if (found.length === 0) issues.push(t().multi.noTrack(lang));
+    if (found.length > 1) issues.push(t().multi.severalTracks(lang));
     if (found.length > 0) targets.push(found[0]);
   }
   return { reference, targets, issues, manual: false };
@@ -106,6 +106,7 @@ function TrackChoiceModal({
   onSave: (choice: TrackChoice) => void;
   onClose: () => void;
 }) {
+  const m = useT();
   const [choice, setChoice] = useState(initial);
   const targetTracks = tracks.filter((t) => choice.targets.includes(t.index));
   const assigned = assignSubtitles(targetTracks, (t) => choice.subtitles?.[t.index] ?? defaultSubtitles(t));
@@ -114,7 +115,7 @@ function TrackChoiceModal({
   }
   return (
     <Dialog onClose={onClose} className="batch-choice-panel" labelledBy="choice-title">
-      <DialogHeader id="choice-title" title={`Pistes de ${basename(path)}`} titleTooltip={path} onClose={onClose} closeLabel="Annuler" />
+      <DialogHeader id="choice-title" title={m.multi.tracksOf(basename(path))} titleTooltip={path} onClose={onClose} closeLabel={m.common.cancel} />
         <TrackTable
           className="batch-tracks-table"
           tracks={tracks}
@@ -132,17 +133,11 @@ function TrackChoiceModal({
         {subtitles.length > 0 && choice.targets.length > 0 && (
           <div className="batch-choice-subs">
             <h3>
-              Sous-titres à recaler{" "}
-              <InfoTip>
-                Les pistes de sous-titres cochées subissent les mêmes sauts et la même dérive que la piste audio de leur
-                ligne ; les autres sont gardées telles quelles, calées sur la vidéo.
-              </InfoTip>
+              {m.multi.subsToRetime} <InfoTip>{m.multi.subsToRetimeHint}</InfoTip>
             </h3>
             {targetTracks.map((t) => (
               <div key={t.index} className="batch-choice-subs-row">
-                <span className="batch-target-name">
-                  Avec @{t.index} {t.language ?? "?"} :
-                </span>
+                <span className="batch-target-name">{m.multi.withTrack(`@${t.index} ${t.language ?? "?"}`)}</span>
                 <SubtitleChecks
                   subtitles={subtitles}
                   chosen={assigned[t.index] ?? []}
@@ -162,7 +157,7 @@ function TrackChoiceModal({
               onClose();
             }}
           >
-            Valider
+            {m.multi.confirm}
           </button>
         </div>
     </Dialog>
@@ -192,6 +187,7 @@ export function MultiTrackBatch({
   blocked: boolean;
   onBusyChange: (busy: boolean) => void;
 }) {
+  const m = useT();
   const [files, setFiles] = useState<string[]>([]);
   const [probes, setProbes] = useState<Record<string, FileProbe>>({});
   const [referenceLanguage, setReferenceLanguage] = useState("");
@@ -398,7 +394,7 @@ export function MultiTrackBatch({
       <div className="batch-config panel">
         {modeSwitch}
         <label>
-          Référence :
+          {m.multi.reference}
           <LanguageSelect
             value={referenceLanguage}
             onChange={(lang) => {
@@ -412,7 +408,7 @@ export function MultiTrackBatch({
           />
         </label>
         <span className="batch-languages">
-          À corriger :
+          {m.multi.toCorrect}
           {languages.filter((l) => l !== referenceLanguage).length === 0 && <span className="batch-track-status">—</span>}
           {languages
             .filter((l) => l !== referenceLanguage)
@@ -431,26 +427,21 @@ export function MultiTrackBatch({
             ))}
         </span>
         <label>
-          Sous-titres :
+          {m.common.labelled(m.batch.subtitles)}
           <select value={subsMode} onChange={(e) => setSubsMode(e.target.value as SubtitleMode)} disabled={busy}>
-            {SUBTITLE_MODES.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
+            {SUBTITLE_MODES.map((mode) => (
+              <option key={mode} value={mode}>
+                {m.subtitles.modes[mode]}
               </option>
             ))}
           </select>
         </label>
-        <InfoTip>
-          Chaque fichier contient déjà la référence et les pistes à corriger. Les pistes sont choisies par langue, pour
-          tous les fichiers : un fichier où une langue manque ou apparaît plusieurs fois est signalé ⚠, et « Choisir »
-          permet de fixer ses pistes à la main. Les sous-titres choisis (texte seulement : SRT, ASS) sont recalés avec la
-          piste audio de leur langue ; les autres sont gardés tels quels.
-        </InfoTip>
+        <InfoTip>{m.multi.hint}</InfoTip>
       </div>
 
       <section className="panel batch-jobs">
         <div className="batch-jobs-header">
-          <h2>Fichiers</h2>
+          <h2>{m.multi.files}</h2>
           <button
             className="small-button"
             onClick={() => {
@@ -463,7 +454,7 @@ export function MultiTrackBatch({
             }}
             disabled={busy || files.length === 0}
           >
-            Tout retirer
+            {m.common.removeAll}
           </button>
         </div>
 
@@ -483,23 +474,23 @@ export function MultiTrackBatch({
                 <th className="batch-index">#</th>
                 <th>
                   <div className="batch-th-add">
-                    <span>Fichier</span>
+                    <span>{m.multi.file}</span>
                     <button
                       className="small-button"
                       disabled={busy}
-                      title="Ajouter des fichiers qui contiennent chacun la référence et les pistes à corriger"
+                      title={m.multi.addHint}
                       onClick={async () => {
                         const selected = await pickMediaFiles(true);
                         if (selected) addPaths(selected);
                       }}
                     >
-                      + Ajouter
+                      {m.common.add}
                     </button>
                   </div>
                 </th>
-                <th>Pistes</th>
-                <th>Analyse</th>
-                <th>Export</th>
+                <th>{m.multi.tracks}</th>
+                <th>{m.common.analysis}</th>
+                <th>{m.common.export}</th>
                 <th></th>
               </tr>
             </thead>
@@ -507,7 +498,7 @@ export function MultiTrackBatch({
               {files.length === 0 && (
                 <tr>
                   <td colSpan={6} className="placeholder">
-                    Ajoute les fichiers à traiter : chacun contient la référence et la ou les pistes à corriger.
+                    {m.multi.empty}
                   </td>
                 </tr>
               )}
@@ -520,7 +511,7 @@ export function MultiTrackBatch({
                     <td className="batch-index">{i + 1}</td>
                     <FileCell files={files} index={i} disabled={busy} onChange={(update) => setFiles(update)} />
                     <td className="batch-tracks-cell">
-                      {!probed && <span className="batch-track-status">Lecture des pistes...</span>}
+                      {!probed && <span className="batch-track-status">{m.multi.readingTracks}</span>}
                       {probed?.error && <span className="error">{probed.error}</span>}
                       {res && (
                         <>
@@ -535,18 +526,18 @@ export function MultiTrackBatch({
                                       return `@${t.index} ${t.language ?? "?"}${retimed}`;
                                     })
                                     .join(", ")
-                                : "rien"}
-                              {res.manual && <span className="batch-track-status"> (manuel)</span>}
+                                : m.multi.nothing}
+                              {res.manual && <span className="batch-track-status">{m.multi.manual}</span>}
                             </span>
                             <span className="batch-tracks-actions">
                               <button className="small-button" disabled={busy} onClick={() => setChoosing(path)}>
-                                Choisir
+                                {m.multi.choose}
                               </button>
                               {res.manual && (
                                 <button
                                   className="small-button"
                                   disabled={busy}
-                                  title="Revenir au choix par langue"
+                                  title={m.multi.byLanguageHint}
                                   onClick={() =>
                                     setChoices((c) => {
                                       const next = { ...c };
@@ -555,7 +546,7 @@ export function MultiTrackBatch({
                                     })
                                   }
                                 >
-                                  Par langue
+                                  {m.multi.byLanguage}
                                 </button>
                               )}
                             </span>
@@ -600,11 +591,10 @@ export function MultiTrackBatch({
         blocked={blocked}
         progress={
           <>
-            {files.length} fichier{files.length > 1 ? "s" : ""}
-            {allTargets.length > 0 &&
-              ` · ${analyzedCount}/${allTargets.length} piste${allTargets.length > 1 ? "s" : ""} analysée${analyzedCount > 1 ? "s" : ""}`}
-            {exportedCount > 0 && ` · ${exportedCount} exporté${exportedCount > 1 ? "s" : ""}`}
-            {flaggedCount > 0 && ` · ⚠ ${flaggedCount} à vérifier`}
+            {m.multi.progressFiles(files.length)}
+            {allTargets.length > 0 && m.multi.progressAnalyzed(analyzedCount, allTargets.length)}
+            {exportedCount > 0 && m.multi.progressExported(exportedCount)}
+            {flaggedCount > 0 && m.multi.progressFlagged(flaggedCount)}
           </>
         }
         analyzeButton={
@@ -612,7 +602,7 @@ export function MultiTrackBatch({
             analyzing={analyzing}
             missing={missingCount}
             analyzed={analyzedCount}
-            unit="piste"
+            unit="track"
             disabled={!analyzable || busy || blocked}
             blocked={blocked}
             onAnalyze={handleAnalyze}
@@ -659,7 +649,7 @@ export function MultiTrackBatch({
           }}
         />
       )}
-      <DropOverlay drag={fileDrag} blocked={dropBlocked} label="Déposer pour ajouter au lot" hint={FOLDER_DROP_HINT} />
+      <DropOverlay drag={fileDrag} blocked={dropBlocked} label={m.files.dropToAdd} hint={m.files.folderHint} />
     </main>
   );
 }

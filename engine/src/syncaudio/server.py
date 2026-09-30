@@ -38,6 +38,7 @@ from syncaudio.ffmpeg_backend import (
     probe_stream_start_time,
     probe_subtitle_streams,
 )
+from syncaudio.i18n import LANGUAGES, set_language, tr
 from syncaudio.jobs import get_job, start_job
 from syncaudio.models import AudioTrackSpec
 from syncaudio.render import (
@@ -139,7 +140,7 @@ def cancel_job(job_id: str) -> dict[str, bool]:
     killed and it ends as "cancelled", leaving no half-written file behind."""
     job = get_job(job_id)
     if job is None:
-        raise HTTPException(404, f"Job inconnu : {job_id}")
+        raise HTTPException(404, tr("Job inconnu : {job_id}", job_id=job_id))
     job.cancel()
     return {"cancelled": True}
 
@@ -157,6 +158,20 @@ def paths_exist(req: PathsRequest) -> PathsExistResponse:
     """Which of these paths are already taken, in order: the GUI names a
     batch export after its original only where that overwrites nothing."""
     return PathsExistResponse(exists=[Path(p).exists() for p in req.paths])
+
+
+class LanguageRequest(BaseModel):
+    language: str
+
+
+@app.post("/language", status_code=204)
+def language(req: LanguageRequest) -> Response:
+    """The language of the messages the GUI shows (job logs, errors): it
+    sends its own at startup and whenever the user changes it."""
+    if req.language not in LANGUAGES:
+        raise HTTPException(400, f"Unknown language: {req.language!r}")
+    set_language(req.language)
+    return Response(status_code=204)
 
 
 class ExpandPathsRequest(BaseModel):
@@ -473,7 +488,7 @@ class RenderResponse(BaseModel):
 def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> RenderResponse:
     # Runs as a job: a ValueError from these checks becomes its error message.
     if req.only_imports and req.track_indices:
-        raise ValueError("only_imports et track_indices sont incompatibles.")
+        raise ValueError(tr("only_imports et track_indices sont incompatibles."))
     targets = resolve_targets(req.input_path, req.reference_index, req.track_indices, req.only_imports)
     for ref in req.import_audio:
         check_import_track(ref.to_spec())
@@ -490,8 +505,11 @@ def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> Rend
         if key not in candidate_keys:
             raise HTTPException(
                 400,
-                f"subs {pair.subs.path}@{pair.subs.index} : la piste audio indiquée ne correspond à aucune piste "
-                "corrigée (track_indices ou import_audio, même fichier@index).",
+                tr(
+                    "subs {subs} : la piste audio indiquée ne correspond à aucune piste corrigée "
+                    "(track_indices ou import_audio, même fichier@index).",
+                    subs=f"{pair.subs.path}@{pair.subs.index}",
+                ),
             )
         subs_positions.append(candidate_keys.index(key))
 
@@ -509,7 +527,7 @@ def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> Rend
                         idx = spec.stream_index if spec.stream_index is not None else 0
                         streams = {s.index: s for s in probe_audio_streams(spec.path)}
                         language = streams[idx].language if idx in streams else None
-                    log(f"[segments] {spec.raw} : utilisation des segments fournis (édités manuellement)")
+                    log(tr("[segments] {track} : utilisation des segments fournis (édités manuellement)", track=spec.raw))
                     seg_corrections.append(
                         SegmentedTrackCorrection(
                             track=spec, language=language, segments=[s.to_segment() for s in override.segments]
@@ -525,7 +543,7 @@ def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> Rend
             segmented_imported_subs = [
                 (pair.subs.to_spec(), seg_corrections[pos].segments) for pair, pos in zip(req.subs, subs_positions)
             ]
-            log(f"[rendu] écriture de {output_path} ...")
+            log(tr("[rendu] écriture de {path} ...", path=output_path))
             written = render_tracks(
                 req.input_path, req.reference_index, corrections=[], output_path=output_path,
                 audio_only=req.audio_only, segmented_corrections=seg_corrections,
@@ -540,7 +558,7 @@ def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> Rend
                 reference_spec, candidates, start=req.start, duration=req.duration, log=log
             )
             imported_subs = [(pair.subs.to_spec(), corrections[pos].offset_seconds) for pair, pos in zip(req.subs, subs_positions)]
-            log(f"[rendu] écriture de {output_path} ...")
+            log(tr("[rendu] écriture de {path} ...", path=output_path))
             written = render_tracks(
                 req.input_path, req.reference_index, corrections, output_path,
                 audio_only=req.audio_only, imported_subs=imported_subs,

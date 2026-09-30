@@ -16,6 +16,7 @@ import { TrackPreview, type TrackPreviewHandle } from "./TrackPreview";
 import { useElementSize } from "./useElementSize";
 import "./SegmentEditor.css";
 import { Dialog, DialogHeader } from "./Dialog";
+import { useT } from "./i18n";
 
 // The chart is drawn at the size its box actually gets (measured), so its
 // text keeps one size on any window (see SegmentChart).
@@ -169,6 +170,7 @@ export function SegmentEditor({
    * chart moves the playback position, with its marker drawn on the chart. */
   preview?: PreviewSource;
 }) {
+  const t = useT();
   const [state, setState] = useState<EditorState>(() => toEditorState(segments));
   // What the editor opened with, for "Réinitialiser".
   const [initialState] = useState(state);
@@ -460,21 +462,18 @@ export function SegmentEditor({
         <DialogHeader
           title={
             <>
-            Corriger manuellement les segments{" "}
+            {t.editor.title}{" "}
             <InfoTip>
               <ul>
-                <li>Glisse un segment vers le haut ou le bas pour changer son décalage.</li>
-                <li>Glisse une poignée ● pour déplacer une frontière.</li>
-                <li>Double-clique sur le graphe pour couper un segment à cet endroit.</li>
-                <li>Molette : zoomer ou dézoomer, en même temps que les formes d'onde.</li>
-                <li>Un segment en pointillés (⚠) est peu fiable : à vérifier à l'écoute.</li>
-                <li>
-                  « Retirer » supprime un segment (une fausse détection, par exemple) : son voisin s'étend sur sa
-                  durée, avec son propre décalage.
-                </li>
-                <li>Ctrl+Z / Ctrl+Y : défaire / refaire.</li>
-                {preview && <li>Clique sur le graphe pour placer la lecture à cet endroit.</li>}
-                <li>Décalage : + = la piste est en retard sur la référence, − = en avance.</li>
+                <li>{t.editor.help.dragSegment}</li>
+                <li>{t.editor.help.dragHandle}</li>
+                <li>{t.editor.help.split}</li>
+                <li>{t.editor.help.wheel}</li>
+                <li>{t.editor.help.unreliable}</li>
+                <li>{t.editor.help.remove}</li>
+                <li>{t.editor.help.undo}</li>
+                {preview && <li>{t.editor.help.seek}</li>}
+                <li>{t.editor.help.sign}</li>
               </ul>
             </InfoTip>
             </>
@@ -489,7 +488,7 @@ export function SegmentEditor({
                 className={editorView === "segments" ? "active" : ""}
                 onClick={() => setEditorView("segments")}
               >
-                Segments
+                {t.common.segments}
               </button>
               <button
                 role="tab"
@@ -497,23 +496,23 @@ export function SegmentEditor({
                 className={editorView === "listen" ? "active" : ""}
                 onClick={() => setEditorView("listen")}
               >
-                Écoute
+                {t.common.listen}
               </button>
             </div>
           )}
           {confirmingClose ? (
             <div className="editor-confirm-close" role="alertdialog">
-              <span>Abandonner les modifications non enregistrées ?</span>
+              <span>{t.editor.abandonQuestion}</span>
               <button className="small-button export-cancel" onClick={onClose}>
-                Abandonner
+                {t.editor.abandon}
               </button>
               <button className="small-button" onClick={() => setConfirmingClose(false)}>
-                Continuer l'édition
+                {t.editor.keepEditing}
               </button>
             </div>
           ) : (
-            <button className="small-button" onClick={requestClose} title="Fermer sans enregistrer (Échap)">
-              Annuler
+            <button className="small-button" onClick={requestClose} title={t.editor.cancelHint}>
+              {t.common.cancel}
             </button>
           )}
         </DialogHeader>
@@ -649,19 +648,19 @@ export function SegmentEditor({
                   <tr>
                     <th>#</th>
                     <th>
-                      Début <span className="th-unit">(s)</span>
+                      {t.editor.start} <span className="th-unit">(s)</span>
                     </th>
                     <th>
-                      Fin <span className="th-unit">(s)</span>
+                      {t.editor.end} <span className="th-unit">(s)</span>
                     </th>
-                    <th title="Décalage au début du segment, en millisecondes">
-                      Décal. début <span className="th-unit">(ms)</span>
+                    <th title={t.editor.offsetStartHint}>
+                      {t.editor.offsetStart} <span className="th-unit">(ms)</span>
                     </th>
-                    <th title="Décalage à la fin du segment, en millisecondes">
-                      Décal. fin <span className="th-unit">(ms)</span>
+                    <th title={t.editor.offsetEndHint}>
+                      {t.editor.offsetEnd} <span className="th-unit">(ms)</span>
                     </th>
-                    <th>Confiance</th>
-                    <th>Actions</th>
+                    <th>{t.editor.confidence}</th>
+                    <th>{t.editor.actions}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -708,7 +707,7 @@ export function SegmentEditor({
                       </td>
                       <td
                         className={seg.confidence < LOW_CONFIDENCE_THRESHOLD ? "editor-confidence-cell low" : "editor-confidence-cell"}
-                        title="Fiabilité de cette détection (décalage, dérive ou constant). Un score bas vient de mesures qui ne s'accordent pas entre elles, ou trop peu nombreuses : à vérifier à l'écoute, sans être forcément faux."
+                        title={t.editor.confidenceHint}
                       >
                         {seg.confidence < LOW_CONFIDENCE_THRESHOLD ? "⚠ " : ""}
                         {Math.round(seg.confidence * 100)}%
@@ -719,10 +718,8 @@ export function SegmentEditor({
                           disabled={segmentsPreview.length < 2}
                           title={
                             segmentsPreview.length < 2
-                              ? "Le seul segment ne peut pas être retiré."
-                              : `Retire le segment ${i + 1} (une fausse détection, par exemple) : le segment ${
-                                  i < segmentsPreview.length - 1 ? i + 2 : i
-                                } s'étend sur sa durée, avec son propre décalage. Aperçu en pointillés verts sur le graphe.`
+                              ? t.editor.onlySegment
+                              : t.editor.removeHint(i + 1, i < segmentsPreview.length - 1 ? i + 2 : i)
                           }
                           onMouseEnter={() => setRemovalPreview(i)}
                           onMouseLeave={() => setRemovalPreview(null)}
@@ -733,7 +730,7 @@ export function SegmentEditor({
                             applyEdit((s) => mergeSegment(s, i));
                           }}
                         >
-                          Retirer
+                          {t.common.remove}
                         </button>
                       </td>
                     </tr>
@@ -765,27 +762,27 @@ export function SegmentEditor({
         <div className="editor-actions">
           <div className="editor-history">
             <button className="small-button" onClick={undo} disabled={past.length === 0} title="Ctrl+Z">
-              ↶ Défaire
+              {t.editor.undo}
             </button>
             <button className="small-button" onClick={redo} disabled={future.length === 0} title="Ctrl+Y">
-              ↷ Refaire
+              {t.editor.redo}
             </button>
             <button
               className="small-button"
               onClick={reset}
               disabled={!dirty}
-              title="Revient aux segments tels qu'à l'ouverture de l'éditeur."
+              title={t.editor.resetHint}
             >
-              Réinitialiser
+              {t.editor.reset}
             </button>
           </div>
           <button
             className="small-button"
             disabled={!state.confidences.some((c) => c < LOW_CONFIDENCE_THRESHOLD)}
-            title="Retire chaque segment peu fiable (⚠), comme « Retirer » sur chacun : son voisin s'étend sur sa durée."
+            title={t.editor.removeUnreliableHint}
             onClick={() => applyEdit(ignoreLowConfidenceSegments)}
           >
-            Retirer les segments peu fiables
+            {t.editor.removeUnreliable}
           </button>
           <button
             className="primary-button"
@@ -794,7 +791,7 @@ export function SegmentEditor({
               onClose();
             }}
           >
-            Enregistrer
+            {t.editor.save}
           </button>
         </div>
     </Dialog>

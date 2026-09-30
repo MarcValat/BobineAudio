@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { peaksToPath } from "./Waveform";
 import "./Waveform.css";
+import { t } from "./i18n";
 
 const WIDTH = 860;
 const HEIGHT = 30;
@@ -88,7 +89,7 @@ export function WaveformNavigator({ duration, viewStart, viewDuration, peaksMin,
         className="waveform-navigator-svg"
         onClick={handleBackgroundClick}
         role="img"
-        aria-label="Navigation dans la piste entière"
+        aria-label={t().preview.navigator}
       >
         <line x1={0} y1={HEIGHT / 2} x2={WIDTH} y2={HEIGHT / 2} className="waveform-zero" />
         {path && <path d={path} className="waveform-navigator-path" />}

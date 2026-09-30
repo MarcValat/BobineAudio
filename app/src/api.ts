@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 // Client for the syncaudio FastAPI sidecar (engine/src/syncaudio/server.py).
 // Dev-time only: the sidecar is spawned by src-tauri/src/lib.rs via `uv run`.
 // Phase 6 packaging will need this base URL/port to stay in sync with
@@ -63,9 +64,9 @@ export interface RenderResponse {
 async function readErrorDetail(resp: Response): Promise<string> {
   try {
     const body = await resp.json();
-    return body.detail ?? `Erreur ${resp.status}`;
+    return body.detail ?? t().common.httpError(resp.status);
   } catch {
-    return `Erreur ${resp.status}`;
+    return t().common.httpError(resp.status);
   }
 }
 
@@ -82,6 +83,16 @@ export async function probe(path: string): Promise<ProbeResponse> {
   const resp = await fetch(`${BASE_URL}/probe?path=${encodeURIComponent(path)}`);
   if (!resp.ok) throw new Error(await readErrorDetail(resp));
   return resp.json();
+}
+
+/** The language of the engine's messages (job logs, errors). */
+export async function setEngineLanguage(language: string): Promise<void> {
+  const resp = await fetch(`${BASE_URL}/language`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ language }),
+  });
+  if (!resp.ok) throw new Error(await readErrorDetail(resp));
 }
 
 /** Which of `paths` already exist, in order. */
@@ -348,13 +359,13 @@ export function connectJobWS<TResult>(jobId: string, onEvent: (event: JobEvent<T
   ws.onerror = () => {
     if (!settled) {
       settled = true;
-      onEvent({ type: "error", message: "Connexion WebSocket perdue." });
+      onEvent({ type: "error", message: t().common.websocketLost });
     }
   };
   ws.onclose = () => {
     if (!settled) {
       settled = true;
-      onEvent({ type: "error", message: "Connexion interrompue avant la fin du traitement (le moteur a-t-il planté ?)." });
+      onEvent({ type: "error", message: t().common.connectionLost });
     }
   };
   return () => ws.close();

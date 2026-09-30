@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { SegmentOut } from "./api";
 import { useElementSize } from "./useElementSize";
 import "./SegmentChart.css";
+import { t, useT } from "./i18n";
 
 // Drawn at its real on-screen width and a fixed height, so its text stays
 // the same size on any window, instead of scaling a fixed picture (too tall
@@ -54,7 +55,7 @@ export function formatOffsetMs(seconds: number): string {
 export function describeJump(delta: number): string | null {
   if (Math.abs(delta) < JUMP_MIN_S) return null;
   const amount = formatOffsetMs(Math.abs(delta)).slice(1);
-  return delta > 0 ? `${amount} coupés` : `${amount} de silence`;
+  return delta > 0 ? t().chart.cut(amount) : t().chart.silence(amount);
 }
 
 /** The offset scale of a chart of these offsets (seconds): always
@@ -102,16 +103,16 @@ export function segmentOffsetLabel(seg: SegmentOut): string {
 
 /** "3 segments · 2 sauts · 1 peu fiable", for a track's analysis header. */
 export function describeSegments(segments: SegmentOut[]): string {
-  const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? "s" : ""}`;
+  const m = t().chart;
   const jumps = segments
     .slice(1)
     .filter((seg, i) => Math.abs(seg.offset_start - segments[i].offset_end) >= JUMP_MIN_S).length;
   const drifts = segments.filter((seg) => seg.is_drift).length;
   const unreliable = segments.filter((seg) => seg.confidence < LOW_CONFIDENCE_THRESHOLD).length;
-  const parts = [plural(segments.length, "segment")];
-  if (jumps > 0) parts.push(plural(jumps, "saut"));
-  if (drifts > 0) parts.push(plural(drifts, "dérive"));
-  if (unreliable > 0) parts.push(`${unreliable} peu fiable${unreliable > 1 ? "s" : ""}`);
+  const parts = [m.segments(segments.length)];
+  if (jumps > 0) parts.push(m.jumps(jumps));
+  if (drifts > 0) parts.push(m.drifts(drifts));
+  if (unreliable > 0) parts.push(m.unreliableCount(unreliable));
   return parts.join(" · ");
 }
 
@@ -133,6 +134,7 @@ export function formatTime(seconds: number): string {
 /** `fill`: take all the height its container gives it (a tab of its own)
  * instead of its usual fixed one. */
 export function SegmentChart({ segments, fill = false }: { segments: SegmentOut[]; fill?: boolean }) {
+  const tr = useT();
   const [boxRef, box] = useElementSize<HTMLDivElement>();
   const compact = useShortWindow();
 
@@ -157,7 +159,7 @@ export function SegmentChart({ segments, fill = false }: { segments: SegmentOut[
       <svg
         viewBox={`0 0 ${width} ${height}`}
         role="img"
-        aria-label="Décalage en fonction du temps"
+        aria-label={tr.chart.ariaLabel}
       >
         <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
           {/* offset scale, with the zero line standing out */}
@@ -211,14 +213,14 @@ export function SegmentChart({ segments, fill = false }: { segments: SegmentOut[
       <div className="segment-chart-footer">
         <div className="segment-chart-legend">
           <span className="legend-item">
-            <span className="legend-swatch constant" /> constant
+            <span className="legend-swatch constant" /> {tr.chart.constant}
           </span>
           <span className="legend-item">
-            <span className="legend-swatch drift" /> dérive
+            <span className="legend-swatch drift" /> {tr.chart.drift}
           </span>
           {segments.some((seg) => seg.confidence < LOW_CONFIDENCE_THRESHOLD) && (
             <span className="legend-item">
-              <span className="legend-swatch low-confidence" /> peu fiable
+              <span className="legend-swatch low-confidence" /> {tr.chart.unreliable}
             </span>
           )}
         </div>

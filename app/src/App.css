@@ -869,9 +869,8 @@ button:focus-visible {
   font-size: 0.85em;
 }
 
-/* No cell breaks mid-word ("truehd", "ANALYSER") in the narrow column of
-   a small window. */
-.field-tracks th,
+/* No cell breaks mid-word ("truehd") in the narrow column of a small
+   window; a header may wrap at a space ("TO CORRECT"), never inside a word. */
 .field-tracks td {
   white-space: nowrap;
 }

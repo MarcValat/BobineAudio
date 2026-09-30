@@ -1,6 +1,7 @@
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { pathsExist } from "./api";
 import { devParam, loadSetting, saveSetting } from "./util";
+import { t } from "./i18n";
 
 // Videos to take a reference from, and the audio-only files a corrected track
 // can come from (batch mode): anything ffmpeg reads is fine, these are the
@@ -9,9 +10,9 @@ export const MEDIA_EXTENSIONS = [
   "mkv", "mp4", "m4v", "mov", "avi", "webm", "ts", "m2ts",
   "mka", "wav", "flac", "aac", "ac3", "eac3", "dts", "thd", "mlp", "mp3", "m4a", "opus", "ogg", "wma",
 ];
-const MEDIA_FILTERS = [
-  { name: "Vidéo/Audio", extensions: MEDIA_EXTENSIONS },
-  { name: "Tous les fichiers", extensions: ["*"] },
+const mediaFilters = () => [
+  { name: t().files.mediaFilter, extensions: MEDIA_EXTENSIONS },
+  { name: t().files.allFilter, extensions: ["*"] },
 ];
 const LAST_FOLDER_KEY = "syncaudio.lastFolder";
 
@@ -30,7 +31,7 @@ function rememberFolder(path: string): void {
 export async function pickMediaFiles(multiple: false): Promise<string | null>;
 export async function pickMediaFiles(multiple: true): Promise<string[] | null>;
 export async function pickMediaFiles(multiple: boolean): Promise<string | string[] | null> {
-  const selected = await open({ multiple, filters: MEDIA_FILTERS, defaultPath: lastFolder() });
+  const selected = await open({ multiple, filters: mediaFilters(), defaultPath: lastFolder() });
   if (!selected) return null;
   const files = Array.isArray(selected) ? selected : [selected];
   if (files.length > 0) rememberFolder(files[0]);

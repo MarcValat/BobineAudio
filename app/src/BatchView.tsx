@@ -4,6 +4,7 @@ import { MultiTrackBatch } from "./MultiTrackBatch";
 import { PairsBatch } from "./PairsBatch";
 import "./BatchView.css";
 import { devParam } from "./util";
+import { useT } from "./i18n";
 
 type BatchMode = "multi" | "pairs";
 
@@ -18,6 +19,7 @@ type BatchMode = "multi" | "pairs";
  * -- `hidden` just toggles visibility -- so switching tabs never resets
  * the imported files or analysis results. */
 export function BatchView({ hidden }: { hidden: boolean }) {
+  const t = useT();
   const [mode, setMode] = useState<BatchMode>("multi");
   const [outputDir, setOutputDir] = useState<string | null>(loadOutputDir);
   // Which mode is analyzing or exporting: only one runs at a time, each
@@ -37,10 +39,10 @@ export function BatchView({ hidden }: { hidden: boolean }) {
   const modeSwitch = (
     <div className="view-tabs batch-mode" role="tablist">
       <button role="tab" aria-selected={mode === "multi"} className={mode === "multi" ? "active" : ""} onClick={() => setMode("multi")}>
-        Fichiers multipistes
+        {t.batch.multiMode}
       </button>
       <button role="tab" aria-selected={mode === "pairs"} className={mode === "pairs" ? "active" : ""} onClick={() => setMode("pairs")}>
-        Paires de fichiers
+        {t.batch.pairsMode}
       </button>
     </div>
   );
