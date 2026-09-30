@@ -598,11 +598,11 @@ export function TrackPreview({
       <div className="preview-toolbar">
         <div className="waveform-zoom-controls">
           <span>Zoom :</span>
-          <button className="small-button" onClick={() => zoomAt(0.5, previewStart)}>
-            + (zoomer)
+          <button className="small-button zoom-button" title="Zoomer" aria-label="Zoomer" onClick={() => zoomAt(0.5, previewStart)}>
+            +
           </button>
-          <button className="small-button" onClick={() => zoomAt(2, previewStart)}>
-            − (dézoomer)
+          <button className="small-button zoom-button" title="Dézoomer" aria-label="Dézoomer" onClick={() => zoomAt(2, previewStart)}>
+            −
           </button>
           <button className="small-button" onClick={resetZoom}>
             Piste entière
@@ -732,6 +732,8 @@ export function TrackPreview({
         <button className="small-button" onClick={stop} disabled={loadedClipStart === null && liveCursor === null}>
           Arrêter
         </button>
+        {/* What plays during "Écouter": any mix of the three. */}
+        <span className="preview-listen-label">Entendre :</span>
         <label>
           <input
             type="checkbox"
@@ -774,12 +776,20 @@ export function TrackPreview({
           />
           Résultat final
         </label>
-        <span className="preview-offset">Décalage à cette position : {formatOffsetMs(appliedOffset)}</span>
-        {hasContainerDelay && (
-          <span className="preview-offset" title="Le décalage ci-dessus (utilisé pour l'écoute et l'export) est mesuré sur la piste brute, sans le délai que le fichier lui applique déjà. Ce nombre est seulement informatif.">
-            (dont {formatOffsetMs(trackStartTime)} déjà présents dans le conteneur pour cette piste ; décalage restant dans un lecteur ≈ {formatOffsetMs(presentationOffset)})
-          </span>
-        )}
+        <span className="preview-offset">
+          Décalage à cette position : {formatOffsetMs(appliedOffset)}
+          {hasContainerDelay && (
+            <>
+              {" "}
+              <InfoTip>
+                Dont {formatOffsetMs(trackStartTime)} déjà appliqués par le fichier à cette piste (délai de conteneur) :
+                dans un lecteur, le décalage restant est d'environ {formatOffsetMs(presentationOffset)}. Le décalage
+                affiché, utilisé pour l'écoute et l'export, est mesuré sur la piste brute ; ce détail est seulement
+                informatif.
+              </InfoTip>
+            </>
+          )}
+        </span>
       </div>
       {error && <p className="error">{error}</p>}
     </div>

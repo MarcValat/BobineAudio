@@ -542,7 +542,6 @@ function App() {
                               l'export. Les pistes décochées sont copiées telles quelles, calées sur la vidéo. Les
                               sous-titres image (PGS, VobSub) ne peuvent pas être recalés.
                             </InfoTip>
-                            :
                           </span>
                           {subtitles.map((s) => {
                             const elsewhere = Object.entries(subsByTrack).some(
@@ -596,8 +595,8 @@ function App() {
                   </p>
                 )}
                 {exportSummary && (
-                  <p className="export-summary" title={exportSummary}>
-                    {exportSummary}
+                  <p className="export-summary">
+                    Contenu de l'export <InfoTip>{exportSummary}</InfoTip>
                   </p>
                 )}
                 <LogPanel lines={exportState.log} />

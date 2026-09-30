@@ -23,7 +23,8 @@
   margin-bottom: 0.4em;
 }
 
-.options-header h2 {
+/* More specific than App.css's `.panel h2` and its bottom margin. */
+.panel .options-header h2 {
   margin: 0;
 }
 

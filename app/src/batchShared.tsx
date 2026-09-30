@@ -276,7 +276,7 @@ export function OutputChooser({
   return (
     <div className="batch-output">
       <span className="batch-output-label">Sortie :</span>
-      <span className="batch-output-dir" title={outputDir ?? undefined}>
+      <span className={outputDir ? "batch-output-dir batch-output-path" : "batch-output-dir"} title={outputDir ?? undefined}>
         {outputDir ?? "à côté des originaux"}
       </span>
       <button

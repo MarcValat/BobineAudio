@@ -475,7 +475,7 @@ export function PairsBatch({
       <div className="batch-config panel">
         {modeSwitch}
         <TrackPicker
-          label="Piste référence"
+          label="Référence"
           tracks={referenceProbe.tracks}
           loading={referenceProbe.loading}
           error={referenceProbe.error}
@@ -484,7 +484,7 @@ export function PairsBatch({
           disabled={busy}
         />
         <TrackPicker
-          label="Piste à corriger"
+          label="À corriger"
           tracks={candidateProbe.tracks}
           loading={candidateProbe.loading}
           error={candidateProbe.error}
@@ -503,6 +503,10 @@ export function PairsBatch({
             })`}
             disabled={busy}
           />
+          <InfoTip>
+            Langue attribuée à la piste corrigée dans le fichier exporté. « Celle du fichier » garde la sienne ; utile
+            pour une piste qui n'en a pas (un .wav, par exemple).
+          </InfoTip>
         </label>
         <label>
           Sous-titres :
@@ -519,9 +523,6 @@ export function PairsBatch({
           toutes les pistes » montre celles de chaque fichier. Les sous-titres choisis du fichier à corriger (texte
           seulement : SRT, ASS) sont importés et recalés avec sa piste audio.
         </InfoTip>
-        <button className="small-button" onClick={() => setShowTracksModal(true)} disabled={rowCount === 0}>
-          Vérifier toutes les pistes
-        </button>
       </div>
 
       <section className="panel batch-jobs">
@@ -537,6 +538,9 @@ export function PairsBatch({
             disabled={busy || rowCount === 0}
           >
             Tout retirer
+          </button>
+          <button className="small-button" onClick={() => setShowTracksModal(true)} disabled={rowCount === 0}>
+            Vérifier toutes les pistes
           </button>
           <InfoTip>
             Une ligne = une paire : la référence (piste jamais modifiée, ex. VO) et le fichier dont la piste est

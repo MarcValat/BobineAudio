@@ -14,7 +14,11 @@
   line-height: 1;
   cursor: help;
   user-select: none;
-  vertical-align: middle;
+  /* The "?" on the same baseline as the text before it, so the circle
+     around it centers on that text's capitals and tall letters (`middle`
+     centers on the lowercase ones, which reads a touch low). Ignored where
+     the icon is a flex item, centered by its row instead. */
+  vertical-align: baseline;
 }
 
 .info-tip:hover,
