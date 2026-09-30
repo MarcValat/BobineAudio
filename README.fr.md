@@ -12,9 +12,9 @@
 
 <p align="center">
   <a href="https://github.com/MarcValat/SyncAudio/releases/latest"><img src="https://img.shields.io/github/v/release/MarcValat/SyncAudio?label=version" alt="Dernière version"></a>
-  <a href="https://github.com/MarcValat/SyncAudio/releases"><img src="https://img.shields.io/github/downloads/MarcValat/SyncAudio/total?label=t%C3%A9l%C3%A9chargements" alt="Téléchargements"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011%20(x64)-0078D6?logo=windows" alt="Windows 10 | 11 (x64)">
   <img src="https://img.shields.io/badge/interface-Fran%C3%A7ais%20%7C%20English-555" alt="Français | English">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MIT-blue" alt="Licence MIT"></a>
 </p>
 
 <p align="center">
@@ -67,3 +67,9 @@ Rien d'autre à installer : le moteur d'analyse et ffmpeg sont fournis avec l'ap
 
 - [`engine/`](engine/README.md) : le moteur Python (détection, correction et rendu, serveur HTTP local) ; utilisable seul en ligne de commande.
 - [`app/`](app/README.md) : l'application (Tauri + React/TypeScript), qui pilote le moteur ; compilation, empaquetage et publication d'une release.
+
+## Licence
+
+SyncAudio est distribué sous [licence MIT](LICENSE).
+
+L'installateur fournit aussi [FFmpeg](https://ffmpeg.org/) (une version de [gyan.dev](https://www.gyan.dev/ffmpeg/builds/), via [imageio-ffmpeg](https://github.com/imageio/imageio-ffmpeg)), que SyncAudio lance comme programme séparé. Cette version est sous licence [GPL v3](https://www.gnu.org/licenses/gpl-3.0.html) ; son code source est disponible auprès de FFmpeg et de gyan.dev.

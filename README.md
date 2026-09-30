@@ -12,9 +12,9 @@
 
 <p align="center">
   <a href="https://github.com/MarcValat/SyncAudio/releases/latest"><img src="https://img.shields.io/github/v/release/MarcValat/SyncAudio?label=version" alt="Latest version"></a>
-  <a href="https://github.com/MarcValat/SyncAudio/releases"><img src="https://img.shields.io/github/downloads/MarcValat/SyncAudio/total?label=downloads" alt="Downloads"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011%20(x64)-0078D6?logo=windows" alt="Windows 10 | 11 (x64)">
   <img src="https://img.shields.io/badge/UI-English%20%7C%20Fran%C3%A7ais-555" alt="English | Français">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
 </p>
 
 <p align="center">
@@ -69,3 +69,9 @@ Nothing else to install: the analysis engine and ffmpeg come with the app. When 
 - [`app/`](app/README.md): the app (Tauri + React/TypeScript), which drives the engine; building, packaging and publishing a release.
 
 Both are documented in French.
+
+## License
+
+SyncAudio is released under the [MIT license](LICENSE).
+
+The installer also ships [FFmpeg](https://ffmpeg.org/) (a [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) build, through [imageio-ffmpeg](https://github.com/imageio/imageio-ffmpeg)), which SyncAudio runs as a separate program. That build is licensed under the [GPL v3](https://www.gnu.org/licenses/gpl-3.0.html); its source code is available from FFmpeg and gyan.dev.
