@@ -114,7 +114,7 @@ export function UpdateButton() {
       // now, right before installing, so its file is free by the time the
       // installer gets to it; relaunch() below starts a fresh app (and
       // sidecar) regardless.
-      await invoke("stop_sidecar");
+      await invoke("prepare_update_install");
       await update.install();
       await relaunch();
     } catch (err) {

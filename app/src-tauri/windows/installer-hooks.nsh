@@ -13,6 +13,10 @@
 ; code just means no engine was running; the result is discarded either way.
 
 !macro NSIS_HOOK_PREINSTALL
+  ; Started by the in-app updater as the app exits: in front of the other
+  ; windows, not behind them (the app allowed it, see prepare_update_install
+  ; in src/lib.rs).
+  BringToFront
   nsExec::Exec 'taskkill /F /T /IM syncaudio-engine.exe'
   Pop $0
   ; Versions up to 1.0.x shipped the engine as a single exe at the install
