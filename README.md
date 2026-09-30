@@ -53,6 +53,8 @@ Nothing else to install: the analysis engine and ffmpeg come with the app. When 
 2. **Analyze**: the offset curve shows the segments found. Listen to the result, and adjust the segments by hand if something's off.
 3. **Export**: the synchronized file is written as a new MKV, next to the original by default (`Film.synced.mkv`).
 
+📖 The [user guide](docs/guide.md) covers everything in detail: reading the result, the segment editor, subtitles, batch mode, FAQ.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/editor-en-dark.png">
   <img src="docs/screenshots/editor-en-light.png" alt="The segment editor: offset chart with draggable boundaries, segment table, waveforms">
