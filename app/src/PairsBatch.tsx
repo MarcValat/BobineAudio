@@ -12,7 +12,6 @@ import {
   RevealButton,
   useExportQueue,
   dropBlockedReason,
-  FOLDER_DROP_HINT,
   writtenFile,
   type AnalysisRun,
   type ExportFields,
@@ -26,6 +25,7 @@ import { SUBTITLE_MODES, subtitlesFor, type SubtitleMode } from "./subtitles";
 import { devParam, errorMessage } from "./util";
 import { Dialog, DialogHeader } from "./Dialog";
 import { TrackTable } from "./TrackTable";
+import { useT } from "./i18n";
 
 
 /** One pair's analysis and export. */
@@ -85,9 +85,10 @@ interface TrackPickerProps {
  * there's nothing to probe yet or probing failed, so picking is never
  * blocked on that. */
 function TrackPicker({ label, tracks, loading, error, value, onChange, disabled }: TrackPickerProps) {
+  const m = useT();
   return (
     <label>
-      {label} :
+      {m.common.labelled(label)}
       {tracks && tracks.length > 0 ? (
         <select value={value} onChange={(e) => onChange(Number(e.target.value))} disabled={disabled}>
           {tracks.map((t) => (
@@ -105,10 +106,10 @@ function TrackPicker({ label, tracks, loading, error, value, onChange, disabled 
           onChange={(e) => onChange(Math.max(0, Number(e.target.value)))}
         />
       )}
-      {loading && <span className="batch-track-status">Sondage...</span>}
+      {loading && <span className="batch-track-status">{m.pairs.probing}</span>}
       {error && (
         <span className="batch-track-status batch-track-status-error" title={error}>
-          Pistes indisponibles
+          {m.pairs.tracksUnavailable}
         </span>
       )}
     </label>
@@ -123,6 +124,7 @@ function TrackPicker({ label, tracks, loading, error, value, onChange, disabled 
  * the modal opens rather than kept live -- this is a manual spot-check,
  * not something that needs to track file-list edits in real time. */
 function AllTracksModal({ referenceFiles, candidateFiles, onClose }: { referenceFiles: string[]; candidateFiles: string[]; onClose: () => void }) {
+  const m = useT();
   const [entries, setEntries] = useState<Record<string, { tracks: TrackInfo[] | null; error: string | null }>>({});
   const [loading, setLoading] = useState(true);
 
@@ -152,7 +154,7 @@ function AllTracksModal({ referenceFiles, candidateFiles, onClose }: { reference
       <div className="batch-tracks-side">
         <h3>{title}</h3>
         {files.length === 0 ? (
-          <p className="placeholder">Aucun fichier.</p>
+          <p className="placeholder">{m.pairs.noFiles}</p>
         ) : (
           files.map((path, i) => {
             const entry = entries[path];
@@ -161,7 +163,7 @@ function AllTracksModal({ referenceFiles, candidateFiles, onClose }: { reference
                 <p className="batch-tracks-filename" title={path}>
                   {i + 1}. {basename(path)}
                 </p>
-                {loading && !entry && <p className="placeholder">Sondage...</p>}
+                {loading && !entry && <p className="placeholder">{m.pairs.probing}</p>}
                 {entry?.error && <p className="error">{entry.error}</p>}
                 {entry?.tracks && (
                   <TrackTable className="batch-tracks-table" tracks={entry.tracks} showChannels />
@@ -176,10 +178,10 @@ function AllTracksModal({ referenceFiles, candidateFiles, onClose }: { reference
 
   return (
     <Dialog onClose={onClose} closeOnBackdrop className="batch-tracks-panel" labelledBy="all-tracks-title">
-      <DialogHeader id="all-tracks-title" title="Vérifier toutes les pistes" onClose={onClose} />
+      <DialogHeader id="all-tracks-title" title={m.pairs.checkAllTracks} onClose={onClose} />
       <div className="batch-tracks-columns">
-        {renderSide("Fichiers référence", referenceFiles)}
-        {renderSide("Fichiers à corriger", candidateFiles)}
+        {renderSide(m.pairs.referenceFiles, referenceFiles)}
+        {renderSide(m.pairs.candidateFiles, candidateFiles)}
       </div>
     </Dialog>
   );
@@ -223,6 +225,7 @@ export function PairsBatch({
   blocked: boolean;
   onBusyChange: (busy: boolean) => void;
 }) {
+  const m = useT();
   const [referenceFiles, setReferenceFiles] = useState<string[]>([]);
   const [candidateFiles, setCandidateFiles] = useState<string[]>([]);
   const [referenceTrackIndex, setReferenceTrackIndex] = useState(0);
@@ -405,7 +408,7 @@ export function PairsBatch({
       <div className="batch-config panel">
         {modeSwitch}
         <TrackPicker
-          label="Référence"
+          label={m.common.reference}
           tracks={referenceProbe.tracks}
           loading={referenceProbe.loading}
           error={referenceProbe.error}
@@ -414,7 +417,7 @@ export function PairsBatch({
           disabled={busy}
         />
         <TrackPicker
-          label="À corriger"
+          label={m.common.toCorrect}
           tracks={candidateProbe.tracks}
           loading={candidateProbe.loading}
           error={candidateProbe.error}
@@ -423,41 +426,34 @@ export function PairsBatch({
           disabled={busy}
         />
         <label>
-          Langue :
+          {m.pairs.language}
           <LanguageSelect
             value={candidateLanguage}
             onChange={setCandidateLanguage}
             extra={candidateProbe.tracks?.map((t) => t.language) ?? []}
-            emptyLabel={`Celle du fichier (${
-              candidateProbe.tracks?.find((t) => t.index === candidateTrackIndex)?.language ?? "aucune"
-            })`}
+            emptyLabel={m.pairs.fileLanguage(
+              candidateProbe.tracks?.find((t) => t.index === candidateTrackIndex)?.language ?? null,
+            )}
             disabled={busy}
           />
-          <InfoTip>
-            Langue attribuée à la piste corrigée dans le fichier exporté. « Celle du fichier » garde la sienne ; utile
-            pour une piste qui n'en a pas (un .wav, par exemple).
-          </InfoTip>
+          <InfoTip>{m.pairs.languageHint}</InfoTip>
         </label>
         <label>
-          Sous-titres :
+          {m.common.labelled(m.batch.subtitles)}
           <select value={subsMode} onChange={(e) => setSubsMode(e.target.value as SubtitleMode)} disabled={busy}>
-            {SUBTITLE_MODES.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
+            {SUBTITLE_MODES.map((mode) => (
+              <option key={mode} value={mode}>
+                {m.subtitles.modes[mode]}
               </option>
             ))}
           </select>
         </label>
-        <InfoTip>
-          Pistes proposées d'après le 1er fichier de chaque colonne, puis appliquées à toutes les paires. « Vérifier
-          toutes les pistes » montre celles de chaque fichier. Les sous-titres choisis du fichier à corriger (texte
-          seulement : SRT, ASS) sont importés et recalés avec sa piste audio.
-        </InfoTip>
+        <InfoTip>{m.pairs.hint}</InfoTip>
       </div>
 
       <section className="panel batch-jobs">
         <div className="batch-jobs-header">
-          <h2>Paires</h2>
+          <h2>{m.pairs.pairs}</h2>
           <button
             className="small-button"
             onClick={() => {
@@ -467,16 +463,12 @@ export function PairsBatch({
             }}
             disabled={busy || rowCount === 0}
           >
-            Tout retirer
+            {m.common.removeAll}
           </button>
           <button className="small-button" onClick={() => setShowTracksModal(true)} disabled={rowCount === 0}>
-            Vérifier toutes les pistes
+            {m.pairs.checkAllTracks}
           </button>
-          <InfoTip>
-            Une ligne = une paire : la référence (piste jamais modifiée, ex. VO) et le fichier dont la piste est
-            resynchronisée puis intégrée (ex. VF). Les fichiers sont appariés dans l'ordre : ↑ ↓ pour corriger l'ordre
-            d'une colonne.
-          </InfoTip>
+          <InfoTip>{m.pairs.pairsHint}</InfoTip>
         </div>
 
         {/* Always shown, even empty: its column headers hold the buttons that
@@ -496,32 +488,32 @@ export function PairsBatch({
                 <th className="batch-index">#</th>
                 <th>
                   <div className="batch-th-add">
-                    <span>Référence</span>
+                    <span>{m.common.reference}</span>
                     <button
                       className="small-button"
                       onClick={addFiles(setReferenceFiles)}
                       disabled={busy}
-                      title="Ajouter des fichiers de référence (piste jamais modifiée, ex. VO), un par épisode"
+                      title={m.pairs.addReferenceHint}
                     >
-                      + Ajouter
+                      {m.common.add}
                     </button>
                   </div>
                 </th>
                 <th>
                   <div className="batch-th-add">
-                    <span>À corriger</span>
+                    <span>{m.common.toCorrect}</span>
                     <button
                       className="small-button"
                       onClick={addFiles(setCandidateFiles)}
                       disabled={busy}
-                      title="Ajouter des fichiers dont la piste est à resynchroniser (ex. VF), un par épisode"
+                      title={m.pairs.addCandidateHint}
                     >
-                      + Ajouter
+                      {m.common.add}
                     </button>
                   </div>
                 </th>
-                <th>Analyse</th>
-                <th>Export</th>
+                <th>{m.common.analysis}</th>
+                <th>{m.common.export}</th>
                 <th></th>
               </tr>
             </thead>
@@ -529,7 +521,7 @@ export function PairsBatch({
               {rowCount === 0 && (
                 <tr>
                   <td colSpan={6} className="placeholder">
-                    Ajoute les fichiers de référence et les fichiers à corriger, un par épisode.
+                    {m.pairs.empty}
                   </td>
                 </tr>
               )}
@@ -554,7 +546,7 @@ export function PairsBatch({
                       {i < pairCount ? (
                         <AnalysisStatus run={a} busy={busy} onEdit={() => setEditingPairIndex(i)} />
                       ) : (
-                        "⚠ Sans paire"
+                        m.pairs.unpaired
                       )}
                     </td>
                     <ExportCell entry={a} />
@@ -576,10 +568,10 @@ export function PairsBatch({
         blocked={blocked}
         progress={
           <>
-            {pairCount} paire{pairCount > 1 ? "s" : ""}
-            {analyzedCount > 0 && ` · ${analyzedCount}/${pairCount} analysée${analyzedCount > 1 ? "s" : ""}`}
-            {exportedCount > 0 && ` · ${exportedCount} exportée${exportedCount > 1 ? "s" : ""}`}
-            {rowCount > pairCount && ` · ${rowCount - pairCount} fichier${rowCount - pairCount > 1 ? "s" : ""} sans paire`}
+            {m.pairs.progressPairs(pairCount)}
+            {analyzedCount > 0 && m.pairs.progressAnalyzed(analyzedCount, pairCount)}
+            {exportedCount > 0 && m.pairs.progressExported(exportedCount)}
+            {rowCount > pairCount && m.pairs.progressUnpaired(rowCount - pairCount)}
           </>
         }
         analyzeButton={
@@ -587,7 +579,7 @@ export function PairsBatch({
             analyzing={analyzing}
             missing={pairCount - analyzedCount}
             analyzed={analyzedCount}
-            unit="paire"
+            unit="pair"
             disabled={pairCount === 0 || busy || blocked}
             blocked={blocked}
             onAnalyze={handleAnalyze}
@@ -622,8 +614,8 @@ export function PairsBatch({
       <DropOverlay
         drag={fileDrag}
         blocked={dropBlocked}
-        split={["Référence", "À corriger"]}
-        hint={FOLDER_DROP_HINT}
+        split={[m.common.reference, m.common.toCorrect]}
+        hint={m.files.folderHint}
       />
     </main>
   );

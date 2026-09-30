@@ -1,4 +1,5 @@
 import type { TrackInfo } from "./api";
+import { useT } from "./i18n";
 
 /** A file's audio tracks, one row each: index, language, codec, then either
  * the reference / track-to-correct picks (with `onReference`) or, read-only,
@@ -24,38 +25,39 @@ export function TrackTable({
   /** Radio group name: unique per table on screen. */
   radioName?: string;
 }) {
+  const t = useT();
   const picking = onReference !== undefined;
   return (
     <table className={className}>
       <thead>
         <tr>
-          <th>Piste</th>
-          <th>Langue</th>
-          <th>Codec</th>
-          {showChannels && <th>Canaux</th>}
-          {picking && <th className="track-pick">Réf.</th>}
-          {picking && <th className="track-pick">À corriger</th>}
+          <th>{t.tracks.track}</th>
+          <th>{t.tracks.language}</th>
+          <th>{t.tracks.codec}</th>
+          {showChannels && <th>{t.tracks.channels}</th>}
+          {picking && <th className="track-pick">{t.tracks.referenceShort}</th>}
+          {picking && <th className="track-pick">{t.common.toCorrect}</th>}
         </tr>
       </thead>
       <tbody>
-        {tracks.map((t) => (
-          <tr key={t.index}>
-            <td>@{t.index}</td>
-            <td>{t.language ?? "?"}</td>
-            <td>{t.codec ?? "?"}</td>
-            {showChannels && <td>{t.channels ?? "?"}</td>}
+        {tracks.map((tr) => (
+          <tr key={tr.index}>
+            <td>@{tr.index}</td>
+            <td>{tr.language ?? "?"}</td>
+            <td>{tr.codec ?? "?"}</td>
+            {showChannels && <td>{tr.channels ?? "?"}</td>}
             {picking && (
               <td className="track-pick">
-                <input type="radio" name={radioName} checked={reference === t.index} onChange={() => onReference(t.index)} />
+                <input type="radio" name={radioName} checked={reference === tr.index} onChange={() => onReference(tr.index)} />
               </td>
             )}
             {picking && (
               <td className="track-pick">
                 <input
                   type="checkbox"
-                  disabled={reference === t.index}
-                  checked={targets.includes(t.index)}
-                  onChange={() => onToggleTarget?.(t.index)}
+                  disabled={reference === tr.index}
+                  checked={targets.includes(tr.index)}
+                  onChange={() => onToggleTarget?.(tr.index)}
                 />
               </td>
             )}

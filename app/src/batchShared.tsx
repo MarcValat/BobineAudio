@@ -7,6 +7,7 @@ import { pickFolder, planOutputPaths } from "./mediaDialog";
 import { basename } from "./paths";
 import { describeSegments } from "./SegmentChart";
 import { errorMessage, loadSetting, saveSetting } from "./util";
+import { t, useT } from "./i18n";
 
 export function moved<T>(arr: T[], from: number, to: number): T[] {
   if (to < 0 || to >= arr.length) return arr;
@@ -31,25 +32,26 @@ export function AnalyzeButton({
   analyzing: boolean;
   missing: number;
   analyzed: number;
-  /** What's counted, feminine singular: "piste", "paire". */
-  unit: string;
+  /** What's counted. */
+  unit: "track" | "pair";
   disabled: boolean;
   blocked: boolean;
   onAnalyze: (all: boolean) => void;
 }) {
-  const blockedTitle = blocked ? OTHER_MODE_BUSY : undefined;
-  const redoTitle = "Réanalyse tout, y compris ce qui l'est déjà : les modifications faites avec « Modifier » sont perdues.";
+  const t = useT();
+  const blockedTitle = blocked ? t.batch.otherModeBusy : undefined;
+  const redoTitle = t.batch.reanalyzeHint;
   if (analyzing) {
     return (
       <button className="primary-button" disabled>
-        Analyse en cours...
+        {t.common.analysisRunning}
       </button>
     );
   }
   if (missing === 0 && analyzed > 0) {
     return (
       <button className="primary-button" disabled={disabled} title={blockedTitle ?? redoTitle} onClick={() => onAnalyze(true)}>
-        Tout réanalyser
+        {t.batch.reanalyzeAll}
       </button>
     );
   }
@@ -57,32 +59,26 @@ export function AnalyzeButton({
     <>
       {analyzed > 0 && (
         <button className="small-button" disabled={disabled} title={blockedTitle ?? redoTitle} onClick={() => onAnalyze(true)}>
-          Tout réanalyser
+          {t.batch.reanalyzeAll}
         </button>
       )}
       <button
         className="primary-button"
         disabled={disabled}
-        title={blockedTitle ?? (analyzed > 0 ? `Analyse seulement les ${unit}s qui ne le sont pas encore ; les autres et leurs modifications sont gardées.` : undefined)}
+        title={blockedTitle ?? (analyzed > 0 ? t.batch.analyzeRestHint(unit) : undefined)}
         onClick={() => onAnalyze(false)}
       >
-        {analyzed > 0 ? `Analyser ${missing > 1 ? `les ${missing} ${unit}s restantes` : `la ${unit} restante`}` : "Analyser tout"}
+        {analyzed > 0 ? t.batch.analyzeRest(missing, unit) : t.batch.analyzeAll}
       </button>
     </>
   );
 }
 
-/** Why a batch mode's buttons are off while the other mode works. */
-export const OTHER_MODE_BUSY = "Un traitement est en cours dans l'autre mode batch : attends sa fin.";
-
-/** Under what's dropped on a batch mode. */
-export const FOLDER_DROP_HINT = "Un dossier ajoute ses fichiers vidéo et audio, par ordre de nom";
-
 /** Why files can't be dropped on a batch mode right now, if they can't:
  * like its "+ Ajouter" buttons, not while it or the other mode works. */
 export function dropBlockedReason(busy: boolean, blocked: boolean): string | null {
-  if (busy) return "Import impossible pendant une analyse ou un export : attends sa fin.";
-  return blocked ? OTHER_MODE_BUSY : null;
+  if (busy) return t().batch.dropBusy;
+  return blocked ? t().batch.otherModeBusy : null;
 }
 
 /** One file of a list, with the buttons that move it within its column (to
@@ -100,6 +96,7 @@ export function FileCell({
   disabled: boolean;
   onChange: (update: (files: string[]) => string[]) => void;
 }) {
+  const t = useT();
   const file = files[index];
   if (file === undefined) return <td className="batch-file batch-file-missing">—</td>;
   return (
@@ -113,7 +110,7 @@ export function FileCell({
             className="small-button"
             onClick={() => onChange((f) => moved(f, index, index - 1))}
             disabled={disabled || index === 0}
-            title="Monter"
+            title={t.batch.moveUp}
           >
             {"\u2191\uFE0E"}
           </button>
@@ -121,7 +118,7 @@ export function FileCell({
             className="small-button"
             onClick={() => onChange((f) => moved(f, index, index + 1))}
             disabled={disabled || index === files.length - 1}
-            title="Descendre"
+            title={t.batch.moveDown}
           >
             {"\u2193\uFE0E"}
           </button>
@@ -129,7 +126,7 @@ export function FileCell({
             className="small-button"
             onClick={() => onChange((f) => f.filter((_, i) => i !== index))}
             disabled={disabled}
-            title="Retirer"
+            title={t.common.remove}
           >
             ✕
           </button>
@@ -155,26 +152,27 @@ export function OutputChooser({
   onChange: (dir: string | null) => void;
   disabled: boolean;
 }) {
+  const t = useT();
   return (
     <div className="batch-output">
-      <span className="batch-output-label">Sortie :</span>
+      <span className="batch-output-label">{t.batch.output}</span>
       <span className={outputDir ? "batch-output-dir batch-output-path" : "batch-output-dir"} title={outputDir ?? undefined}>
-        {outputDir ?? "à côté des originaux"}
+        {outputDir ?? t.batch.nextToOriginals}
       </span>
       <button
         className="small-button"
         disabled={disabled}
-        title="Dans un autre dossier que l'original, un export garde le nom de l'original (sauf si ce nom y est déjà pris) ; à côté de l'original, il prend le suffixe « .synced »."
+        title={t.batch.chooseFolderHint}
         onClick={async () => {
           const dir = await pickFolder(outputDir);
           if (dir) onChange(dir);
         }}
       >
-        Choisir un dossier…
+        {t.batch.chooseFolder}
       </button>
       {outputDir && (
-        <button className="small-button" disabled={disabled} onClick={() => onChange(null)} title="Écrire chaque export à côté de son original">
-          À côté des originaux
+        <button className="small-button" disabled={disabled} onClick={() => onChange(null)} title={t.batch.backNextToOriginalsHint}>
+          {t.batch.backNextToOriginals}
         </button>
       )}
     </div>
@@ -200,16 +198,17 @@ export function AnalysisStatus({
   busy: boolean;
   onEdit: () => void;
 }) {
-  if (!run) return <>À analyser</>;
+  const t = useT();
+  if (!run) return <>{t.batch.toAnalyze}</>;
   return (
     <>
-      {run.status === "pending" && "En attente"}
-      {run.status === "running" && "Analyse en cours..."}
+      {run.status === "pending" && t.batch.pending}
+      {run.status === "running" && t.common.analysisRunning}
       {run.status === "done" && run.result && describeSegments(run.result.segments)}
-      {run.status === "error" && (run.error ?? "Erreur")}
+      {run.status === "error" && (run.error ?? t.common.error)}
       {run.status === "done" && run.result && (
         <button className="small-button" disabled={busy} onClick={onEdit}>
-          Modifier
+          {t.common.edit}
         </button>
       )}
       {(run.status === "running" || run.status === "error") && <LogPanel lines={run.log} />}
@@ -232,15 +231,16 @@ export const writtenFile = (entry: ExportFields | undefined | null): string | un
 
 /** The "Export" cell: dash, progress, the written file, the error or "Annulé". */
 export function ExportCell({ entry }: { entry: ExportFields | undefined | null }) {
+  const t = useT();
   const status = entry?.exportStatus ?? "idle";
   const written = writtenFile(entry);
   return (
     <td className={`batch-status batch-status-${status === "idle" ? "pending" : status}`}>
       {status === "idle" && "—"}
-      {status === "running" && "Export en cours..."}
+      {status === "running" && t.common.exportRunning}
       {status === "done" && written && <span title={written}>{basename(written)}</span>}
-      {status === "error" && (entry?.exportError ?? "Erreur")}
-      {status === "cancelled" && "Annulé"}
+      {status === "error" && (entry?.exportError ?? t.common.error)}
+      {status === "cancelled" && t.common.cancelled}
       {entry && (status === "running" || status === "error") && <LogPanel lines={entry.exportLog} />}
     </td>
   );
@@ -248,10 +248,11 @@ export function ExportCell({ entry }: { entry: ExportFields | undefined | null }
 
 /** The row's "Dossier" button, once its export is written. */
 export function RevealButton({ file }: { file: string | undefined }) {
+  const t = useT();
   if (!file) return null;
   return (
-    <button className="small-button" title="Ouvrir le dossier du fichier écrit" onClick={() => revealItemInDir(file)}>
-      Dossier
+    <button className="small-button" title={t.batch.folderHint} onClick={() => revealItemInDir(file)}>
+      {t.batch.folder}
     </button>
   );
 }
@@ -347,6 +348,7 @@ export function BatchFooter({
   canExport: boolean;
   onExport: () => void;
 }) {
+  const t = useT();
   return (
     <div className="batch-footer panel">
       <OutputChooser outputDir={outputDir} onChange={onOutputDirChange} disabled={busy} />
@@ -354,16 +356,16 @@ export function BatchFooter({
       {analyzeButton}
       {queue.exporting ? (
         <button className="export-cancel" onClick={queue.cancel} disabled={queue.cancelling}>
-          {queue.cancelling ? "Annulation..." : "Annuler l'export"}
+          {queue.cancelling ? t.common.cancelling : t.common.cancelExport}
         </button>
       ) : (
         <button
           className="primary-button"
           onClick={onExport}
           disabled={!canExport || busy || blocked}
-          title={blocked ? OTHER_MODE_BUSY : undefined}
+          title={blocked ? t.batch.otherModeBusy : undefined}
         >
-          Exporter tout
+          {t.batch.exportAll}
         </button>
       )}
     </div>

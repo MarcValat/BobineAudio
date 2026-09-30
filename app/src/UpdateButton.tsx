@@ -4,6 +4,7 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import { devParam, errorMessage } from "./util";
 import { DownloadIcon } from "./icons";
+import { useT } from "./i18n";
 
 // "error": the download failed, the app still works; "failed": the install
 // did, after the engine was stopped.
@@ -25,7 +26,7 @@ function devUpdate(): PendingUpdate | null {
   if (devParam("update") !== "1") return null;
   return {
     version: "9.9.9",
-    download: () => Promise.reject(new Error("mise à jour factice (dev)")),
+    download: () => Promise.reject(new Error("pretend update (dev)")),
     install: () => Promise.resolve(),
   };
 }
@@ -39,6 +40,7 @@ function devUpdate(): PendingUpdate | null {
  * clutter the app over something this optional.
  */
 export function UpdateButton() {
+  const t = useT();
   const [update, setUpdate] = useState<PendingUpdate | null>(devUpdate);
   const [phase, setPhase] = useState<Phase>(() => (devUpdate() ? "available" : "idle"));
   const [progress, setProgress] = useState<{ downloaded: number; total: number | null }>({ downloaded: 0, total: null });
@@ -126,10 +128,10 @@ export function UpdateButton() {
   const failed = phase === "error" || phase === "failed";
   const title =
     phase === "downloading"
-      ? `Téléchargement de la mise à jour${percent !== null ? ` : ${percent} %` : "..."}`
+      ? t.update.downloadingTitle(percent)
       : failed
-        ? "La mise à jour a échoué"
-        : `Mise à jour disponible : v${update.version}`;
+        ? t.update.failedTitle
+        : t.update.availableTitle(update.version);
 
   return (
     <div className="update-box" ref={boxRef}>
@@ -146,34 +148,31 @@ export function UpdateButton() {
       {open && (
         <div className="top-menu update-menu" role="dialog">
           <p className="update-menu-title">
-            {failed ? "Échec de la mise à jour" : `SyncAudio v${update.version} est disponible`}
+            {failed ? t.update.failedHeading : t.update.availableHeading(update.version)}
           </p>
           {phase === "available" && (
             <>
-              <p className="update-menu-note">
-                L'application redémarre une fois la mise à jour téléchargée : une analyse ou un export en cours sera
-                interrompu.
-              </p>
+              <p className="update-menu-note">{t.update.restartNote}</p>
               <button className="primary-button" onClick={install}>
-                Installer et redémarrer
+                {t.update.install}
               </button>
             </>
           )}
-          {phase === "downloading" && <p>Téléchargement... {percent !== null ? `${percent} %` : ""}</p>}
-          {phase === "ready" && <p>Installation, redémarrage...</p>}
+          {phase === "downloading" && <p>{t.update.downloading(percent)}</p>}
+          {phase === "ready" && <p>{t.update.installing}</p>}
           {phase === "error" && (
             <>
-              <p className="error">Échec du téléchargement : {error}</p>
+              <p className="error">{t.update.downloadFailed(error ?? "")}</p>
               <button className="primary-button" onClick={install}>
-                Réessayer
+                {t.common.retry}
               </button>
             </>
           )}
           {phase === "failed" && (
             <>
-              <p className="error">Échec de l'installation : {error}</p>
+              <p className="error">{t.update.installFailed(error ?? "")}</p>
               <button className="primary-button" onClick={() => relaunch()}>
-                Redémarrer l'application
+                {t.update.restart}
               </button>
             </>
           )}

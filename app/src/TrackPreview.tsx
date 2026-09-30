@@ -8,6 +8,7 @@ import { Waveform, type HighlightRegion } from "./Waveform";
 import { WaveformNavigator } from "./WaveformNavigator";
 import { errorMessage } from "./util";
 import { MinusIcon, PlusIcon } from "./icons";
+import { useT } from "./i18n";
 
 const PREVIEW_DURATION_S = 12;
 const WAVEFORM_BUCKETS = 800;
@@ -221,6 +222,7 @@ export function TrackPreview({
   view: sharedView,
   onViewChange,
 }: TrackPreviewProps) {
+  const t = useT();
   const [previewStart, setPreviewStart] = useState(() => (segments.length ? segments[0].start_s : 0));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -599,25 +601,23 @@ export function TrackPreview({
           small screen lacks. */}
       <div className="preview-toolbar">
         <div className="waveform-zoom-controls">
-          <span>Zoom :</span>
-          <button className="small-button zoom-button" title="Zoomer" aria-label="Zoomer" onClick={() => zoomAt(0.5, previewStart)}>
+          <span>{t.preview.zoom}</span>
+          <button className="small-button zoom-button" title={t.preview.zoomIn} aria-label={t.preview.zoomIn} onClick={() => zoomAt(0.5, previewStart)}>
             <PlusIcon />
           </button>
-          <button className="small-button zoom-button" title="Dézoomer" aria-label="Dézoomer" onClick={() => zoomAt(2, previewStart)}>
+          <button className="small-button zoom-button" title={t.preview.zoomOut} aria-label={t.preview.zoomOut} onClick={() => zoomAt(2, previewStart)}>
             <MinusIcon />
           </button>
           <button className="small-button" onClick={resetZoom}>
-            Piste entière
+            {t.preview.wholeTrack}
           </button>
-          <InfoTip>
-            Molette sur une forme d'onde : zoomer ou dézoomer sous le curseur. Clic : placer la lecture à cet endroit.
-          </InfoTip>
+          <InfoTip>{t.preview.zoomHint}</InfoTip>
         </div>
         {/* A few segments: one button each. More: a list, so the row
             doesn't wrap and eat the waveforms' height. */}
         {segments.length > 1 && segments.length <= MAX_SEGMENT_BUTTONS && (
           <div className="preview-segment-picks">
-            Aller à :
+            {t.preview.goTo}
             {segments.map((seg, i) => (
               <button key={i} className="small-button" onClick={() => goToSegment(seg)}>
                 {segmentPickLabel(seg)}
@@ -627,7 +627,7 @@ export function TrackPreview({
         )}
         {segments.length > MAX_SEGMENT_BUTTONS && (
           <label className="preview-segment-picks">
-            Aller à :
+            {t.preview.goTo}
             <select
               value=""
               onChange={(e) => {
@@ -635,7 +635,7 @@ export function TrackPreview({
                 if (seg) goToSegment(seg);
               }}
             >
-              <option value="">un segment ({segments.length})…</option>
+              <option value="">{t.preview.aSegment(segments.length)}</option>
               {segments.map((seg, i) => (
                 <option key={i} value={i}>
                   {i + 1}. {segmentPickLabel(seg)}
@@ -647,10 +647,10 @@ export function TrackPreview({
         {(removedHighlight.length > 0 || addedHighlight.length > 0) && (
           <span className="waveform-legend">
             <span>
-              <span className="waveform-legend-swatch removed" /> sera supprimé
+              <span className="waveform-legend-swatch removed" /> {t.preview.willBeRemoved}
             </span>
             <span>
-              <span className="waveform-legend-swatch added" /> sera ajouté (silence)
+              <span className="waveform-legend-swatch added" /> {t.preview.willBeAdded}
             </span>
           </span>
         )}
@@ -658,7 +658,7 @@ export function TrackPreview({
 
       {waveformError && <p className="error">{waveformError}</p>}
 
-      {waveformLoading && !viewData && <p className="placeholder">Chargement des formes d'onde...</p>}
+      {waveformLoading && !viewData && <p className="placeholder">{t.preview.loadingWaveforms}</p>}
 
       {viewDuration !== null && viewData && (
         <div className="waveforms">
@@ -672,7 +672,7 @@ export function TrackPreview({
             cursor={displayCursor}
             onSeek={handleWaveformSeek}
             onZoom={zoomAt}
-            label="Référence"
+            label={t.preview.reference}
             className="waveform-reference"
           />
           <Waveform
@@ -686,7 +686,7 @@ export function TrackPreview({
             onSeek={handleWaveformSeek}
             onZoom={zoomAt}
             highlights={removedHighlight}
-            label="Piste à corriger (telle quelle)"
+            label={t.preview.candidate}
             className="waveform-candidate"
           />
           <Waveform
@@ -700,7 +700,7 @@ export function TrackPreview({
             onSeek={handleWaveformSeek}
             onZoom={zoomAt}
             highlights={addedHighlight}
-            label="Résultat final"
+            label={t.preview.result}
             className="waveform-final"
           />
         </div>
@@ -719,7 +719,7 @@ export function TrackPreview({
 
       <div className="preview-controls">
         <label>
-          Position (s) :
+          {t.preview.position}
           <input
             type="number"
             step="0.5"
@@ -729,13 +729,13 @@ export function TrackPreview({
           />
         </label>
         <button className="small-button" onClick={() => loadAndPlay()} disabled={loading}>
-          {loading ? "Chargement..." : "Écouter"}
+          {loading ? t.preview.loading : t.preview.play}
         </button>
         <button className="small-button" onClick={stop} disabled={loadedClipStart === null && liveCursor === null}>
-          Arrêter
+          {t.preview.stop}
         </button>
         {/* What plays during "Écouter": any mix of the three. */}
-        <span className="preview-listen-label">Entendre :</span>
+        <span className="preview-listen-label">{t.preview.hear}</span>
         <label>
           <input
             type="checkbox"
@@ -748,7 +748,7 @@ export function TrackPreview({
               })
             }
           />
-          Référence
+          {t.preview.reference}
         </label>
         <label>
           <input
@@ -762,7 +762,7 @@ export function TrackPreview({
               })
             }
           />
-          Piste à corriger (telle quelle)
+          {t.preview.candidate}
         </label>
         <label>
           <input
@@ -776,19 +776,14 @@ export function TrackPreview({
               })
             }
           />
-          Résultat final
+          {t.preview.result}
         </label>
         <span className="preview-offset">
-          Décalage à cette position : {formatOffsetMs(appliedOffset)}
+          {t.preview.offsetHere(formatOffsetMs(appliedOffset))}
           {hasContainerDelay && (
             <>
               {" "}
-              <InfoTip>
-                Dont {formatOffsetMs(trackStartTime)} déjà appliqués par le fichier à cette piste (délai de conteneur) :
-                dans un lecteur, le décalage restant est d'environ {formatOffsetMs(presentationOffset)}. Le décalage
-                affiché, utilisé pour l'écoute et l'export, est mesuré sur la piste brute ; ce détail est seulement
-                informatif.
-              </InfoTip>
+              <InfoTip>{t.preview.containerDelay(formatOffsetMs(trackStartTime), formatOffsetMs(presentationOffset))}</InfoTip>
             </>
           )}
         </span>

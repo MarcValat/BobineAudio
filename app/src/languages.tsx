@@ -1,33 +1,13 @@
-// ISO 639-2 codes, as Matroska tags tracks with them.
-const LANGUAGE_NAMES: Record<string, string> = {
-  fre: "Français",
-  eng: "Anglais",
-  jpn: "Japonais",
-  ger: "Allemand",
-  spa: "Espagnol",
-  ita: "Italien",
-  por: "Portugais",
-  dut: "Néerlandais",
-  rus: "Russe",
-  pol: "Polonais",
-  kor: "Coréen",
-  chi: "Chinois",
-  ara: "Arabe",
-  swe: "Suédois",
-  nor: "Norvégien",
-  dan: "Danois",
-  fin: "Finnois",
-  tur: "Turc",
-  heb: "Hébreu",
-  hin: "Hindi",
-  tha: "Thaï",
-  vie: "Vietnamien",
-};
+import { t } from "./i18n";
 
-/** "Français (fre)", or the bare code for one not in the list above. */
+// The usual languages, by ISO 639-2 code (as Matroska tags tracks), named
+// in the UI's language.
+const languageNames = (): Record<string, string> => t().languages.names;
+
+/** "French (fre)", or the bare code for one not among the usual ones. */
 export function languageLabel(code: string | null): string {
-  if (!code) return "sans langue";
-  const name = LANGUAGE_NAMES[code];
+  if (!code) return t().languages.none;
+  const name = languageNames()[code];
   return name ? `${name} (${code})` : code;
 }
 
@@ -51,7 +31,7 @@ export function LanguageSelect({
   disabled?: boolean;
 }) {
   const found = extra.filter((c): c is string => !!c);
-  const codes = [...new Set(onlyExtra ? found : [...found, ...Object.keys(LANGUAGE_NAMES)])];
+  const codes = [...new Set(onlyExtra ? found : [...found, ...Object.keys(languageNames())])];
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
       {emptyLabel !== undefined && <option value="">{emptyLabel}</option>}

@@ -1,4 +1,5 @@
 import { connectJobWS } from "./api";
+import { t } from "./i18n";
 
 /** An engine job (analysis, export) as a promise: `onLog` gets its progress
  * messages, `onStart` its id as soon as it's known (to cancel it), and it
@@ -33,7 +34,7 @@ export function runJob<T>(
 /** What runJob rejects with when the job was cancelled (see cancelJob). */
 export class JobCancelled extends Error {
   constructor() {
-    super("Annulé");
+    super(t().common.cancelled);
   }
 }
 

@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { formatTime } from "./SegmentChart";
 import { WHEEL_ZOOM_IN_FACTOR, WHEEL_ZOOM_OUT_FACTOR, useWheel } from "./timeView";
 import "./Waveform.css";
+import { t } from "./i18n";
 
 const WIDTH = 860;
 const HEIGHT = 56;
@@ -132,7 +133,7 @@ export function Waveform({
         className="waveform-svg"
         onClick={handleClick}
         role="img"
-        aria-label={`Forme d'onde -- ${label}`}
+        aria-label={t().preview.waveform(label)}
       >
         <line x1={0} y1={HEIGHT / 2} x2={WIDTH} y2={HEIGHT / 2} className="waveform-zero" />
         {wideHighlights.map((h, i) => (

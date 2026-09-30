@@ -31,6 +31,7 @@ import { TrackTable } from "./TrackTable";
 import { SubtitleChecks } from "./SubtitleChecks";
 import { JobCancelled, runJob } from "./jobs";
 import { DropOverlay, useFileDrop } from "./FileDrop";
+import { useT } from "./i18n";
 
 type EngineStatus = "starting" | "ready" | "unreachable";
 
@@ -84,6 +85,7 @@ const IDLE_EXPORT: ExportState = {
 const COMPACT_ANALYSIS_HEIGHT = 520;
 
 function App() {
+  const t = useT();
   const [mode, setMode] = useState<"single" | "batch">("single");
   const [engineStatus, setEngineStatus] = useState<EngineStatus>("starting");
   const [filePath, setFilePath] = useState<string | null>(null);
@@ -139,7 +141,7 @@ function App() {
   useEffect(() => pollHealth(), [pollHealth]);
 
   // A file dropped on the window opens like a picked one (the first, if several).
-  const dropBlocked = exportState.running ? "Un export est en cours : attends sa fin ou annule-le." : null;
+  const dropBlocked = exportState.running ? t.single.exportRunningHint : null;
   const fileDrag = useFileDrop(
     mode === "single" && engineStatus === "ready" && editingTrack === null,
     dropBlocked,
@@ -292,18 +294,14 @@ function App() {
   const exportReferences = [...new Set(exportTracks.map((t) => analyses[t.index].referenceIndex))];
   const exportReference = exportReferences.length === 1 ? exportReferences[0] : null;
   const exportReferenceTrack = tracks?.find((t) => t.index === exportReference);
-  const plural = (n: number, one: string, many: string) => (n > 1 ? many : one);
   const exportSummary =
     exportReferenceTrack &&
-    `Contiendra la vidéo, la référence @${exportReferenceTrack.index} (${exportReferenceTrack.language ?? "?"}), ${plural(
-      exportTracks.length,
-      "la piste corrigée",
-      "les pistes corrigées",
-    )} ${exportTracks.map((t) => `@${t.index} (${t.language ?? "?"})`).join(", ")} et les sous-titres${
-      retimedSubs.length > 0
-        ? ` (${retimedSubs.map((i) => `@${i}`).join(", ")} ${plural(retimedSubs.length, "recalé", "recalés")} avec l'audio)`
-        : ""
-    }.${(tracks?.length ?? 0) > exportTracks.length + 1 ? " Les autres pistes audio ne sont pas incluses." : ""}`;
+    t.single.exportSummary(
+      `@${exportReferenceTrack.index} (${exportReferenceTrack.language ?? "?"})`,
+      exportTracks.map((tr) => `@${tr.index} (${tr.language ?? "?"})`),
+      retimedSubs.map((i) => `@${i}`),
+      (tracks?.length ?? 0) > exportTracks.length + 1,
+    );
 
   function toggleExportTrack(index: number) {
     setExportExcluded((current) => toggled(current, index));
@@ -314,7 +312,7 @@ function App() {
     const outputPath = await pickOutputFile(syncedFileName(filePath));
     if (!outputPath) return;
     if (outputPath.toLowerCase() === filePath.toLowerCase()) {
-      setExportState({ ...IDLE_EXPORT, error: "Choisis un autre nom que le fichier d'origine : il ne peut pas être remplacé pendant sa lecture." });
+      setExportState({ ...IDLE_EXPORT, error: t.single.sameAsInput });
       return;
     }
     setExportState({ ...IDLE_EXPORT, running: true });
@@ -371,12 +369,12 @@ function App() {
         {engineStatus === "starting" ? (
           <>
             <div className="spinner" aria-hidden="true" />
-            <p className="startup-text">Démarrage du moteur...</p>
+            <p className="startup-text">{t.startup.starting}</p>
           </>
         ) : (
           <>
-            <p className="startup-text error">Le moteur d'analyse ne répond pas. Réessaie, ou redémarre l'application.</p>
-            <button onClick={pollHealth}>Réessayer</button>
+            <p className="startup-text error">{t.startup.unreachable}</p>
+            <button onClick={pollHealth}>{t.common.retry}</button>
           </>
         )}
       </div>
@@ -388,10 +386,10 @@ function App() {
       <div className="top-bar">
         <div className="mode-switch">
           <button className={mode === "single" ? "primary-button" : ""} onClick={() => setMode("single")}>
-            Fichier unique
+            {t.modes.single}
           </button>
           <button className={mode === "batch" ? "primary-button" : ""} onClick={() => setMode("batch")}>
-            Batch
+            {t.modes.batch}
           </button>
         </div>
         <div className="top-actions">
@@ -416,27 +414,27 @@ function App() {
             className="primary-button file-open-button"
             onClick={handleOpenFile}
             disabled={exportState.running}
-            title={exportState.running ? "Un export est en cours : attends sa fin ou annule-le." : undefined}
+            title={exportState.running ? t.single.exportRunningHint : undefined}
           >
-            Ouvrir un fichier
+            {t.single.openFile}
           </button>
 
           <section className="panel field-tracks">
-            <h2>Pistes</h2>
+            <h2>{t.single.tracks}</h2>
             {filePath && (
               <p className="file-path" title={filePath}>
                 {basename(filePath)}
               </p>
             )}
             {prefetching && (
-              <p className="prefetch-status" title="Lecture des pistes audio en arrière-plan, pour que l'analyse démarre plus vite.">
-                Préparation des pistes...
+              <p className="prefetch-status" title={t.single.preparingHint}>
+                {t.single.preparing}
               </p>
             )}
-            {!tracks && !probeError && <p className="placeholder">Ouvre un fichier pour voir ses pistes.</p>}
+            {!tracks && !probeError && <p className="placeholder">{t.single.openToSeeTracks}</p>}
             {probeError && <p className="error">{probeError}</p>}
             {tracks && tracks.length < 2 && (
-              <p className="error">Ce fichier n'a qu'une seule piste audio : rien à comparer.</p>
+              <p className="error">{t.single.singleTrack}</p>
             )}
             {tracks && tracks.length >= 2 && (
               <>
@@ -455,9 +453,9 @@ function App() {
                     className="primary-button"
                     onClick={handleAnalyzeSelected}
                     disabled={referenceIndex === null || targetIndices.length === 0 || anySelectedRunning}
-                    title="Détecte le décalage de chaque piste cochée par rapport à la référence (dérive et sauts nets inclus), avec la courbe correspondante."
+                    title={t.single.analyzeHint}
                   >
-                    {anySelectedRunning ? "Analyse en cours..." : "Analyser"}
+                    {anySelectedRunning ? t.common.analysisRunning : t.single.analyze}
                   </button>
                 </div>
               </>
@@ -466,33 +464,33 @@ function App() {
 
           {analyzedTracks.length > 0 && tracks && (
             <section className="panel field-results">
-              <h2>Pistes analysées</h2>
+              <h2>{t.single.analyzedTracks}</h2>
               {/* One row per analyzed track: clicking it shows that track on
                   the right; its checkbox puts it in the export below. */}
               <ul className="result-list list-scroll">
-                {analyzedTracks.map((t) => {
-                  const entry = analyses[t.index];
+                {analyzedTracks.map((tr) => {
+                  const entry = analyses[tr.index];
                   return (
                     <li
-                      key={t.index}
-                      className={`result-row status-${entry.status}${activeAnalysisTab === t.index ? " active" : ""}`}
-                      onClick={() => setActiveAnalysisTab(t.index)}
+                      key={tr.index}
+                      className={`result-row status-${entry.status}${activeAnalysisTab === tr.index ? " active" : ""}`}
+                      onClick={() => setActiveAnalysisTab(tr.index)}
                     >
                       <div className="result-row-head">
                         <input
                           type="checkbox"
-                          title="Inclure cette piste corrigée dans l'export"
-                          checked={entry.result !== null && !exportExcluded.includes(t.index)}
+                          title={t.single.includeInExport}
+                          checked={entry.result !== null && !exportExcluded.includes(tr.index)}
                           disabled={entry.result === null || exportState.running}
                           onClick={(e) => e.stopPropagation()}
-                          onChange={() => toggleExportTrack(t.index)}
+                          onChange={() => toggleExportTrack(tr.index)}
                         />
                         <span className="result-name">
-                          @{t.index} ({t.language ?? "?"})
+                          @{tr.index} ({tr.language ?? "?"})
                         </span>
                         <span className="result-status">
-                          {entry.status === "running" && "Analyse en cours..."}
-                          {entry.status === "error" && "Échec"}
+                          {entry.status === "running" && t.common.analysisRunning}
+                          {entry.status === "error" && t.single.failed}
                           {entry.result && describeSegments(entry.result.segments)}
                         </span>
                       </div>
@@ -500,21 +498,15 @@ function App() {
                       {entry.result && subtitles.length > 0 && (
                         <div className="result-subs" onClick={(e) => e.stopPropagation()}>
                           <span className="result-subs-label">
-                            Recaler aussi ces sous-titres{" "}
-                            <InfoTip>
-                              Coche les pistes de sous-titres calées sur cette piste audio (typiquement les sous-titres
-                              forcés de sa langue, pré-cochés) : elles subiront les mêmes sauts et la même dérive à
-                              l'export. Les pistes décochées sont copiées telles quelles, calées sur la vidéo. Les
-                              sous-titres image (PGS, VobSub) ne peuvent pas être recalés.
-                            </InfoTip>
+                            {t.single.retimeSubs} <InfoTip>{t.single.retimeSubsHint}</InfoTip>
                           </span>
                           <SubtitleChecks
                             subtitles={subtitles}
-                            chosen={subsByTrack[t.index] ?? []}
-                            taken={takenByOthers(subsByTrack, t.index)}
+                            chosen={subsByTrack[tr.index] ?? []}
+                            taken={takenByOthers(subsByTrack, tr.index)}
                             disabled={exportState.running}
                             onToggle={(sub) =>
-                              setSubsChoice((c) => ({ ...c, [t.index]: toggled(subsByTrack[t.index] ?? [], sub) }))
+                              setSubsChoice((c) => ({ ...c, [tr.index]: toggled(subsByTrack[tr.index] ?? [], sub) }))
                             }
                           />
                         </div>
@@ -529,17 +521,14 @@ function App() {
 
               <div className="export-box">
                 {exportableTracks.length > 0 && exportTracks.length === 0 && (
-                  <p className="placeholder">Coche au moins une piste analysée pour l'inclure dans l'export.</p>
+                  <p className="placeholder">{t.single.tickOne}</p>
                 )}
                 {exportTracks.length > 0 && exportReference === null && (
-                  <p className="error">
-                    Ces pistes ont été analysées avec des références différentes : relance l'analyse avec une seule
-                    référence pour les exporter ensemble.
-                  </p>
+                  <p className="error">{t.single.mixedReferences}</p>
                 )}
                 {exportSummary && (
                   <p className="export-summary">
-                    Contenu de l'export <InfoTip>{exportSummary}</InfoTip>
+                    {t.single.exportContent} <InfoTip>{exportSummary}</InfoTip>
                   </p>
                 )}
                 <LogPanel lines={exportState.log} />
@@ -547,28 +536,28 @@ function App() {
                 {exportState.written && (
                   <div className="export-written">
                     <span className="render-success" title={exportState.written}>
-                      Fichier écrit : {basename(exportState.written)}
+                      {t.single.written(basename(exportState.written))}
                     </span>
                     <button className="small-button" onClick={() => revealItemInDir(exportState.written!)}>
-                      Ouvrir le dossier
+                      {t.single.openFolder}
                     </button>
                   </div>
                 )}
-                {exportState.cancelled && <p className="export-cancelled">Export annulé : aucun fichier n'a été écrit.</p>}
+                {exportState.cancelled && <p className="export-cancelled">{t.single.exportCancelled}</p>}
                 {exportState.running ? (
                   <div className="export-running">
-                    <span className="export-running-label">Export en cours...</span>
+                    <span className="export-running-label">{t.common.exportRunning}</span>
                     <button
                       className="export-cancel"
                       onClick={cancelExport}
                       disabled={!exportState.jobId || exportState.cancelling}
                     >
-                      {exportState.cancelling ? "Annulation..." : "Annuler l'export"}
+                      {exportState.cancelling ? t.common.cancelling : t.common.cancelExport}
                     </button>
                   </div>
                 ) : (
                   <button className="primary-button export-button" onClick={exportFile} disabled={exportReference === null}>
-                    Exporter le fichier synchronisé
+                    {t.single.exportButton}
                   </button>
                 )}
               </div>
@@ -580,8 +569,11 @@ function App() {
           <div className="analysis-header">
             <h2>
               {shownTrack && shownEntry
-                ? `Piste @${shownTrack.index} (${shownTrack.language ?? "?"}) · référence @${shownEntry.referenceIndex} (${shownReference?.language ?? "?"})`
-                : "Analyse"}
+                ? t.single.heading(
+                    `@${shownTrack.index} (${shownTrack.language ?? "?"})`,
+                    `@${shownEntry.referenceIndex} (${shownReference?.language ?? "?"})`,
+                  )
+                : t.common.analysis}
             </h2>
             {/* Too little height for the chart and readable waveforms at
                 once: one at a time, as tabs. */}
@@ -593,7 +585,7 @@ function App() {
                   className={analysisView === "segments" ? "active" : ""}
                   onClick={() => setAnalysisView("segments")}
                 >
-                  Segments
+                  {t.common.segments}
                 </button>
                 <button
                   role="tab"
@@ -601,19 +593,19 @@ function App() {
                   className={analysisView === "listen" ? "active" : ""}
                   onClick={() => setAnalysisView("listen")}
                 >
-                  Écoute
+                  {t.common.listen}
                 </button>
               </div>
             )}
             {shownTrack && shownEntry?.result && (
               <button className="small-button analysis-edit" onClick={() => setEditingTrack(shownTrack.index)}>
-                Modifier les segments
+                {t.single.editSegments}
               </button>
             )}
           </div>
           <div className="analysis-view" ref={analysisViewRef}>
             {!shownEntry && (
-              <p className="placeholder">Coche une ou plusieurs pistes à corriger, puis clique sur « Analyser ».</p>
+              <p className="placeholder">{t.single.pickAndAnalyze}</p>
             )}
             {shownEntry?.status === "running" && !shownEntry.result && <p className="placeholder">Analyse en cours...</p>}
             {shownEntry?.status === "error" && <p className="error">{shownEntry.error}</p>}
@@ -651,7 +643,7 @@ function App() {
       </main>
       )}
 
-      {mode === "single" && <DropOverlay drag={fileDrag} blocked={dropBlocked} label="Déposer pour ouvrir le fichier" />}
+      {mode === "single" && <DropOverlay drag={fileDrag} blocked={dropBlocked} label={t.files.dropToOpen} />}
 
       {mode === "single" && editingTrack !== null && editingEntry?.result && (
         <SegmentEditor

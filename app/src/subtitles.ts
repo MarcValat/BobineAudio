@@ -1,4 +1,5 @@
 import type { SubtitleInfo } from "./api";
+import { t } from "./i18n";
 
 /** Which subtitle tracks go with a corrected audio track, retimed along with
  * it: its language's forced ones (only the lines the audio doesn't cover --
@@ -6,11 +7,8 @@ import type { SubtitleInfo } from "./api";
  * language, or none. */
 export type SubtitleMode = "forced" | "all" | "none";
 
-export const SUBTITLE_MODES: { value: SubtitleMode; label: string }[] = [
-  { value: "forced", label: "Forcés de même langue" },
-  { value: "all", label: "Tous de même langue" },
-  { value: "none", label: "Aucun" },
-];
+/** In the order the setting lists them (labels: Messages.subtitles.modes). */
+export const SUBTITLE_MODES: SubtitleMode[] = ["forced", "all", "none"];
 
 /** The subtitle tracks to retime with an audio track in `language`, by
  * `mode`. Image subtitles (PGS, VobSub) are left out: they can't be
@@ -24,18 +22,17 @@ export function subtitlesFor(subtitles: SubtitleInfo[], language: string | null,
 
 /** "@4 fre forcés « Français (forcé) »". */
 export function subtitleLabel(s: SubtitleInfo): string {
-  return `@${s.index} ${s.language ?? "?"}${s.forced ? " forcés" : ""}${s.title ? ` « ${s.title} »` : ""}`;
+  const m = t().subtitles;
+  return `@${s.index} ${s.language ?? "?"}${s.forced ? m.forcedTag : ""}${s.title ? ` ${m.quoted(s.title)}` : ""}`;
 }
 
 /** What a subtitle track is, for a tooltip: "Format ass · sous-titres forcés · titre « ... »". */
 export function subtitleDetails(s: SubtitleInfo): string {
-  const parts = [`Format ${s.codec}`, s.forced ? "sous-titres forcés" : "sous-titres complets"];
-  if (s.title) parts.push(`titre « ${s.title} »`);
+  const m = t().subtitles;
+  const parts = [m.format(s.codec), s.forced ? m.forced : m.full];
+  if (s.title) parts.push(m.titled(s.title));
   return parts.join(" · ");
 }
-
-export const UNSHIFTABLE_HINT =
-  "Sous-titres image (PGS, VobSub) : ils ne peuvent pas être recalés segment par segment, seuls les sous-titres texte (SRT, ASS) le peuvent.";
 
 /** Which subtitle tracks go with each audio track (by its index): one
  * subtitle track goes with one audio track at most, so in `tracks`' order,

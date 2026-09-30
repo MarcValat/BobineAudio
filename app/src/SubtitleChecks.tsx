@@ -1,5 +1,6 @@
 import type { SubtitleInfo } from "./api";
-import { UNSHIFTABLE_HINT, subtitleDetails, subtitleLabel } from "./subtitles";
+import { subtitleDetails, subtitleLabel } from "./subtitles";
+import { useT } from "./i18n";
 
 /** One checkbox per subtitle track of a file: the ones retimed along with
  * one corrected audio track (`chosen`). A track `taken` by another audio
@@ -18,6 +19,7 @@ export function SubtitleChecks({
   disabled?: boolean;
   onToggle: (index: number) => void;
 }) {
+  const t = useT();
   return (
     <>
       {subtitles.map((s) => {
@@ -25,7 +27,7 @@ export function SubtitleChecks({
         return (
           <label
             key={s.index}
-            title={!s.shiftable ? UNSHIFTABLE_HINT : elsewhere ? "Déjà recalés avec une autre piste audio" : subtitleDetails(s)}
+            title={!s.shiftable ? t.subtitles.unshiftable : elsewhere ? t.subtitles.takenElsewhere : subtitleDetails(s)}
           >
             <input
               type="checkbox"
