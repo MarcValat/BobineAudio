@@ -10,18 +10,9 @@ import {
   type SubtitleInfo,
   type TrackInfo,
 } from "./api";
-import {
-  AnalyzeButton,
-  FileCell,
-  JobCancelled,
-  languageLabel,
-  LanguageSelect,
-  OTHER_MODE_BUSY,
-  OutputChooser,
-  runJob,
-  useEscape,
-  type RunStatus,
-} from "./batchShared";
+import { JobCancelled, runJob, type RunStatus } from "./jobs";
+import { languageLabel, LanguageSelect } from "./languages";
+import { AnalyzeButton, FileCell, OTHER_MODE_BUSY, OutputChooser } from "./batchShared";
 import { InfoTip } from "./InfoTip";
 import { LogPanel } from "./LogPanel";
 import { pickMediaFiles, planOutputPaths } from "./mediaDialog";
@@ -37,6 +28,7 @@ import {
   type SubtitleMode,
 } from "./subtitles";
 import { devParam, errorMessage } from "./util";
+import { Dialog, DialogHeader } from "./Dialog";
 
 interface FileProbe {
   tracks: TrackInfo[] | null;
@@ -128,7 +120,6 @@ function TrackChoiceModal({
   onClose: () => void;
 }) {
   const [choice, setChoice] = useState(initial);
-  useEscape(onClose);
   const subsOfTrack = (index: number) =>
     choice.subtitles?.[index] ?? defaultSubtitles(tracks.find((t) => t.index === index)!);
   function toggleSubtitle(track: number, sub: number) {
@@ -139,14 +130,8 @@ function TrackChoiceModal({
     });
   }
   return (
-    <div className="batch-tracks-overlay" role="dialog" aria-modal="true">
-      <div className="batch-tracks-panel batch-choice-panel">
-        <div className="batch-tracks-header">
-          <h2 title={path}>Pistes de {basename(path)}</h2>
-          <button className="small-button" onClick={onClose}>
-            Annuler
-          </button>
-        </div>
+    <Dialog onClose={onClose} className="batch-choice-panel" labelledBy="choice-title">
+      <DialogHeader id="choice-title" title={`Pistes de ${basename(path)}`} titleTooltip={path} onClose={onClose} closeLabel="Annuler" />
         <table className="batch-tracks-table">
           <thead>
             <tr>
@@ -241,8 +226,7 @@ function TrackChoiceModal({
             Valider
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }
 

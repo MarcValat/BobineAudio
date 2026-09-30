@@ -1,31 +1,7 @@
-.editor-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-  padding: 1em;
-  box-sizing: border-box;
-}
-
+/* A `fill` Dialog (the whole window, bar the backdrop's margin): the chart
+   takes the height left over, the segment table scrolls in its own frame. */
 .editor-panel {
-  background: var(--surface, #f6f6f6);
-  color: inherit;
-  border-radius: var(--radius, 12px);
-  box-shadow: var(--shadow, 0 4px 16px rgba(0, 0, 0, 0.25));
-  padding: 1.2em 1.4em;
-  width: 100%;
   max-width: 960px;
-  /* The whole window (bar the backdrop's margin), fitted rather than
-     scrolled: the chart takes the height left over, the segment table
-     scrolls in its own frame when long. */
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-  text-align: left;
 }
 
 /* Wider when the waveform column is present -- side by side, both the
@@ -60,19 +36,6 @@
 .editor-chart-box {
   flex: 1 1 auto;
   min-height: 160px;
-}
-
-.editor-header {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.6em;
-}
-
-.editor-header h2 {
-  margin: 0;
-  font-size: 1.1em;
 }
 
 .editor-chart {
@@ -311,7 +274,4 @@
   padding-left: 0;
 }
 
-.editor-header .view-tabs {
-  margin-left: auto;
-  margin-right: 0.8em;
-}
+

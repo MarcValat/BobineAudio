@@ -20,6 +20,10 @@
   --radius: 12px;
   --radius-sm: 8px;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.05);
+  /* What floats over the rest: menus, dropdown lists, dialogs. */
+  --shadow-popup: 0 6px 20px rgba(0, 0, 0, 0.25);
+  /* Dims the app behind a dialog. */
+  --backdrop: rgba(0, 0, 0, 0.55);
   --scrollbar-thumb: light-dark(rgba(15, 15, 15, 0.22), rgba(255, 255, 255, 0.2));
   --scrollbar-thumb-hover: light-dark(rgba(15, 15, 15, 0.4), rgba(255, 255, 255, 0.38));
 

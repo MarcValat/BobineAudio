@@ -13,6 +13,7 @@ import { type TimeView, WHEEL_ZOOM_IN_FACTOR, WHEEL_ZOOM_OUT_FACTOR, useWheel, z
 import { TrackPreview, type TrackPreviewHandle } from "./TrackPreview";
 import { useElementSize } from "./useElementSize";
 import "./SegmentEditor.css";
+import { Dialog, DialogHeader } from "./Dialog";
 
 // The chart is drawn at the size its box actually gets (measured), so its
 // text keeps one size on any window (see SegmentChart).
@@ -252,12 +253,6 @@ export function SegmentEditor({
   // native undo can't follow values the editor rewrites.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        if (confirmingClose) setConfirmingClose(false);
-        else requestClose();
-        return;
-      }
       if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
       const key = e.key.toLowerCase();
       if (key === "z" && !e.shiftKey) {
@@ -462,10 +457,17 @@ export function SegmentEditor({
   }
 
   return (
-    <div className="editor-overlay" role="dialog" aria-modal="true">
-      <div ref={panelRef} className={`editor-panel${preview ? " editor-panel-wide" : ""}${narrow ? " editor-narrow" : ""}`}>
-        <div className="editor-header">
-          <h2>
+    <Dialog
+      fill
+      onClose={onClose}
+      // Escape backs out of the "abandon changes?" question first.
+      onEscape={() => (confirmingClose ? setConfirmingClose(false) : requestClose())}
+      panelRef={panelRef}
+      className={`editor-panel${preview ? " editor-panel-wide" : ""}${narrow ? " editor-narrow" : ""}`}
+    >
+        <DialogHeader
+          title={
+            <>
             Corriger manuellement les segments{" "}
             <InfoTip>
               <ul>
@@ -483,7 +485,9 @@ export function SegmentEditor({
                 <li>Décalage : + = la piste est en retard sur la référence, − = en avance.</li>
               </ul>
             </InfoTip>
-          </h2>
+            </>
+          }
+        >
           {/* Too narrow for the chart and the preview side by side: one at a time. */}
           {narrow && (
             <div className="view-tabs" role="tablist">
@@ -520,7 +524,7 @@ export function SegmentEditor({
               Annuler
             </button>
           )}
-        </div>
+        </DialogHeader>
 
         <div className="editor-columns">
           <div className={narrow && editorView !== "segments" ? "editor-primary view-hidden" : "editor-primary"}>
@@ -803,7 +807,6 @@ export function SegmentEditor({
             Enregistrer
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

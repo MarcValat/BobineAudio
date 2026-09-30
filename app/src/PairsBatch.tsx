@@ -9,16 +9,9 @@ import {
   type RenderResponse,
   type TrackInfo,
 } from "./api";
-import {
-  AnalyzeButton,
-  FileCell,
-  JobCancelled,
-  LanguageSelect,
-  OTHER_MODE_BUSY,
-  OutputChooser,
-  runJob,
-  useEscape,
-} from "./batchShared";
+import { JobCancelled, runJob } from "./jobs";
+import { LanguageSelect } from "./languages";
+import { AnalyzeButton, FileCell, OTHER_MODE_BUSY, OutputChooser } from "./batchShared";
 import { InfoTip } from "./InfoTip";
 import { describeSegments } from "./SegmentChart";
 import { SegmentEditor } from "./SegmentEditor";
@@ -27,6 +20,7 @@ import { pickMediaFiles, planOutputPaths } from "./mediaDialog";
 import { basename } from "./paths";
 import { SUBTITLE_MODES, subtitlesFor, type SubtitleMode } from "./subtitles";
 import { devParam, errorMessage } from "./util";
+import { Dialog, DialogHeader } from "./Dialog";
 
 
 interface PairAnalysis {
@@ -136,7 +130,6 @@ function TrackPicker({ label, tracks, loading, error, value, onChange, disabled 
 function AllTracksModal({ referenceFiles, candidateFiles, onClose }: { referenceFiles: string[]; candidateFiles: string[]; onClose: () => void }) {
   const [entries, setEntries] = useState<Record<string, { tracks: TrackInfo[] | null; error: string | null }>>({});
   const [loading, setLoading] = useState(true);
-  useEscape(onClose);
 
   useEffect(() => {
     let cancelled = false;
@@ -206,20 +199,13 @@ function AllTracksModal({ referenceFiles, candidateFiles, onClose }: { reference
   }
 
   return (
-    <div className="batch-tracks-overlay" role="dialog" aria-modal="true">
-      <div className="batch-tracks-panel">
-        <div className="batch-tracks-header">
-          <h2>Vérifier toutes les pistes</h2>
-          <button className="small-button" onClick={onClose}>
-            Fermer
-          </button>
-        </div>
-        <div className="batch-tracks-columns">
-          {renderSide("Fichiers référence", referenceFiles)}
-          {renderSide("Fichiers à corriger", candidateFiles)}
-        </div>
+    <Dialog onClose={onClose} closeOnBackdrop className="batch-tracks-panel" labelledBy="all-tracks-title">
+      <DialogHeader id="all-tracks-title" title="Vérifier toutes les pistes" onClose={onClose} />
+      <div className="batch-tracks-columns">
+        {renderSide("Fichiers référence", referenceFiles)}
+        {renderSide("Fichiers à corriger", candidateFiles)}
       </div>
-    </div>
+    </Dialog>
   );
 }
 
