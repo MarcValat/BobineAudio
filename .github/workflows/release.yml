@@ -1,9 +1,10 @@
 # Builds the Windows and Linux installers + auto-updater artifacts and
 # publishes them as a GitHub Release, triggered by pushing a `vX.Y.Z` tag.
-# A pull request that touches the build (this file, the Tauri shell, the
-# engine's packaging) builds both too, without publishing anything: the
-# installers are attached to the run as artifacts, to try before merging.
-# So does a manual run (Actions > Release > Run workflow).
+# A pull request that changes how they're built (this file, the engine's
+# packaging) builds both too, without publishing anything: the installers
+# are attached to the run as artifacts, to try before merging. So does a
+# manual run (Actions > Release > Run workflow). Not a version bump's pull
+# request: its tag builds the release right after anyway.
 #
 # GitHub is the canonical remote (this repo used to live on a self-hosted
 # GitLab, mirrored here -- switched away after mirrored pushes turned out
@@ -24,7 +25,6 @@ on:
   pull_request:
     paths:
       - ".github/workflows/release.yml"
-      - "app/src-tauri/**"
       - "engine/packaging/**"
   workflow_dispatch:
 
