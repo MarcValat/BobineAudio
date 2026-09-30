@@ -433,7 +433,13 @@ select:hover {
     display: none;
   }
 
+  /* Below the field, flipping above only when it doesn't fit there: the
+     default opens on whichever side has more room, i.e. above any field in
+     the lower half of the window. Capped so it can't just shrink to fit
+     below instead of flipping; a long list scrolls inside. */
   ::picker(select) {
+    position-try-order: normal;
+    max-block-size: 60vh;
     margin-block: 4px;
     padding: 4px;
     border: 1px solid var(--border);
