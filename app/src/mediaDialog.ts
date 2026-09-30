@@ -4,15 +4,13 @@ import { devParam, loadSetting, saveSetting } from "./util";
 
 // Videos to take a reference from, and the audio-only files a corrected track
 // can come from (batch mode): anything ffmpeg reads is fine, these are the
-// usual ones.
+// usual ones -- and what a dropped folder's files are picked by.
+export const MEDIA_EXTENSIONS = [
+  "mkv", "mp4", "m4v", "mov", "avi", "webm", "ts", "m2ts",
+  "mka", "wav", "flac", "aac", "ac3", "eac3", "dts", "thd", "mlp", "mp3", "m4a", "opus", "ogg", "wma",
+];
 const MEDIA_FILTERS = [
-  {
-    name: "Vidéo/Audio",
-    extensions: [
-      "mkv", "mp4", "m4v", "mov", "avi", "webm", "ts", "m2ts",
-      "mka", "wav", "flac", "aac", "ac3", "eac3", "dts", "thd", "mlp", "mp3", "m4a", "opus", "ogg", "wma",
-    ],
-  },
+  { name: "Vidéo/Audio", extensions: MEDIA_EXTENSIONS },
   { name: "Tous les fichiers", extensions: ["*"] },
 ];
 const LAST_FOLDER_KEY = "syncaudio.lastFolder";

@@ -75,6 +75,16 @@ export function AnalyzeButton({
 /** Why a batch mode's buttons are off while the other mode works. */
 export const OTHER_MODE_BUSY = "Un traitement est en cours dans l'autre mode batch : attends sa fin.";
 
+/** Under what's dropped on a batch mode. */
+export const FOLDER_DROP_HINT = "Un dossier ajoute ses fichiers vidéo et audio, par ordre de nom";
+
+/** Why files can't be dropped on a batch mode right now, if they can't:
+ * like its "+ Ajouter" buttons, not while it or the other mode works. */
+export function dropBlockedReason(busy: boolean, blocked: boolean): string | null {
+  if (busy) return "Import impossible pendant une analyse ou un export : attends sa fin.";
+  return blocked ? OTHER_MODE_BUSY : null;
+}
+
 /** One file of a list, with the buttons that move it within its column (to
  * reorder, or pair it with another row) or drop it. A dash when its column
  * is shorter than the other one. The arrows carry U+FE0E, which asks for

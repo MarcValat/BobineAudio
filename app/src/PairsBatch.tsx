@@ -11,6 +11,8 @@ import {
   IDLE_EXPORT,
   RevealButton,
   useExportQueue,
+  dropBlockedReason,
+  FOLDER_DROP_HINT,
   writtenFile,
   type AnalysisRun,
   type ExportFields,
@@ -18,6 +20,7 @@ import {
 import { InfoTip } from "./InfoTip";
 import { SegmentEditor } from "./SegmentEditor";
 import { pickMediaFiles } from "./mediaDialog";
+import { DropOverlay, useFileDrop } from "./FileDrop";
 import { basename } from "./paths";
 import { SUBTITLE_MODES, subtitlesFor, type SubtitleMode } from "./subtitles";
 import { devParam, errorMessage } from "./util";
@@ -364,6 +367,12 @@ export function PairsBatch({
   }
 
   const busy = analyzing || queue.exporting;
+
+  // Dropped on the left half: reference files; on the right: files to correct.
+  const dropBlocked = dropBlockedReason(busy, blocked);
+  const fileDrag = useFileDrop(!hidden && !showTracksModal && editingPairIndex === null, dropBlocked, (files, side) =>
+    (side === "left" ? setReferenceFiles : setCandidateFiles)((current) => [...current, ...files]),
+  );
   useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
 
   // The files' own start times, for the editor's informational "delay
@@ -610,6 +619,12 @@ export function PairsBatch({
           }}
         />
       )}
+      <DropOverlay
+        drag={fileDrag}
+        blocked={dropBlocked}
+        split={["Référence", "À corriger"]}
+        hint={FOLDER_DROP_HINT}
+      />
     </main>
   );
 }
