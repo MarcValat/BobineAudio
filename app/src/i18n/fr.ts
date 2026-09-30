@@ -33,6 +33,7 @@ export const fr = {
   startup: {
     starting: "Démarrage du moteur...",
     unreachable: "Le moteur d'analyse ne répond pas. Réessaie, ou redémarre l'application.",
+    unreachableShort: "⚠ Le moteur ne répond pas",
   },
 
   modes: {
@@ -157,6 +158,7 @@ export const fr = {
     preparing: "Préparation des pistes...",
     preparingHint: "Lecture des pistes audio en arrière-plan, pour que l'analyse démarre plus vite.",
     openToSeeTracks: "Ouvre un fichier pour voir ses pistes.",
+    readingTracks: "Lecture des pistes...",
     singleTrack: "Ce fichier n'a qu'une seule piste audio : rien à comparer.",
     analyze: "Analyser",
     analyzeHint:

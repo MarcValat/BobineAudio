@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  checkHealth,
   probe,
   startSegmentsJob,
   startPrefetchJob,
@@ -34,13 +33,7 @@ import { JobCancelled, runJob } from "./jobs";
 import { DropOverlay, useFileDrop } from "./FileDrop";
 import { useLanguage, useT } from "./i18n";
 import { useSubtitleDefault } from "./settings";
-
-type EngineStatus = "starting" | "ready" | "unreachable";
-
-// Asked often, so the app opens as soon as the engine answers (it's up in
-// about a second); a tiny local request, only while starting.
-const HEALTH_POLL_INTERVAL_MS = 100;
-const HEALTH_POLL_ATTEMPTS = 200; // 200 * 100ms = 20s before giving up
+import { EngineStatusBadge } from "./EngineStatus";
 
 /**
  * Per-track analysis + export state, keyed by track index. There used to be
@@ -89,7 +82,6 @@ const COMPACT_ANALYSIS_HEIGHT = 520;
 function App() {
   const t = useT();
   const [mode, setMode] = useState<"single" | "batch">("single");
-  const [engineStatus, setEngineStatus] = useState<EngineStatus>("starting");
   const [filePath, setFilePath] = useState<string | null>(null);
   const [tracks, setTracks] = useState<TrackInfo[] | null>(null);
   const [subtitles, setSubtitles] = useState<SubtitleInfo[]>([]);
@@ -118,41 +110,17 @@ function App() {
   // landing in the new file's view.
   const fileGenRef = useRef(0);
 
-  const pollHealth = useCallback(() => {
-    let cancelled = false;
-    let attempts = 0;
-    setEngineStatus("starting");
-    async function poll() {
-      if (await checkHealth()) {
-        if (!cancelled) setEngineStatus("ready");
-        return;
-      }
-      attempts += 1;
-      if (attempts > HEALTH_POLL_ATTEMPTS) {
-        if (!cancelled) setEngineStatus("unreachable");
-        return;
-      }
-      if (!cancelled) setTimeout(poll, HEALTH_POLL_INTERVAL_MS);
-    }
-    poll();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => pollHealth(), [pollHealth]);
-
-  // The engine's messages (job logs, errors) in the UI's language: once it
-  // answers, and whenever the language changes.
+  // The engine's messages (job logs, errors) in the UI's language whenever
+  // it changes (engine.ts sends it once the engine is up).
   const language = useLanguage();
   useEffect(() => {
-    if (engineStatus === "ready") setEngineLanguage(language).catch(() => {});
-  }, [engineStatus, language]);
+    setEngineLanguage(language).catch(() => {});
+  }, [language]);
 
   // A file dropped on the window opens like a picked one (the first, if several).
   const dropBlocked = exportState.running ? t.single.exportRunningHint : null;
   const fileDrag = useFileDrop(
-    mode === "single" && engineStatus === "ready" && editingTrack === null,
+    mode === "single" && editingTrack === null,
     dropBlocked,
     (files) => openFile(files[0]),
   );
@@ -165,12 +133,11 @@ function App() {
   // Dev only (see devParam): `?open=<path>` opens a file, `?mode=batch`
   // starts on batch mode.
   useEffect(() => {
-    if (engineStatus !== "ready") return;
     if (devParam("mode") === "batch") setMode("batch");
     const path = devParam("open");
     if (path) openFile(path);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engineStatus]);
+  }, []);
 
   async function openFile(selected: string) {
     const gen = ++fileGenRef.current;
@@ -371,27 +338,6 @@ function App() {
   // together in the analysis panel: they become two tabs instead.
   const compactAnalysis = analysisViewSize.height > 0 && analysisViewSize.height < COMPACT_ANALYSIS_HEIGHT;
 
-  // Nothing in the app is usable before the sidecar answers -- a full-screen
-  // splash instead of a text banner over an inert shell makes that obvious
-  // and stops the user from clicking around a UI that can't do anything yet.
-  if (engineStatus !== "ready") {
-    return (
-      <div className="container startup-screen">
-        {engineStatus === "starting" ? (
-          <>
-            <div className="spinner" aria-hidden="true" />
-            <p className="startup-text">{t.startup.starting}</p>
-          </>
-        ) : (
-          <>
-            <p className="startup-text error">{t.startup.unreachable}</p>
-            <button onClick={pollHealth}>{t.common.retry}</button>
-          </>
-        )}
-      </div>
-    );
-  }
-
   return (
     <div className="container">
       <div className="top-bar">
@@ -404,6 +350,7 @@ function App() {
           </button>
         </div>
         <div className="top-actions">
+          <EngineStatusBadge />
           <UpdateButton />
           <OptionsButton />
         </div>
@@ -442,7 +389,10 @@ function App() {
                 {t.single.preparing}
               </p>
             )}
-            {!tracks && !probeError && <p className="placeholder">{t.single.openToSeeTracks}</p>}
+            {!tracks && !probeError && (
+              // Opened but not read yet: the engine may still be starting.
+              <p className="placeholder">{filePath ? t.single.readingTracks : t.single.openToSeeTracks}</p>
+            )}
             {probeError && <p className="error">{probeError}</p>}
             {tracks && tracks.length < 2 && (
               <p className="error">{t.single.singleTrack}</p>

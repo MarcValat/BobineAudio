@@ -32,6 +32,7 @@ export const en: Messages = {
   startup: {
     starting: "Starting the engine...",
     unreachable: "The analysis engine isn't responding. Try again, or restart the app.",
+    unreachableShort: "⚠ The engine isn't responding",
   },
 
   modes: {
@@ -154,6 +155,7 @@ export const en: Messages = {
     preparing: "Preparing the tracks...",
     preparingHint: "Reading the audio tracks in the background, so the analysis starts sooner.",
     openToSeeTracks: "Open a file to see its tracks.",
+    readingTracks: "Reading tracks...",
     singleTrack: "This file has only one audio track: nothing to compare.",
     analyze: "Analyze",
     analyzeHint:
