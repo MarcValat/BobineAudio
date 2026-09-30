@@ -32,3 +32,8 @@ export function devParam(name: string): string | null {
   if (!import.meta.env.DEV) return null;
   return new URLSearchParams(window.location.search).get(name);
 }
+
+/** `list` with `item` added, or removed if it was there (a ticked/unticked box). */
+export function toggled<T>(list: T[], item: T): T[] {
+  return list.includes(item) ? list.filter((x) => x !== item) : [...list, item];
+}

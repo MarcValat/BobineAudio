@@ -24,10 +24,12 @@ import { OptionsButton } from "./Options";
 import { UpdateButton } from "./UpdateButton";
 import { pickMediaFiles, pickOutputFile, syncedFileName } from "./mediaDialog";
 import { basename } from "./paths";
-import { UNSHIFTABLE_HINT, subtitleDetails, subtitleLabel, subtitlesFor } from "./subtitles";
+import { assignSubtitles, subtitlesFor, takenByOthers } from "./subtitles";
 import { useElementSize } from "./useElementSize";
 import "./App.css";
-import { devParam, errorMessage } from "./util";
+import { devParam, errorMessage, toggled } from "./util";
+import { TrackTable } from "./TrackTable";
+import { SubtitleChecks } from "./SubtitleChecks";
 
 type EngineStatus = "starting" | "ready" | "unreachable";
 
@@ -206,7 +208,7 @@ function App() {
 
   function toggleTarget(index: number) {
     setTargetIndices((current) =>
-      current.includes(index) ? current.filter((i) => i !== index) : [...current, index],
+      toggled(current, index),
     );
   }
 
@@ -269,13 +271,10 @@ function App() {
   // The subtitle tracks retimed with each analyzed track: those picked by
   // hand, or by default its language's forced ones. One subtitle track goes
   // with one audio track at most (the first to claim it).
-  const subsByTrack: Record<number, number[]> = {};
-  const claimedSubs = new Set<number>();
-  for (const t of analyzedTracks) {
-    const wanted = subsChoice[t.index] ?? subtitlesFor(subtitles, t.language, "forced");
-    subsByTrack[t.index] = wanted.filter((i) => !claimedSubs.has(i));
-    subsByTrack[t.index].forEach((i) => claimedSubs.add(i));
-  }
+  const subsByTrack = assignSubtitles(
+    analyzedTracks,
+    (t) => subsChoice[t.index] ?? subtitlesFor(subtitles, t.language, "forced"),
+  );
   const exportTracks = exportableTracks.filter((t) => !exportExcluded.includes(t.index));
   const retimedSubs = exportTracks.flatMap((t) => subsByTrack[t.index] ?? []);
   // What an export would contain now: once it changes (another analysis, a
@@ -307,7 +306,7 @@ function App() {
     }.${(tracks?.length ?? 0) > exportTracks.length + 1 ? " Les autres pistes audio ne sont pas incluses." : ""}`;
 
   function toggleExportTrack(index: number) {
-    setExportExcluded((current) => (current.includes(index) ? current.filter((i) => i !== index) : [...current, index]));
+    setExportExcluded((current) => toggled(current, index));
   }
 
   async function exportFile() {
@@ -445,42 +444,13 @@ function App() {
             {tracks && tracks.length >= 2 && (
               <>
                 <div className="tracks-table-wrap list-scroll">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Piste</th>
-                        <th>Langue</th>
-                        <th>Codec</th>
-                        <th>Réf.</th>
-                        <th>À corriger</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tracks.map((t) => (
-                        <tr key={t.index}>
-                          <td>@{t.index}</td>
-                          <td>{t.language ?? "?"}</td>
-                          <td>{t.codec ?? "?"}</td>
-                          <td>
-                            <input
-                              type="radio"
-                              name="reference"
-                              checked={referenceIndex === t.index}
-                              onChange={() => handleReferenceChange(t.index)}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="checkbox"
-                              disabled={referenceIndex === t.index}
-                              checked={targetIndices.includes(t.index)}
-                              onChange={() => toggleTarget(t.index)}
-                            />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <TrackTable
+                    tracks={tracks}
+                    reference={referenceIndex}
+                    targets={targetIndices}
+                    onReference={handleReferenceChange}
+                    onToggleTarget={toggleTarget}
+                  />
                 </div>
 
                 <div className="tracks-actions">
@@ -541,37 +511,15 @@ function App() {
                               sous-titres image (PGS, VobSub) ne peuvent pas être recalés.
                             </InfoTip>
                           </span>
-                          {subtitles.map((s) => {
-                            const elsewhere = Object.entries(subsByTrack).some(
-                              ([track, subs]) => Number(track) !== t.index && subs.includes(s.index),
-                            );
-                            const mine = subsByTrack[t.index] ?? [];
-                            return (
-                              <label
-                                key={s.index}
-                                title={
-                                  !s.shiftable
-                                    ? UNSHIFTABLE_HINT
-                                    : elsewhere
-                                      ? "Déjà recalés avec une autre piste audio"
-                                      : subtitleDetails(s)
-                                }
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={mine.includes(s.index)}
-                                  disabled={!s.shiftable || elsewhere || exportState.running}
-                                  onChange={() =>
-                                    setSubsChoice((c) => ({
-                                      ...c,
-                                      [t.index]: mine.includes(s.index) ? mine.filter((i) => i !== s.index) : [...mine, s.index],
-                                    }))
-                                  }
-                                />
-                                {subtitleLabel(s)}
-                              </label>
-                            );
-                          })}
+                          <SubtitleChecks
+                            subtitles={subtitles}
+                            chosen={subsByTrack[t.index] ?? []}
+                            taken={takenByOthers(subsByTrack, t.index)}
+                            disabled={exportState.running}
+                            onToggle={(sub) =>
+                              setSubsChoice((c) => ({ ...c, [t.index]: toggled(subsByTrack[t.index] ?? [], sub) }))
+                            }
+                          />
                         </div>
                       )}
                       <div onClick={(e) => e.stopPropagation()}>

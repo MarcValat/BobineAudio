@@ -21,6 +21,7 @@ import { basename } from "./paths";
 import { SUBTITLE_MODES, subtitlesFor, type SubtitleMode } from "./subtitles";
 import { devParam, errorMessage } from "./util";
 import { Dialog, DialogHeader } from "./Dialog";
+import { TrackTable } from "./TrackTable";
 
 
 interface PairAnalysis {
@@ -169,26 +170,7 @@ function AllTracksModal({ referenceFiles, candidateFiles, onClose }: { reference
                 {loading && !entry && <p className="placeholder">Sondage...</p>}
                 {entry?.error && <p className="error">{entry.error}</p>}
                 {entry?.tracks && (
-                  <table className="batch-tracks-table">
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>Langue</th>
-                        <th>Codec</th>
-                        <th>Canaux</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {entry.tracks.map((t) => (
-                        <tr key={t.index}>
-                          <td>@{t.index}</td>
-                          <td>{t.language ?? "?"}</td>
-                          <td>{t.codec ?? "?"}</td>
-                          <td>{t.channels ?? "?"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <TrackTable className="batch-tracks-table" tracks={entry.tracks} showChannels />
                 )}
               </div>
             );

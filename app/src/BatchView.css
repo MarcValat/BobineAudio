@@ -346,7 +346,7 @@ td.batch-index {
 
 /* Radio buttons and checkboxes centered under their header, as in the
    single-file tracks table. */
-.batch-tracks-table .batch-choice-control {
+.batch-tracks-table .track-pick {
   text-align: center;
 }
 

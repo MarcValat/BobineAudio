@@ -36,3 +36,21 @@ export function subtitleDetails(s: SubtitleInfo): string {
 
 export const UNSHIFTABLE_HINT =
   "Sous-titres image (PGS, VobSub) : ils ne peuvent pas être recalés segment par segment, seuls les sous-titres texte (SRT, ASS) le peuvent.";
+
+/** Which subtitle tracks go with each audio track (by its index): one
+ * subtitle track goes with one audio track at most, so in `tracks`' order,
+ * each takes those of `wanted(track)` no earlier one took. */
+export function assignSubtitles<T extends { index: number }>(tracks: T[], wanted: (track: T) => number[]): Record<number, number[]> {
+  const claimed = new Set<number>();
+  const out: Record<number, number[]> = {};
+  for (const t of tracks) {
+    out[t.index] = wanted(t).filter((i) => !claimed.has(i));
+    out[t.index].forEach((i) => claimed.add(i));
+  }
+  return out;
+}
+
+/** The subtitle tracks assigned to other audio tracks than `track`. */
+export function takenByOthers(assigned: Record<number, number[]>, track: number): number[] {
+  return Object.entries(assigned).flatMap(([other, subs]) => (Number(other) === track ? [] : subs));
+}

@@ -19,16 +19,11 @@ import { pickMediaFiles, planOutputPaths } from "./mediaDialog";
 import { basename } from "./paths";
 import { describeSegments } from "./SegmentChart";
 import { SegmentEditor } from "./SegmentEditor";
-import {
-  SUBTITLE_MODES,
-  UNSHIFTABLE_HINT,
-  subtitleDetails,
-  subtitleLabel,
-  subtitlesFor,
-  type SubtitleMode,
-} from "./subtitles";
-import { devParam, errorMessage } from "./util";
+import { assignSubtitles, SUBTITLE_MODES, type SubtitleMode, subtitlesFor, takenByOthers } from "./subtitles";
+import { devParam, errorMessage, toggled } from "./util";
 import { Dialog, DialogHeader } from "./Dialog";
+import { TrackTable } from "./TrackTable";
+import { SubtitleChecks } from "./SubtitleChecks";
 
 interface FileProbe {
   tracks: TrackInfo[] | null;
@@ -120,61 +115,28 @@ function TrackChoiceModal({
   onClose: () => void;
 }) {
   const [choice, setChoice] = useState(initial);
-  const subsOfTrack = (index: number) =>
-    choice.subtitles?.[index] ?? defaultSubtitles(tracks.find((t) => t.index === index)!);
+  const targetTracks = tracks.filter((t) => choice.targets.includes(t.index));
+  const assigned = assignSubtitles(targetTracks, (t) => choice.subtitles?.[t.index] ?? defaultSubtitles(t));
   function toggleSubtitle(track: number, sub: number) {
-    setChoice((c) => {
-      const mine = c.subtitles?.[track] ?? defaultSubtitles(tracks.find((t) => t.index === track)!);
-      const next = mine.includes(sub) ? mine.filter((i) => i !== sub) : [...mine, sub];
-      return { ...c, subtitles: { ...c.subtitles, [track]: next } };
-    });
+    setChoice((c) => ({ ...c, subtitles: { ...c.subtitles, [track]: toggled(assigned[track] ?? [], sub) } }));
   }
   return (
     <Dialog onClose={onClose} className="batch-choice-panel" labelledBy="choice-title">
       <DialogHeader id="choice-title" title={`Pistes de ${basename(path)}`} titleTooltip={path} onClose={onClose} closeLabel="Annuler" />
-        <table className="batch-tracks-table">
-          <thead>
-            <tr>
-              <th>Piste</th>
-              <th>Langue</th>
-              <th>Codec</th>
-              <th className="batch-choice-control">Réf.</th>
-              <th className="batch-choice-control">À corriger</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tracks.map((t) => (
-              <tr key={t.index}>
-                <td>@{t.index}</td>
-                <td>{t.language ?? "?"}</td>
-                <td>{t.codec ?? "?"}</td>
-                <td className="batch-choice-control">
-                  <input
-                    type="radio"
-                    name="choice-reference"
-                    checked={choice.reference === t.index}
-                    onChange={() =>
-                      setChoice((c) => ({ ...c, reference: t.index, targets: c.targets.filter((i) => i !== t.index) }))
-                    }
-                  />
-                </td>
-                <td className="batch-choice-control">
-                  <input
-                    type="checkbox"
-                    disabled={choice.reference === t.index}
-                    checked={choice.targets.includes(t.index)}
-                    onChange={() =>
-                      setChoice((c) => ({
-                        ...c,
-                        targets: c.targets.includes(t.index) ? c.targets.filter((i) => i !== t.index) : [...c.targets, t.index],
-                      }))
-                    }
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <TrackTable
+          className="batch-tracks-table"
+          tracks={tracks}
+          radioName="choice-reference"
+          reference={choice.reference}
+          targets={choice.targets}
+          onReference={(index) => setChoice((c) => ({ ...c, reference: index, targets: c.targets.filter((i) => i !== index) }))}
+          onToggleTarget={(index) =>
+            setChoice((c) => ({
+              ...c,
+              targets: toggled(c.targets, index),
+            }))
+          }
+        />
         {subtitles.length > 0 && choice.targets.length > 0 && (
           <div className="batch-choice-subs">
             <h3>
@@ -184,34 +146,19 @@ function TrackChoiceModal({
                 ligne ; les autres sont gardées telles quelles, calées sur la vidéo.
               </InfoTip>
             </h3>
-            {choice.targets.map((track) => {
-              const info = tracks.find((t) => t.index === track);
-              const mine = subsOfTrack(track);
-              return (
-                <div key={track} className="batch-choice-subs-row">
-                  <span className="batch-target-name">
-                    Avec @{track} {info?.language ?? "?"} :
-                  </span>
-                  {subtitles.map((sub) => {
-                    const elsewhere = choice.targets.some((other) => other !== track && subsOfTrack(other).includes(sub.index));
-                    return (
-                      <label
-                        key={sub.index}
-                        title={!sub.shiftable ? UNSHIFTABLE_HINT : elsewhere ? "Déjà recalés avec une autre piste audio" : subtitleDetails(sub)}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={mine.includes(sub.index)}
-                          disabled={!sub.shiftable || elsewhere}
-                          onChange={() => toggleSubtitle(track, sub.index)}
-                        />
-                        {subtitleLabel(sub)}
-                      </label>
-                    );
-                  })}
-                </div>
-              );
-            })}
+            {targetTracks.map((t) => (
+              <div key={t.index} className="batch-choice-subs-row">
+                <span className="batch-target-name">
+                  Avec @{t.index} {t.language ?? "?"} :
+                </span>
+                <SubtitleChecks
+                  subtitles={subtitles}
+                  chosen={assigned[t.index] ?? []}
+                  taken={takenByOthers(assigned, t.index)}
+                  onToggle={(sub) => toggleSubtitle(t.index, sub)}
+                />
+              </div>
+            ))}
           </div>
         )}
         <div className="batch-choice-actions">
@@ -332,14 +279,7 @@ export function MultiTrackBatch({
   function subsOf(path: string, targets: TrackInfo[]): Record<number, number[]> {
     const subtitles = probes[path]?.subtitles ?? [];
     const picked = choices[path]?.subtitles;
-    const claimed = new Set<number>();
-    const out: Record<number, number[]> = {};
-    for (const t of targets) {
-      const wanted = picked?.[t.index] ?? subtitlesFor(subtitles, t.language, subsMode);
-      out[t.index] = wanted.filter((i) => !claimed.has(i));
-      out[t.index].forEach((i) => claimed.add(i));
-    }
-    return out;
+    return assignSubtitles(targets, (t) => picked?.[t.index] ?? subtitlesFor(subtitles, t.language, subsMode));
   }
 
   /** This file's analyses, if made against its current reference. */
@@ -536,7 +476,7 @@ export function MultiTrackBatch({
                   checked={targetLanguages.includes(lang)}
                   disabled={busy}
                   onChange={() =>
-                    setTargetLanguages((t) => (t.includes(lang) ? t.filter((l) => l !== lang) : [...t, lang]))
+                    setTargetLanguages((t) => toggled(t, lang))
                   }
                 />
                 {languageLabel(lang)}
