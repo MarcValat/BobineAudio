@@ -11,12 +11,15 @@ import {
   IDLE_EXPORT,
   RevealButton,
   useExportQueue,
+  dropBlockedReason,
+  FOLDER_DROP_HINT,
   writtenFile,
   type AnalysisRun,
   type ExportFields,
 } from "./batchShared";
 import { InfoTip } from "./InfoTip";
 import { pickMediaFiles } from "./mediaDialog";
+import { DropOverlay, useFileDrop } from "./FileDrop";
 import { basename } from "./paths";
 import { SegmentEditor } from "./SegmentEditor";
 import { assignSubtitles, SUBTITLE_MODES, type SubtitleMode, subtitlesFor, takenByOthers } from "./subtitles";
@@ -209,6 +212,9 @@ export function MultiTrackBatch({
   function addPaths(paths: string[]) {
     setFiles((current) => [...current, ...[...new Set(paths)].filter((p) => !current.includes(p))]);
   }
+
+  const dropBlocked = dropBlockedReason(busy, blocked);
+  const fileDrag = useFileDrop(!hidden && choosing === null && editing === null, dropBlocked, addPaths);
 
   // Each file's tracks are read once, as soon as it's listed.
   const requested = useRef(new Set<string>());
@@ -653,6 +659,7 @@ export function MultiTrackBatch({
           }}
         />
       )}
+      <DropOverlay drag={fileDrag} blocked={dropBlocked} label="Déposer pour ajouter au lot" hint={FOLDER_DROP_HINT} />
     </main>
   );
 }

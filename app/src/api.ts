@@ -96,6 +96,18 @@ export async function pathsExist(paths: string[]): Promise<boolean[]> {
   return (await resp.json()).exists;
 }
 
+/** The files dropped on the window (see the engine's /paths/expand): a
+ * folder stands for its files with one of `extensions`, in name order. */
+export async function expandPaths(paths: string[], extensions: string[]): Promise<string[]> {
+  const resp = await fetch(`${BASE_URL}/paths/expand`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paths, extensions }),
+  });
+  if (!resp.ok) throw new Error(await readErrorDetail(resp));
+  return (await resp.json()).files;
+}
+
 export interface PrefetchResponse {
   cached: number;
 }

@@ -423,6 +423,24 @@ def test_paths_exist_answers_in_order(tmp_path: Path) -> None:
     assert resp.json() == {"exists": [False, True]}
 
 
+def test_paths_expand_lists_a_folders_media_files_in_episode_order(tmp_path: Path) -> None:
+    folder = tmp_path / "Show"
+    (folder / "Extras").mkdir(parents=True)
+    for name in ["Episode 10.mkv", "Episode 2.MKV", "Episode 1.mp4", "notes.txt", "Extras/Making of.mkv"]:
+        (folder / name).write_bytes(b"")
+    loose = tmp_path / "loose.txt"
+    loose.write_bytes(b"")
+
+    resp = client.post(
+        "/paths/expand",
+        json={"paths": [str(loose), str(folder), str(tmp_path / "gone.mkv")], "extensions": ["mkv", "mp4"]},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "files": [str(loose)] + [str(folder / n) for n in ["Episode 1.mp4", "Episode 2.MKV", "Episode 10.mkv"]]
+    }
+
+
 def test_a_cancelled_export_leaves_no_partial_file(offset_mkv: tuple[Path, float], monkeypatch: pytest.MonkeyPatch) -> None:
     import syncaudio.server as server
     from syncaudio.cancellation import Cancelled

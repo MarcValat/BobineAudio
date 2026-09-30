@@ -30,6 +30,7 @@ import { devParam, errorMessage, toggled } from "./util";
 import { TrackTable } from "./TrackTable";
 import { SubtitleChecks } from "./SubtitleChecks";
 import { JobCancelled, runJob } from "./jobs";
+import { DropOverlay, useFileDrop } from "./FileDrop";
 
 type EngineStatus = "starting" | "ready" | "unreachable";
 
@@ -136,6 +137,14 @@ function App() {
   }, []);
 
   useEffect(() => pollHealth(), [pollHealth]);
+
+  // A file dropped on the window opens like a picked one (the first, if several).
+  const dropBlocked = exportState.running ? "Un export est en cours : attends sa fin ou annule-le." : null;
+  const fileDrag = useFileDrop(
+    mode === "single" && engineStatus === "ready" && editingTrack === null,
+    dropBlocked,
+    (files) => openFile(files[0]),
+  );
 
   async function handleOpenFile() {
     const selected = await pickMediaFiles(false);
@@ -641,6 +650,8 @@ function App() {
         </section>
       </main>
       )}
+
+      {mode === "single" && <DropOverlay drag={fileDrag} blocked={dropBlocked} label="Déposer pour ouvrir le fichier" />}
 
       {mode === "single" && editingTrack !== null && editingEntry?.result && (
         <SegmentEditor
