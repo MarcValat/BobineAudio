@@ -16,6 +16,7 @@ progress instead of a frozen spinner.
 from __future__ import annotations
 
 import asyncio
+import re
 import threading
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -156,6 +157,37 @@ def paths_exist(req: PathsRequest) -> PathsExistResponse:
     """Which of these paths are already taken, in order: the GUI names a
     batch export after its original only where that overwrites nothing."""
     return PathsExistResponse(exists=[Path(p).exists() for p in req.paths])
+
+
+class ExpandPathsRequest(BaseModel):
+    paths: list[str]
+    # Lowercase, without the dot: what a folder's files are kept by.
+    extensions: list[str]
+
+
+class ExpandPathsResponse(BaseModel):
+    files: list[str]
+
+
+def _natural_key(name: str) -> list[int | str]:
+    """Sorts "Episode 2" before "Episode 10"."""
+    return [int(part) if part.isdigit() else part for part in re.split(r"(\d+)", name.lower())]
+
+
+@app.post("/paths/expand", response_model=ExpandPathsResponse)
+def expand_paths(req: ExpandPathsRequest) -> ExpandPathsResponse:
+    """The files dropped on the GUI, in order: a file as is, a folder as the
+    files directly in it with one of `extensions`, sorted by name (a series
+    folder in episode order). Paths that no longer exist are left out."""
+    extensions = {e.lower() for e in req.extensions}
+    files: list[str] = []
+    for p in map(Path, req.paths):
+        if p.is_dir():
+            inside = [f for f in p.iterdir() if f.is_file() and f.suffix[1:].lower() in extensions]
+            files.extend(str(f) for f in sorted(inside, key=lambda f: _natural_key(f.name)))
+        elif p.is_file():
+            files.append(str(p))
+    return ExpandPathsResponse(files=files)
 
 
 class TrackInfo(BaseModel):
