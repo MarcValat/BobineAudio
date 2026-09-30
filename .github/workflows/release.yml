@@ -28,6 +28,12 @@ on:
       - "engine/packaging/**"
   workflow_dispatch:
 
+# A new push to a pull request cancels its build still running: the newer
+# one supersedes it. Never a release's.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # The engine's tests, on both platforms. A release waits for them (see
   # create-release); a test build runs alongside them, to be ready sooner.
