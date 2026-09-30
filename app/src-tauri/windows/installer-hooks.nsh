@@ -13,6 +13,15 @@
 ; code just means no engine was running; the result is discarded either way.
 
 !macro NSIS_HOOK_PREINSTALL
+  ; The in-app updater starts this installer and exits at once: Windows
+  ; then gives the foreground back to whatever window was behind the app,
+  ; and a window of this installer would open behind it. Made topmost for
+  ; an instant, then not: it lands above every other window, and they can
+  ; still come back in front of it once clicked (SWP_NOSIZE | SWP_NOMOVE |
+  ; SWP_NOACTIVATE = 0x13; -1/-2 = HWND_TOPMOST/HWND_NOTOPMOST).
+  BringToFront
+  System::Call 'user32::SetWindowPos(p $HWNDPARENT, p -1, i 0, i 0, i 0, i 0, i 0x13)'
+  System::Call 'user32::SetWindowPos(p $HWNDPARENT, p -2, i 0, i 0, i 0, i 0, i 0x13)'
   nsExec::Exec 'taskkill /F /T /IM syncaudio-engine.exe'
   Pop $0
   ; Versions up to 1.0.x shipped the engine as a single exe at the install
