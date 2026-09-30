@@ -793,10 +793,23 @@ button:focus-visible {
   color: var(--text-muted);
 }
 
-/* "+" / "−" alone: a square button, same height as its neighbours. */
+/* "+" / "−": drawn, not typed -- the font's glyphs sit at lowercase
+   height, never quite centered. Same height as the neighbouring buttons. */
 .zoom-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
   min-width: 2.2em;
-  font-weight: 700;
+  padding-block: 0;
+}
+
+.zoom-button svg {
+  width: 0.8em;
+  height: 0.8em;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
 }
 
 .error {
