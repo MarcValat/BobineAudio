@@ -24,12 +24,10 @@
   outline: none;
 }
 
+/* Rendered at the end of the page (see InfoTip.tsx), over everything. */
 .info-tip-bubble {
-  display: none;
-  position: absolute;
-  top: calc(100% + 6px);
-  /* Above the segment editor's overlay too. */
-  z-index: 100;
+  position: fixed;
+  z-index: 1000;
   width: max-content;
   max-width: 22rem;
   padding: 0.6em 0.8em;
@@ -39,23 +37,13 @@
   box-shadow: var(--shadow);
   font-size: 0.8rem;
   font-weight: 400;
+  font-style: normal;
   line-height: 1.45;
   text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
   white-space: normal;
-  cursor: default;
-}
-
-.info-tip-bubble.left {
-  left: -0.4em;
-}
-
-.info-tip-bubble.right {
-  right: -0.4em;
-}
-
-.info-tip:hover .info-tip-bubble,
-.info-tip:focus .info-tip-bubble {
-  display: block;
+  pointer-events: none;
 }
 
 .info-tip-bubble ul {

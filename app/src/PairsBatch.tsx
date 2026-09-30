@@ -538,7 +538,7 @@ export function PairsBatch({
           >
             Tout retirer
           </button>
-          <InfoTip align="right">
+          <InfoTip>
             Une ligne = une paire : la référence (piste jamais modifiée, ex. VO) et le fichier dont la piste est
             resynchronisée puis intégrée (ex. VF). Les fichiers sont appariés dans l'ordre : ↑ ↓ pour corriger l'ordre
             d'une colonne.
