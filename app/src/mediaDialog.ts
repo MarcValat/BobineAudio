@@ -51,14 +51,19 @@ function splitPath(path: string): { dir: string; stem: string } {
   return { dir: path.slice(0, cut + 1), stem: dot > 0 ? name.slice(0, dot) : name };
 }
 
+// Windows paths use "\" and ignore case; Linux ones use "/" and don't.
+const WINDOWS = navigator.userAgent.includes("Windows");
+
 function joinPath(dir: string, name: string): string {
-  const sep = dir === "" || dir.endsWith("\\") || dir.endsWith("/") ? "" : "\\";
+  const sep = dir === "" || dir.endsWith("\\") || dir.endsWith("/") ? "" : WINDOWS ? "\\" : "/";
   return dir + sep + name;
 }
 
-/** Windows paths: case and slash direction don't matter. */
+/** The same file or folder: on Windows, whatever the case and slash direction. */
 function samePath(a: string, b: string): boolean {
-  const norm = (p: string) => p.replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase();
+  const norm = WINDOWS
+    ? (p: string) => p.replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase()
+    : (p: string) => p.replace(/\/+$/, "");
   return norm(a) === norm(b);
 }
 
@@ -74,13 +79,13 @@ export async function planOutputPaths(inputs: string[], outputDir: string | null
   });
   const candidates = plain.filter((p): p is string => p !== null);
   const taken = await pathsExist(candidates);
-  const existing = new Set(candidates.filter((_, i) => taken[i]).map((p) => p.toLowerCase()));
+  const existing = candidates.filter((_, i) => taken[i]);
 
   const planned: string[] = [];
   const isFree = (path: string) => !planned.some((p) => samePath(p, path));
   inputs.forEach((input, i) => {
     const keep = plain[i];
-    if (keep && !existing.has(keep.toLowerCase()) && isFree(keep)) {
+    if (keep && !existing.some((p) => samePath(p, keep)) && isFree(keep)) {
       planned.push(keep);
       return;
     }
