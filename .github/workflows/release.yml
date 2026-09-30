@@ -29,9 +29,31 @@ on:
   workflow_dispatch:
 
 jobs:
+  # The engine's tests, on both platforms. A release waits for them (see
+  # create-release); a test build runs alongside them, to be ready sooner.
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [windows-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: engine/uv.lock
+
+      - name: Run engine tests
+        working-directory: engine
+        run: uv run pytest -q
+
   # One draft release for both platforms to upload to, created up front: two
-  # build jobs each creating it when they finish could race into two.
+  # build jobs each creating it when they finish could race into two. Only
+  # once the tests pass: a release never ships an engine that fails them.
   create-release:
+    needs: test
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -53,8 +75,11 @@ jobs:
 
   build:
     needs: create-release
-    # Also when create-release was skipped (a pull request or a manual run).
-    if: ${{ !failure() && !cancelled() }}
+    # A release: once its draft exists (so after the tests). A pull request
+    # or a manual run: straight away, create-release being skipped.
+    if: >-
+      ${{ !cancelled() && (needs.create-release.result == 'success' ||
+      (needs.create-release.result == 'skipped' && !startsWith(github.ref, 'refs/tags/'))) }}
     strategy:
       fail-fast: false
       matrix:
@@ -70,10 +95,12 @@ jobs:
     permissions:
       contents: write
     env:
-      # Published builds get the fullest optimization; Cargo.toml keeps
-      # cheaper settings for local builds (see its [profile.release]).
-      CARGO_PROFILE_RELEASE_LTO: "fat"
-      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "1"
+      # Published builds get the fullest optimization (its whole-program
+      # pass is redone on every build, cache or not: minutes). Test builds
+      # keep Cargo.toml's cheaper settings (see its [profile.release]):
+      # they only need to show the build works.
+      CARGO_PROFILE_RELEASE_LTO: ${{ startsWith(github.ref, 'refs/tags/v') && 'fat' || 'thin' }}
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '16' }}
       # AppImage: linuxdeploy's own (old) strip fails on the engine's
       # recently built libraries (Python, numpy, scipy); unstripped, they
       # just take a little more room.
@@ -92,6 +119,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: app/src-tauri
+          # Also after a failed build: the next one, fixing it, then
+          # doesn't recompile every dependency.
+          cache-on-failure: true
 
       - uses: actions/setup-node@v7
         with:
@@ -108,9 +138,13 @@ jobs:
         working-directory: engine
         run: uv sync
 
-      - name: Run engine tests
-        working-directory: engine
-        run: uv run pytest -q
+      # The frozen engine from an earlier run, when nothing it's built from
+      # changed: build_sidecar.py then sees its source hash match and skips
+      # PyInstaller.
+      - uses: actions/cache@v6
+        with:
+          path: app/src-tauri/binaries
+          key: sidecar-${{ runner.os }}-${{ hashFiles('engine/src/**/*.py', 'engine/pyproject.toml', 'engine/uv.lock', 'engine/packaging/syncaudio-engine.spec') }}
 
       # PyInstaller only builds for the system it runs on: each platform
       # freezes its own engine.
