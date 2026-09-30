@@ -35,7 +35,7 @@
   width: max-content;
   max-width: 22rem;
   padding: 0.6em 0.8em;
-  border-radius: var(--radius-sm, 8px);
+  border-radius: var(--radius-sm);
   background: var(--text);
   color: var(--surface);
   box-shadow: var(--shadow);

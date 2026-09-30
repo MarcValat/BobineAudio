@@ -3,7 +3,9 @@ import type { SegmentOut } from "./api";
 import {
   LOW_CONFIDENCE_THRESHOLD,
   describeJump,
+  drawnOffsets,
   formatOffsetMs,
+  offsetRange,
   formatTime,
   offsetTicks,
   segmentOffsetLabel,
@@ -305,19 +307,9 @@ export function SegmentEditor({
   }
 
   const totalDuration = state.times[state.times.length - 1];
-  const offsetsFlat = [...state.offsetStarts, ...state.offsetEnds];
-  let minOffset = Math.min(0, ...offsetsFlat);
-  let maxOffset = Math.max(0, ...offsetsFlat);
-  if (minOffset === maxOffset) {
-    minOffset -= 1;
-    maxOffset += 1;
-  }
-  const pad = (maxOffset - minOffset) * 0.15;
-  minOffset -= pad;
-  maxOffset += pad;
   // Held still while dragging: rescaling under the pointer would make the
   // dragged segment run away from it.
-  if (frozenRange) [minOffset, maxOffset] = frozenRange;
+  const [minOffset, maxOffset] = frozenRange ?? offsetRange([...state.offsetStarts, ...state.offsetEnds]);
 
   // The stretch on screen, the same as the waveforms' (see TrackPreview's
   // `view`): zooming or panning one moves the other.
@@ -564,9 +556,7 @@ export function SegmentEditor({
 
                 <g clipPath={`url(#${clipId})`}>
                 {segmentsPreview.map((seg, i) => {
-                  const flat = (seg.offset_start + seg.offset_end) / 2;
-                  const yStart = seg.is_drift ? y(seg.offset_start) : y(flat);
-                  const yEnd = seg.is_drift ? y(seg.offset_end) : y(flat);
+                  const [yStart, yEnd] = drawnOffsets(seg).map(y);
                   const isDragged = dragging?.kind === "segment" && dragging.index === i;
                   return (
                     <g key={i}>
@@ -613,9 +603,9 @@ export function SegmentEditor({
                 {removalGhost && (
                   <line
                     x1={x(removalGhost.start_s)}
-                    y1={y(removalGhost.is_drift ? removalGhost.offset_start : (removalGhost.offset_start + removalGhost.offset_end) / 2)}
+                    y1={y(drawnOffsets(removalGhost)[0])}
                     x2={x(removalGhost.end_s)}
-                    y2={y(removalGhost.is_drift ? removalGhost.offset_end : (removalGhost.offset_start + removalGhost.offset_end) / 2)}
+                    y2={y(drawnOffsets(removalGhost)[1])}
                     className="segment-line removal-ghost"
                   />
                 )}
