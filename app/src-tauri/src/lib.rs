@@ -90,11 +90,6 @@ impl KillOnCloseJob {
 #[cfg(windows)]
 struct SidecarJob(#[allow(dead_code)] Option<KillOnCloseJob>);
 
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
 /// Stop the sidecar ahead of an in-place update install.
 ///
 /// Real reported bug: the NSIS installer failed with "Error opening file
@@ -103,11 +98,11 @@ fn greet(name: &str) -> String {
 /// you, but has no idea the sidecar exists -- it's a separate process this
 /// app spawns and manages entirely on its own (see spawn_sidecar), so it
 /// was still running and holding its own exe file locked when the
-/// installer tried to overwrite it. The frontend calls this right before
-/// `update.downloadAndInstall()` so the file is free by the time the
-/// installer gets to it; `relaunch()` afterwards starts a fresh app
-/// (respawning the sidecar) regardless, so there's nothing left needing
-/// the old sidecar alive in between.
+/// installer tried to overwrite it. The frontend (UpdateButton) downloads
+/// the update first, then calls this right before `update.install()` so
+/// the file is free by the time the installer gets to it; `relaunch()`
+/// afterwards starts a fresh app (respawning the sidecar) regardless, so
+/// there's nothing left needing the old sidecar alive in between.
 #[tauri::command]
 fn stop_sidecar(state: tauri::State<SidecarState>) {
     let mut guard = state.0.lock().unwrap();
@@ -256,7 +251,7 @@ pub fn run() {
             app.manage(SidecarState(Mutex::new(child)));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, stop_sidecar])
+        .invoke_handler(tauri::generate_handler![stop_sidecar])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
