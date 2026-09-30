@@ -27,7 +27,8 @@ export function saveSetting(key: string, value: string | null): void {
 /** Dev only (always null in production builds): a `?name=value` parameter of
  * the page's URL. They let automated screenshots in a plain browser do what
  * a system dialog would -- `?open=<path>`, `?mode=batch`,
- * `?batchFiles=a|b`, `?batchRef=a|b&batchCand=c|d`, `?update=1`. */
+ * `?batchFiles=a|b`, `?batchRef=a|b&batchCand=c|d`, `?update=1`,
+ * `?saveAs=<path>`. */
 export function devParam(name: string): string | null {
   if (!import.meta.env.DEV) return null;
   return new URLSearchParams(window.location.search).get(name);

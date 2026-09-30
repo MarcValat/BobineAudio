@@ -1,6 +1,6 @@
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { pathsExist } from "./api";
-import { loadSetting, saveSetting } from "./util";
+import { devParam, loadSetting, saveSetting } from "./util";
 
 // Videos to take a reference from, and the audio-only files a corrected track
 // can come from (batch mode): anything ffmpeg reads is fine, these are the
@@ -103,5 +103,8 @@ export function syncedFileName(inputPath: string): string {
 
 /** The system's "save as" dialog for an exported MKV, starting at `suggestedPath`. */
 export async function pickOutputFile(suggestedPath: string): Promise<string | null> {
+  // Dev only (see devParam): `?saveAs=<path>` answers the dialog.
+  const devPath = devParam("saveAs");
+  if (devPath) return devPath;
   return save({ defaultPath: suggestedPath, filters: [{ name: "Matroska", extensions: ["mkv"] }] });
 }
