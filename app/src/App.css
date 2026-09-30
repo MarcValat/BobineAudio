@@ -417,6 +417,54 @@ select:hover {
   border-color: var(--accent);
 }
 
+/* The open list itself, styled like the rest of the app instead of the
+   system's square popup (customizable select, WebView2/Chromium 135+; older
+   runtimes keep the system one). Rounded on every corner and detached from
+   the field by a small gap: it opens upward when there's no room below, so
+   no single side is always the free one. */
+@supports (appearance: base-select) {
+  select,
+  ::picker(select) {
+    appearance: base-select;
+  }
+
+  /* The chevron is already drawn as the field's background image. */
+  select::picker-icon {
+    display: none;
+  }
+
+  ::picker(select) {
+    margin-block: 4px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  }
+
+  option {
+    padding: 0.35em 0.8em;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  option::checkmark {
+    display: none;
+  }
+
+  option:checked {
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  option:hover,
+  option:focus-visible {
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    outline: none;
+  }
+}
+
 input,
 select,
 button {
