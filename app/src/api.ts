@@ -85,6 +85,16 @@ export async function probe(path: string): Promise<ProbeResponse> {
   return resp.json();
 }
 
+/** The language of the engine's messages (job logs, errors). */
+export async function setEngineLanguage(language: string): Promise<void> {
+  const resp = await fetch(`${BASE_URL}/language`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ language }),
+  });
+  if (!resp.ok) throw new Error(await readErrorDetail(resp));
+}
+
 /** Which of `paths` already exist, in order. */
 export async function pathsExist(paths: string[]): Promise<boolean[]> {
   if (paths.length === 0) return [];

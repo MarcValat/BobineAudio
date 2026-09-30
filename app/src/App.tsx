@@ -6,6 +6,7 @@ import {
   startPrefetchJob,
   startSegmentedRenderJob,
   cancelJob,
+  setEngineLanguage,
   type SubtitleInfo,
   type TrackInfo,
   type SegmentsResponse,
@@ -31,7 +32,7 @@ import { TrackTable } from "./TrackTable";
 import { SubtitleChecks } from "./SubtitleChecks";
 import { JobCancelled, runJob } from "./jobs";
 import { DropOverlay, useFileDrop } from "./FileDrop";
-import { useT } from "./i18n";
+import { useLanguage, useT } from "./i18n";
 
 type EngineStatus = "starting" | "ready" | "unreachable";
 
@@ -139,6 +140,13 @@ function App() {
   }, []);
 
   useEffect(() => pollHealth(), [pollHealth]);
+
+  // The engine's messages (job logs, errors) in the UI's language: once it
+  // answers, and whenever the language changes.
+  const language = useLanguage();
+  useEffect(() => {
+    if (engineStatus === "ready") setEngineLanguage(language).catch(() => {});
+  }, [engineStatus, language]);
 
   // A file dropped on the window opens like a picked one (the first, if several).
   const dropBlocked = exportState.running ? t.single.exportRunningHint : null;
