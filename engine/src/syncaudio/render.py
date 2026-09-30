@@ -314,6 +314,42 @@ def default_output_path(input_path: str) -> str:
     return str(Path(input_path).with_suffix("")) + ".synced.mkv"
 
 
+def resolve_targets(input_path: str, reference_index: int, track_indices: Sequence[int] | None, only_imports: bool) -> list[int]:
+    """The tracks of ``input_path`` a render corrects: ``track_indices``, or
+    every one but the reference, or none with ``only_imports`` (only tracks
+    imported from other files). Shared by the CLI and the server; raises
+    ``ValueError`` for a request that can't be met."""
+    all_indices = [s.index for s in probe_audio_streams(input_path)]
+    if reference_index not in all_indices:
+        raise ValueError(f"Index de référence {reference_index} absent de {input_path!r} (pistes : {all_indices}).")
+    if only_imports:
+        targets: list[int] = []
+    elif track_indices:
+        targets = sorted(track_indices)
+    else:
+        targets = [i for i in all_indices if i != reference_index]
+    if reference_index in targets:
+        raise ValueError("La piste de référence ne peut pas aussi être une piste à corriger.")
+    unknown = [i for i in targets if i not in all_indices]
+    if unknown:
+        raise ValueError(f"Index(es) inconnu(s) : {unknown} (pistes disponibles : {all_indices}).")
+    return targets
+
+
+def check_import_track(spec: AudioTrackSpec) -> None:
+    """Raises ``ValueError`` unless ``spec``'s file has that audio track (the first one by default)."""
+    available = sorted(s.index for s in probe_audio_streams(spec.path))
+    idx = _stream_index(spec)
+    if idx not in available:
+        raise ValueError(f"Index audio {idx} absent de {spec.path!r} (pistes : {available}).")
+
+
+def track_key(spec: AudioTrackSpec) -> tuple[str, int]:
+    """Identifies one track whether its path is written relative or absolute:
+    subtitle pairs and per-track overrides are matched with it."""
+    return (str(Path(spec.path).resolve()), _stream_index(spec))
+
+
 def plan_corrections(
     reference: AudioTrackSpec,
     candidates: Sequence[AudioTrackSpec],
