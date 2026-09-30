@@ -1,10 +1,10 @@
 # Builds the Windows and Linux installers + auto-updater artifacts and
 # publishes them as a GitHub Release, triggered by pushing a `vX.Y.Z` tag.
-# A pull request that changes how they're built (this file, the engine's
-# packaging) builds both too, without publishing anything: the installers
-# are attached to the run as artifacts, to try before merging. So does a
-# manual run (Actions > Release > Run workflow). Not a version bump's pull
-# request: its tag builds the release right after anyway.
+# A manual run (Actions > Release > Run workflow, on any branch) builds both
+# without publishing anything: the installers are attached to the run as
+# artifacts, to try a change to the build before merging it. Pull requests
+# don't build on their own: each push to one used to start a build, and one
+# still running when the pull request was merged was a build for nothing.
 #
 # GitHub is the canonical remote (this repo used to live on a self-hosted
 # GitLab, mirrored here -- switched away after mirrored pushes turned out
@@ -22,21 +22,17 @@ on:
   push:
     tags:
       - "v*"
-  pull_request:
-    paths:
-      - ".github/workflows/release.yml"
-      - "engine/packaging/**"
   workflow_dispatch:
 
-# A new push to a pull request cancels its build still running: the newer
-# one supersedes it. Never a release's.
+# A new manual run on a branch cancels the one still running there: the
+# newer one supersedes it. Never a release's.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   # The engine's tests, on both platforms. A release waits for them (see
-  # create-release); a test build runs alongside them, to be ready sooner.
+  # create-release); a manual build runs alongside them, to be ready sooner.
   test:
     strategy:
       fail-fast: false
@@ -84,8 +80,8 @@ jobs:
 
   build:
     needs: create-release
-    # A release: once its draft exists (so after the tests). A pull request
-    # or a manual run: straight away, create-release being skipped.
+    # A release: once its draft exists (so after the tests). A manual run:
+    # straight away, create-release being skipped.
     if: >-
       ${{ !cancelled() && (needs.create-release.result == 'success' ||
       (needs.create-release.result == 'skipped' && !startsWith(github.ref, 'refs/tags/'))) }}
@@ -107,7 +103,7 @@ jobs:
       contents: write
     env:
       # Published builds get the fullest optimization (its whole-program
-      # pass is redone on every build, cache or not: minutes). Test builds
+      # pass is redone on every build, cache or not: minutes). Manual builds
       # keep Cargo.toml's cheaper settings (see its [profile.release]):
       # they only need to show the build works.
       CARGO_PROFILE_RELEASE_LTO: ${{ startsWith(github.ref, 'refs/tags/v') && 'fat' || 'thin' }}
@@ -190,7 +186,7 @@ jobs:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: --bundles ${{ matrix.bundles }}
 
-      - name: Build only (pull request or manual run)
+      - name: Build only (manual run)
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         uses: tauri-apps/tauri-action@v0
         env:
