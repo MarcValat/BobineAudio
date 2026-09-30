@@ -14,7 +14,7 @@
   <a href="https://github.com/MarcValat/SyncAudio/releases/latest"><img src="https://img.shields.io/github/v/release/MarcValat/SyncAudio?label=version" alt="Dernière version"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011%20(x64)-0078D6?logo=windows" alt="Windows 10 | 11 (x64)">
   <img src="https://img.shields.io/badge/interface-Fran%C3%A7ais%20%7C%20English-555" alt="Français | English">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MIT-blue" alt="Licence MIT"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-GPL%20v3-blue" alt="Licence GPL v3"></a>
 </p>
 
 <p align="center">
@@ -70,6 +70,6 @@ Rien d'autre à installer : le moteur d'analyse et ffmpeg sont fournis avec l'ap
 
 ## Licence
 
-SyncAudio est distribué sous [licence MIT](LICENSE).
+Copyright © 2026 Marc Valat. SyncAudio est un logiciel libre, distribué sous [licence publique générale GNU v3](LICENSE) : tu peux l'utiliser, l'étudier, le partager et le modifier, et toute version distribuée, modifiée ou non, doit rester sous la même licence avec son code source disponible.
 
-L'installateur fournit aussi [FFmpeg](https://ffmpeg.org/) (une version de [gyan.dev](https://www.gyan.dev/ffmpeg/builds/), via [imageio-ffmpeg](https://github.com/imageio/imageio-ffmpeg)), que SyncAudio lance comme programme séparé. Cette version est sous licence [GPL v3](https://www.gnu.org/licenses/gpl-3.0.html) ; son code source est disponible auprès de FFmpeg et de gyan.dev.
+L'installateur fournit aussi [FFmpeg](https://ffmpeg.org/) (une version de [gyan.dev](https://www.gyan.dev/ffmpeg/builds/), via [imageio-ffmpeg](https://github.com/imageio/imageio-ffmpeg)), que SyncAudio lance comme programme séparé. Cette version est elle aussi sous GPL v3 ; son code source est disponible auprès de FFmpeg et de gyan.dev.
