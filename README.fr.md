@@ -53,6 +53,8 @@ Rien d'autre à installer : le moteur d'analyse et ffmpeg sont fournis avec l'ap
 2. **Analyse** : la courbe de décalage montre les segments trouvés. Écoute le résultat, et ajuste les segments à la main si quelque chose cloche.
 3. **Exporte** : le fichier synchronisé est écrit dans un nouveau MKV, à côté de l'original par défaut (`Film.synced.mkv`).
 
+📖 Le [guide d'utilisation](docs/guide.fr.md) détaille tout : lire le résultat, l'éditeur de segments, les sous-titres, le mode batch, les questions fréquentes.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/editor-fr-dark.png">
   <img src="docs/screenshots/editor-fr-light.png" alt="L'éditeur de segments : graphe des décalages avec frontières déplaçables, tableau des segments, formes d'onde">
