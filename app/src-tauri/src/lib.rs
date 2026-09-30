@@ -90,8 +90,7 @@ impl KillOnCloseJob {
 #[cfg(windows)]
 struct SidecarJob(#[allow(dead_code)] Option<KillOnCloseJob>);
 
-/// Get ready for an in-place update install: stop the sidecar, and let the
-/// installer come to the front.
+/// Stop the sidecar ahead of an in-place update install.
 ///
 /// Real reported bug: the NSIS installer failed with "Error opening file
 /// for writing: ...\syncaudio-engine.exe" when run through the in-app
@@ -104,23 +103,11 @@ struct SidecarJob(#[allow(dead_code)] Option<KillOnCloseJob>);
 /// the file is free by the time the installer gets to it; `relaunch()`
 /// afterwards starts a fresh app (respawning the sidecar) regardless, so
 /// there's nothing left needing the old sidecar alive in between.
-///
-/// Windows only lets the foreground process bring a window to the front:
-/// the installer, started by the updater just before this app exits,
-/// would otherwise open behind whatever else is on screen. Still in the
-/// foreground (the user just clicked "Installer"), this app hands that
-/// right on to the next process, and the installer takes it (BringToFront
-/// in windows/installer-hooks.nsh).
 #[tauri::command]
-fn prepare_update_install(state: tauri::State<SidecarState>) {
+fn stop_sidecar(state: tauri::State<SidecarState>) {
     let mut guard = state.0.lock().unwrap();
     if let Some(child) = guard.take() {
         kill_process_tree(child.id());
-    }
-    #[cfg(windows)]
-    unsafe {
-        use windows_sys::Win32::UI::WindowsAndMessaging::{AllowSetForegroundWindow, ASFW_ANY};
-        AllowSetForegroundWindow(ASFW_ANY);
     }
 }
 
@@ -264,7 +251,7 @@ pub fn run() {
             app.manage(SidecarState(Mutex::new(child)));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![prepare_update_install])
+        .invoke_handler(tauri::generate_handler![stop_sidecar])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
