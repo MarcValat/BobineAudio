@@ -423,6 +423,18 @@ def test_paths_exist_answers_in_order(tmp_path: Path) -> None:
     assert resp.json() == {"exists": [False, True]}
 
 
+def test_cache_size_and_clearing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    folder = tmp_path / "cache" / "envelopes"
+    monkeypatch.setenv("SYNCAUDIO_CACHE_DIR", str(folder))
+    assert client.get("/cache").json() == {"bytes": 0}  # not created yet
+    folder.mkdir(parents=True)
+    (folder / "a.npy").write_bytes(b"x" * 1000)
+    (folder / "b.npy").write_bytes(b"x" * 500)
+    assert client.get("/cache").json() == {"bytes": 1500}
+    assert client.delete("/cache").json() == {"bytes": 0}
+    assert list(folder.iterdir()) == []
+
+
 def test_paths_expand_lists_a_folders_media_files_in_episode_order(tmp_path: Path) -> None:
     folder = tmp_path / "Show"
     (folder / "Extras").mkdir(parents=True)

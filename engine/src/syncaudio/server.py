@@ -160,6 +160,24 @@ def paths_exist(req: PathsRequest) -> PathsExistResponse:
     return PathsExistResponse(exists=[Path(p).exists() for p in req.paths])
 
 
+class CacheResponse(BaseModel):
+    bytes: int
+
+
+@app.get("/cache", response_model=CacheResponse)
+def cache_size() -> CacheResponse:
+    """How much disk the analysis cache takes."""
+    return CacheResponse(bytes=analysis_cache.disk_usage())
+
+
+@app.delete("/cache", response_model=CacheResponse)
+def cache_clear() -> CacheResponse:
+    """Empties the analysis cache (Options); answers what's left."""
+    analysis_cache.clear_disk()
+    waveform_cache.clear()
+    return CacheResponse(bytes=analysis_cache.disk_usage())
+
+
 class LanguageRequest(BaseModel):
     language: str
 
