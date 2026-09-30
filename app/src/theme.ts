@@ -1,4 +1,5 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { loadSetting, saveSetting } from "./util";
 
 /** "system" follows Windows; the others force it. */
 export type ThemeChoice = "system" | "light" | "dark";
@@ -6,12 +7,8 @@ export type ThemeChoice = "system" | "light" | "dark";
 const THEME_KEY = "syncaudio.theme";
 
 export function loadTheme(): ThemeChoice {
-  try {
-    const saved = localStorage.getItem(THEME_KEY);
-    return saved === "light" || saved === "dark" ? saved : "system";
-  } catch {
-    return "system";
-  }
+  const saved = loadSetting(THEME_KEY);
+  return saved === "light" || saved === "dark" ? saved : "system";
 }
 
 /** Applies `choice` to the page (App.css's colors follow `data-theme`) and
@@ -20,12 +17,7 @@ export function applyTheme(choice: ThemeChoice): void {
   const root = document.documentElement;
   if (choice === "system") root.removeAttribute("data-theme");
   else root.setAttribute("data-theme", choice);
-  try {
-    if (choice === "system") localStorage.removeItem(THEME_KEY);
-    else localStorage.setItem(THEME_KEY, choice);
-  } catch {
-    // not remembered this time
-  }
+  saveSetting(THEME_KEY, choice === "system" ? null : choice);
   // Outside Tauri (the dev server in a plain browser) there's no window to theme.
   try {
     getCurrentWindow()

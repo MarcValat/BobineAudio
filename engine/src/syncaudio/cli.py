@@ -5,7 +5,6 @@ import json
 import os
 import sys
 import time
-from pathlib import Path
 
 import click
 
@@ -14,10 +13,13 @@ from syncaudio.features import extract_envelope
 from syncaudio.ffmpeg_backend import FFmpegError, extract_pcm, parse_track_spec, probe_audio_streams
 from syncaudio.models import AudioTrackSpec
 from syncaudio.render import (
+    check_import_track,
     default_output_path,
     plan_corrections,
     plan_segmented_correction,
     render as render_tracks,
+    resolve_targets,
+    track_key,
 )
 from syncaudio.segments import (
     DEFAULT_HOP_S,
@@ -258,46 +260,15 @@ def render(
     --segmented gère aussi la dérive et les sauts. Voir le README pour les
     limites.
     """
-    try:
-        streams = probe_audio_streams(input_path)
-    except FFmpegError as exc:
-        raise click.ClickException(str(exc)) from exc
-
-    all_indices = [s.index for s in streams]
-    if reference_index not in all_indices:
-        raise click.ClickException(
-            f"Index de référence {reference_index} absent de {input_path!r} (pistes : {all_indices})."
-        )
-
     if only_imports and track_indices:
         raise click.ClickException("--only-imports et --track sont incompatibles.")
-    if only_imports:
-        targets: list[int] = []
-    else:
-        targets = sorted(track_indices) if track_indices else [i for i in all_indices if i != reference_index]
-    if reference_index in targets:
-        raise click.ClickException("La piste de référence ne peut pas aussi être une piste à corriger.")
-    unknown = [i for i in targets if i not in all_indices]
-    if unknown:
-        raise click.ClickException(f"Index(es) inconnu(s) : {unknown} (pistes disponibles : {all_indices}).")
-
     try:
+        targets = resolve_targets(input_path, reference_index, track_indices, only_imports)
         import_audio_specs = [parse_track_spec(s) for s in import_audio]
-    except ValueError as exc:
+        for spec in import_audio_specs:
+            check_import_track(spec)
+    except (ValueError, FFmpegError) as exc:
         raise click.ClickException(str(exc)) from exc
-
-    for spec in import_audio_specs:
-        try:
-            ext_streams = {s.index for s in probe_audio_streams(spec.path)}
-        except FFmpegError as exc:
-            raise click.ClickException(str(exc)) from exc
-        idx = spec.stream_index if spec.stream_index is not None else 0
-        if idx not in ext_streams:
-            raise click.ClickException(f"Index audio {idx} absent de {spec.path!r} (pistes : {sorted(ext_streams)}).")
-
-    def _track_key(spec: AudioTrackSpec) -> tuple[str, int]:
-        idx = spec.stream_index if spec.stream_index is not None else 0
-        return (str(Path(spec.path).resolve()), idx)
 
     subs_specs: list[AudioTrackSpec] = []
     subs_audio_keys: list[tuple[str, int]] = []
@@ -309,14 +280,14 @@ def render(
             )
         try:
             subs_specs.append(parse_track_spec(subs_raw))
-            subs_audio_keys.append(_track_key(parse_track_spec(audio_raw)))
+            subs_audio_keys.append(track_key(parse_track_spec(audio_raw)))
         except ValueError as exc:
             raise click.ClickException(str(exc)) from exc
 
     reference_spec = AudioTrackSpec(raw=f"{input_path}@{reference_index}", path=input_path, stream_index=reference_index)
     same_file_specs = [AudioTrackSpec(raw=f"{input_path}@{i}", path=input_path, stream_index=i) for i in targets]
     candidates = same_file_specs + import_audio_specs
-    candidate_keys = [_track_key(c) for c in candidates]
+    candidate_keys = [track_key(c) for c in candidates]
 
     for raw, key in zip(subs_pairs, subs_audio_keys):
         if key not in candidate_keys:

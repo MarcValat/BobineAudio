@@ -57,6 +57,31 @@ export function describeJump(delta: number): string | null {
   return delta > 0 ? `${amount} coupés` : `${amount} de silence`;
 }
 
+/** The offset scale of a chart of these offsets (seconds): always
+ * including 0 (the reference), 15% of room above and below. */
+export function offsetRange(offsets: number[]): [number, number] {
+  let min = Math.min(0, ...offsets);
+  let max = Math.max(0, ...offsets);
+  if (min === max) {
+    min -= 1;
+    max += 1;
+  }
+  const pad = (max - min) * 0.15;
+  return [min - pad, max + pad];
+}
+
+/** The offsets a segment's line is drawn at, start and end. A constant
+ * segment is drawn perfectly flat, at the mean of its two offsets: it's
+ * classified constant because they're close enough, not bit-for-bit equal,
+ * and a visible tilt on a segment labelled "constant" reads as a rendering
+ * bug rather than the measurement noise it is. A drift keeps its real
+ * slope -- that's the whole point. */
+export function drawnOffsets(seg: SegmentOut): [number, number] {
+  if (seg.is_drift) return [seg.offset_start, seg.offset_end];
+  const flat = (seg.offset_start + seg.offset_end) / 2;
+  return [flat, flat];
+}
+
 /** Round tick values covering [min, max] (seconds), about `target` of them. */
 export function offsetTicks(min: number, max: number, target = 5): number[] {
   const span = max - min;
@@ -118,16 +143,7 @@ export function SegmentChart({ segments, fill = false }: { segments: SegmentOut[
   const PLOT_H = height - MARGIN.top - MARGIN.bottom;
 
   const totalDuration = segments[segments.length - 1].end_s;
-  const offsets = segments.flatMap((s) => [s.offset_start, s.offset_end]);
-  let minOffset = Math.min(0, ...offsets);
-  let maxOffset = Math.max(0, ...offsets);
-  if (minOffset === maxOffset) {
-    minOffset -= 1;
-    maxOffset += 1;
-  }
-  const pad = (maxOffset - minOffset) * 0.15;
-  minOffset -= pad;
-  maxOffset += pad;
+  const [minOffset, maxOffset] = offsetRange(segments.flatMap((s) => [s.offset_start, s.offset_end]));
 
   const x = (t: number) => (totalDuration > 0 ? (t / totalDuration) * PLOT_W : 0);
   const y = (offset: number) => PLOT_H - ((offset - minOffset) / (maxOffset - minOffset)) * PLOT_H;
@@ -164,17 +180,9 @@ export function SegmentChart({ segments, fill = false }: { segments: SegmentOut[
             </g>
           ))}
 
-          {/* segments -- a "constant" segment is drawn perfectly flat (at the
-              mean of its start/end offset) rather than connecting the two
-              raw values: they're classified constant because they're close
-              enough, not because they're bit-for-bit equal, and a visible
-              tilt on a segment labelled "constant" reads as a rendering bug
-              rather than the measurement noise it actually is. Drift
-              segments keep their real slope -- that's the whole point. */}
+          {/* segments (see drawnOffsets) */}
           {segments.map((seg, i) => {
-            const flatOffset = (seg.offset_start + seg.offset_end) / 2;
-            const yStart = seg.is_drift ? y(seg.offset_start) : y(flatOffset);
-            const yEnd = seg.is_drift ? y(seg.offset_end) : y(flatOffset);
+            const [yStart, yEnd] = drawnOffsets(seg).map(y);
             return (
               <g key={i}>
                 <line

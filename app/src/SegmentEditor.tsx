@@ -3,7 +3,9 @@ import type { SegmentOut } from "./api";
 import {
   LOW_CONFIDENCE_THRESHOLD,
   describeJump,
+  drawnOffsets,
   formatOffsetMs,
+  offsetRange,
   formatTime,
   offsetTicks,
   segmentOffsetLabel,
@@ -13,6 +15,7 @@ import { type TimeView, WHEEL_ZOOM_IN_FACTOR, WHEEL_ZOOM_OUT_FACTOR, useWheel, z
 import { TrackPreview, type TrackPreviewHandle } from "./TrackPreview";
 import { useElementSize } from "./useElementSize";
 import "./SegmentEditor.css";
+import { Dialog, DialogHeader } from "./Dialog";
 
 // The chart is drawn at the size its box actually gets (measured), so its
 // text keeps one size on any window (see SegmentChart).
@@ -252,12 +255,6 @@ export function SegmentEditor({
   // native undo can't follow values the editor rewrites.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        if (confirmingClose) setConfirmingClose(false);
-        else requestClose();
-        return;
-      }
       if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
       const key = e.key.toLowerCase();
       if (key === "z" && !e.shiftKey) {
@@ -310,19 +307,9 @@ export function SegmentEditor({
   }
 
   const totalDuration = state.times[state.times.length - 1];
-  const offsetsFlat = [...state.offsetStarts, ...state.offsetEnds];
-  let minOffset = Math.min(0, ...offsetsFlat);
-  let maxOffset = Math.max(0, ...offsetsFlat);
-  if (minOffset === maxOffset) {
-    minOffset -= 1;
-    maxOffset += 1;
-  }
-  const pad = (maxOffset - minOffset) * 0.15;
-  minOffset -= pad;
-  maxOffset += pad;
   // Held still while dragging: rescaling under the pointer would make the
   // dragged segment run away from it.
-  if (frozenRange) [minOffset, maxOffset] = frozenRange;
+  const [minOffset, maxOffset] = frozenRange ?? offsetRange([...state.offsetStarts, ...state.offsetEnds]);
 
   // The stretch on screen, the same as the waveforms' (see TrackPreview's
   // `view`): zooming or panning one moves the other.
@@ -462,10 +449,17 @@ export function SegmentEditor({
   }
 
   return (
-    <div className="editor-overlay" role="dialog" aria-modal="true">
-      <div ref={panelRef} className={`editor-panel${preview ? " editor-panel-wide" : ""}${narrow ? " editor-narrow" : ""}`}>
-        <div className="editor-header">
-          <h2>
+    <Dialog
+      fill
+      onClose={onClose}
+      // Escape backs out of the "abandon changes?" question first.
+      onEscape={() => (confirmingClose ? setConfirmingClose(false) : requestClose())}
+      panelRef={panelRef}
+      className={`editor-panel${preview ? " editor-panel-wide" : ""}${narrow ? " editor-narrow" : ""}`}
+    >
+        <DialogHeader
+          title={
+            <>
             Corriger manuellement les segments{" "}
             <InfoTip>
               <ul>
@@ -483,7 +477,9 @@ export function SegmentEditor({
                 <li>Décalage : + = la piste est en retard sur la référence, − = en avance.</li>
               </ul>
             </InfoTip>
-          </h2>
+            </>
+          }
+        >
           {/* Too narrow for the chart and the preview side by side: one at a time. */}
           {narrow && (
             <div className="view-tabs" role="tablist">
@@ -520,7 +516,7 @@ export function SegmentEditor({
               Annuler
             </button>
           )}
-        </div>
+        </DialogHeader>
 
         <div className="editor-columns">
           <div className={narrow && editorView !== "segments" ? "editor-primary view-hidden" : "editor-primary"}>
@@ -560,9 +556,7 @@ export function SegmentEditor({
 
                 <g clipPath={`url(#${clipId})`}>
                 {segmentsPreview.map((seg, i) => {
-                  const flat = (seg.offset_start + seg.offset_end) / 2;
-                  const yStart = seg.is_drift ? y(seg.offset_start) : y(flat);
-                  const yEnd = seg.is_drift ? y(seg.offset_end) : y(flat);
+                  const [yStart, yEnd] = drawnOffsets(seg).map(y);
                   const isDragged = dragging?.kind === "segment" && dragging.index === i;
                   return (
                     <g key={i}>
@@ -609,9 +603,9 @@ export function SegmentEditor({
                 {removalGhost && (
                   <line
                     x1={x(removalGhost.start_s)}
-                    y1={y(removalGhost.is_drift ? removalGhost.offset_start : (removalGhost.offset_start + removalGhost.offset_end) / 2)}
+                    y1={y(drawnOffsets(removalGhost)[0])}
                     x2={x(removalGhost.end_s)}
-                    y2={y(removalGhost.is_drift ? removalGhost.offset_end : (removalGhost.offset_start + removalGhost.offset_end) / 2)}
+                    y2={y(drawnOffsets(removalGhost)[1])}
                     className="segment-line removal-ghost"
                   />
                 )}
@@ -803,7 +797,6 @@ export function SegmentEditor({
             Enregistrer
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

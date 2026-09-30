@@ -1,41 +1,29 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { probe, startSegmentedRenderJob, startSegmentsJob, type SegmentsResponse, type SubtitleInfo, type TrackInfo } from "./api";
+import { runJob } from "./jobs";
+import { languageLabel, LanguageSelect } from "./languages";
 import {
-  probe,
-  cancelJob,
-  startSegmentedRenderJob,
-  startSegmentsJob,
-  type RenderResponse,
-  type SegmentsResponse,
-  type SubtitleInfo,
-  type TrackInfo,
-} from "./api";
-import {
+  AnalysisStatus,
   AnalyzeButton,
+  BatchFooter,
+  ExportCell,
   FileCell,
-  JobCancelled,
-  languageLabel,
-  LanguageSelect,
-  OTHER_MODE_BUSY,
-  OutputChooser,
-  runJob,
-  useEscape,
-  type RunStatus,
+  IDLE_EXPORT,
+  RevealButton,
+  useExportQueue,
+  writtenFile,
+  type AnalysisRun,
+  type ExportFields,
 } from "./batchShared";
 import { InfoTip } from "./InfoTip";
-import { LogPanel } from "./LogPanel";
-import { pickMediaFiles, planOutputPaths } from "./mediaDialog";
+import { pickMediaFiles } from "./mediaDialog";
 import { basename } from "./paths";
-import { describeSegments } from "./SegmentChart";
 import { SegmentEditor } from "./SegmentEditor";
-import {
-  SUBTITLE_MODES,
-  UNSHIFTABLE_HINT,
-  subtitleDetails,
-  subtitleLabel,
-  subtitlesFor,
-  type SubtitleMode,
-} from "./subtitles";
+import { assignSubtitles, SUBTITLE_MODES, type SubtitleMode, subtitlesFor, takenByOthers } from "./subtitles";
+import { devParam, errorMessage, toggled } from "./util";
+import { Dialog, DialogHeader } from "./Dialog";
+import { TrackTable } from "./TrackTable";
+import { SubtitleChecks } from "./SubtitleChecks";
 
 interface FileProbe {
   tracks: TrackInfo[] | null;
@@ -61,23 +49,12 @@ interface Resolution {
   manual: boolean;
 }
 
-interface TargetRun {
-  status: RunStatus;
-  result: SegmentsResponse | null;
-  error: string | null;
-  log: string[];
-}
-
 /** One file's analyses (one per corrected track) and its single export. Kept
  * with the reference they were made against: a different one since makes
  * them stale. */
-interface FileRun {
+interface FileRun extends ExportFields {
   referenceIndex: number;
-  targets: Record<number, TargetRun>;
-  exportStatus: RunStatus;
-  exportResult: RenderResponse | null;
-  exportError: string | null;
-  exportLog: string[];
+  targets: Record<number, AnalysisRun>;
 }
 
 function resolve(tracks: TrackInfo[], referenceLanguage: string, targetLanguages: string[], choice?: TrackChoice): Resolution {
@@ -127,68 +104,28 @@ function TrackChoiceModal({
   onClose: () => void;
 }) {
   const [choice, setChoice] = useState(initial);
-  useEscape(onClose);
-  const subsOfTrack = (index: number) =>
-    choice.subtitles?.[index] ?? defaultSubtitles(tracks.find((t) => t.index === index)!);
+  const targetTracks = tracks.filter((t) => choice.targets.includes(t.index));
+  const assigned = assignSubtitles(targetTracks, (t) => choice.subtitles?.[t.index] ?? defaultSubtitles(t));
   function toggleSubtitle(track: number, sub: number) {
-    setChoice((c) => {
-      const mine = c.subtitles?.[track] ?? defaultSubtitles(tracks.find((t) => t.index === track)!);
-      const next = mine.includes(sub) ? mine.filter((i) => i !== sub) : [...mine, sub];
-      return { ...c, subtitles: { ...c.subtitles, [track]: next } };
-    });
+    setChoice((c) => ({ ...c, subtitles: { ...c.subtitles, [track]: toggled(assigned[track] ?? [], sub) } }));
   }
   return (
-    <div className="batch-tracks-overlay" role="dialog" aria-modal="true">
-      <div className="batch-tracks-panel batch-choice-panel">
-        <div className="batch-tracks-header">
-          <h2 title={path}>Pistes de {basename(path)}</h2>
-          <button className="small-button" onClick={onClose}>
-            Annuler
-          </button>
-        </div>
-        <table className="batch-tracks-table">
-          <thead>
-            <tr>
-              <th>Piste</th>
-              <th>Langue</th>
-              <th>Codec</th>
-              <th className="batch-choice-control">Réf.</th>
-              <th className="batch-choice-control">À corriger</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tracks.map((t) => (
-              <tr key={t.index}>
-                <td>@{t.index}</td>
-                <td>{t.language ?? "?"}</td>
-                <td>{t.codec ?? "?"}</td>
-                <td className="batch-choice-control">
-                  <input
-                    type="radio"
-                    name="choice-reference"
-                    checked={choice.reference === t.index}
-                    onChange={() =>
-                      setChoice((c) => ({ ...c, reference: t.index, targets: c.targets.filter((i) => i !== t.index) }))
-                    }
-                  />
-                </td>
-                <td className="batch-choice-control">
-                  <input
-                    type="checkbox"
-                    disabled={choice.reference === t.index}
-                    checked={choice.targets.includes(t.index)}
-                    onChange={() =>
-                      setChoice((c) => ({
-                        ...c,
-                        targets: c.targets.includes(t.index) ? c.targets.filter((i) => i !== t.index) : [...c.targets, t.index],
-                      }))
-                    }
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <Dialog onClose={onClose} className="batch-choice-panel" labelledBy="choice-title">
+      <DialogHeader id="choice-title" title={`Pistes de ${basename(path)}`} titleTooltip={path} onClose={onClose} closeLabel="Annuler" />
+        <TrackTable
+          className="batch-tracks-table"
+          tracks={tracks}
+          radioName="choice-reference"
+          reference={choice.reference}
+          targets={choice.targets}
+          onReference={(index) => setChoice((c) => ({ ...c, reference: index, targets: c.targets.filter((i) => i !== index) }))}
+          onToggleTarget={(index) =>
+            setChoice((c) => ({
+              ...c,
+              targets: toggled(c.targets, index),
+            }))
+          }
+        />
         {subtitles.length > 0 && choice.targets.length > 0 && (
           <div className="batch-choice-subs">
             <h3>
@@ -198,34 +135,19 @@ function TrackChoiceModal({
                 ligne ; les autres sont gardées telles quelles, calées sur la vidéo.
               </InfoTip>
             </h3>
-            {choice.targets.map((track) => {
-              const info = tracks.find((t) => t.index === track);
-              const mine = subsOfTrack(track);
-              return (
-                <div key={track} className="batch-choice-subs-row">
-                  <span className="batch-target-name">
-                    Avec @{track} {info?.language ?? "?"} :
-                  </span>
-                  {subtitles.map((sub) => {
-                    const elsewhere = choice.targets.some((other) => other !== track && subsOfTrack(other).includes(sub.index));
-                    return (
-                      <label
-                        key={sub.index}
-                        title={!sub.shiftable ? UNSHIFTABLE_HINT : elsewhere ? "Déjà recalés avec une autre piste audio" : subtitleDetails(sub)}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={mine.includes(sub.index)}
-                          disabled={!sub.shiftable || elsewhere}
-                          onChange={() => toggleSubtitle(track, sub.index)}
-                        />
-                        {subtitleLabel(sub)}
-                      </label>
-                    );
-                  })}
-                </div>
-              );
-            })}
+            {targetTracks.map((t) => (
+              <div key={t.index} className="batch-choice-subs-row">
+                <span className="batch-target-name">
+                  Avec @{t.index} {t.language ?? "?"} :
+                </span>
+                <SubtitleChecks
+                  subtitles={subtitles}
+                  chosen={assigned[t.index] ?? []}
+                  taken={takenByOthers(assigned, t.index)}
+                  onToggle={(sub) => toggleSubtitle(t.index, sub)}
+                />
+              </div>
+            ))}
           </div>
         )}
         <div className="batch-choice-actions">
@@ -240,8 +162,7 @@ function TrackChoiceModal({
             Valider
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }
 
@@ -276,10 +197,10 @@ export function MultiTrackBatch({
   const [subsMode, setSubsMode] = useState<SubtitleMode>("forced");
   const [runs, setRuns] = useState<Record<string, FileRun>>({});
   const [analyzing, setAnalyzing] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const queue = useExportQueue(outputDir);
   const [choosing, setChoosing] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ path: string; track: number } | null>(null);
-  const busy = analyzing || exporting;
+  const busy = analyzing || queue.exporting;
   useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
 
   /** Adds files not in the list yet (checked against the list as it really
@@ -302,17 +223,15 @@ export function MultiTrackBatch({
         .catch((err) =>
           setProbes((p) => ({
             ...p,
-            [path]: { tracks: null, subtitles: [], error: err instanceof Error ? err.message : String(err) },
+            [path]: { tracks: null, subtitles: [], error: errorMessage(err) },
           })),
         );
     }
   }, [files]);
 
-  // Dev only (stripped from production builds): `?batchFiles=a|b` adds files
-  // without the system dialog, for automated screenshots.
+  // Dev only (see devParam): `?batchFiles=a|b` adds files.
   useEffect(() => {
-    if (!import.meta.env.DEV) return;
-    const list = new URLSearchParams(window.location.search).get("batchFiles");
+    const list = devParam("batchFiles");
     if (list) addPaths(list.split("|"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -349,14 +268,7 @@ export function MultiTrackBatch({
   function subsOf(path: string, targets: TrackInfo[]): Record<number, number[]> {
     const subtitles = probes[path]?.subtitles ?? [];
     const picked = choices[path]?.subtitles;
-    const claimed = new Set<number>();
-    const out: Record<number, number[]> = {};
-    for (const t of targets) {
-      const wanted = picked?.[t.index] ?? subtitlesFor(subtitles, t.language, subsMode);
-      out[t.index] = wanted.filter((i) => !claimed.has(i));
-      out[t.index].forEach((i) => claimed.add(i));
-    }
-    return out;
+    return assignSubtitles(targets, (t) => picked?.[t.index] ?? subtitlesFor(subtitles, t.language, subsMode));
   }
 
   /** This file's analyses, if made against its current reference. */
@@ -370,7 +282,7 @@ export function MultiTrackBatch({
     setRuns((current) => (current[path] ? { ...current, [path]: update(current[path]) } : current));
   }
 
-  function updateTarget(path: string, track: number, patch: Partial<TargetRun> | ((t: TargetRun) => Partial<TargetRun>)) {
+  function updateTarget(path: string, track: number, patch: Partial<AnalysisRun> | ((t: AnalysisRun) => Partial<AnalysisRun>)) {
     updateRun(path, (run) => {
       const target = run.targets[track];
       const next = typeof patch === "function" ? patch(target) : patch;
@@ -380,13 +292,13 @@ export function MultiTrackBatch({
 
   /** A file's tracks to correct (as picked now) whose analysis against its
    * current reference succeeded -- what its export holds. */
-  function doneTargets(path: string): [TrackInfo, TargetRun][] {
+  function doneTargets(path: string): [TrackInfo, AnalysisRun][] {
     const run = runOf(path);
     const res = resolutions[path];
     if (!run || !res) return [];
     return res.targets.flatMap((t) => {
       const target = run.targets[t.index];
-      return target?.status === "done" && target.result ? [[t, target] as [TrackInfo, TargetRun]] : [];
+      return target?.status === "done" && target.result ? [[t, target] as [TrackInfo, AnalysisRun]] : [];
     });
   }
 
@@ -410,14 +322,11 @@ export function MultiTrackBatch({
           targets: {
             ...keep?.targets,
             ...Object.fromEntries(
-              targets.map((t) => [t.index, { status: "pending" as RunStatus, result: null, error: null, log: [] }]),
+              targets.map((t) => [t.index, { status: "pending", result: null, error: null, log: [] } satisfies AnalysisRun]),
             ),
           },
           // What it held changes: the last export no longer matches.
-          exportStatus: "idle",
-          exportResult: null,
-          exportError: null,
-          exportLog: [],
+          ...IDLE_EXPORT,
         };
       }
       return next;
@@ -432,7 +341,7 @@ export function MultiTrackBatch({
           );
           updateTarget(path, target.index, { status: "done", result });
         } catch (err) {
-          updateTarget(path, target.index, { status: "error", error: err instanceof Error ? err.message : String(err) });
+          updateTarget(path, target.index, { status: "error", error: errorMessage(err) });
         }
       }
     }
@@ -441,70 +350,25 @@ export function MultiTrackBatch({
 
   /** One export per file, holding every corrected track whose analysis
    * succeeded, with its segments as edited ("Modifier"). */
-  // "Annuler l'export": stop the file being exported and don't start the next ones.
-  const cancelRequested = useRef(false);
-  const currentExportJob = useRef<string | null>(null);
-  const [cancelling, setCancelling] = useState(false);
-
-  async function cancelExports() {
-    cancelRequested.current = true;
-    setCancelling(true);
-    if (currentExportJob.current) {
-      try {
-        await cancelJob(currentExportJob.current);
-      } catch {
-        // already over: the loop stops before the next file anyway
-      }
-    }
-  }
-
-  async function handleExportAll() {
-    setExporting(true);
-    cancelRequested.current = false;
-    const toExport = files.filter((path) => doneTargets(path).length > 0);
-    let outputs: string[];
-    try {
-      outputs = await planOutputPaths(toExport, outputDir);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      for (const path of toExport) updateRun(path, (r) => ({ ...r, exportStatus: "error", exportError: message }));
-      setExporting(false);
-      return;
-    }
-    for (const [k, path] of toExport.entries()) {
-      if (cancelRequested.current) break;
-      const run = runOf(path)!;
-      const done = doneTargets(path);
-      updateRun(path, (r) => ({ ...r, exportStatus: "running", exportLog: [], exportError: null }));
-      const subs = subsOf(
-        path,
-        done.map(([track]) => track),
-      );
-      try {
-        const result = await runJob<RenderResponse>(
-          startSegmentedRenderJob(
-            path,
-            run.referenceIndex,
-            done.map(([track, t]) => ({
-              trackIndex: track.index,
-              segments: t.result!.segments,
-              subtitles: subs[track.index] ?? [],
-            })),
-            outputs[k],
-          ),
-          (message) => updateRun(path, (r) => ({ ...r, exportLog: [...r.exportLog, message] })),
-          (id) => (currentExportJob.current = id),
-        );
-        updateRun(path, (r) => ({ ...r, exportStatus: "done", exportResult: result }));
-      } catch (err) {
-        if (err instanceof JobCancelled) updateRun(path, (r) => ({ ...r, exportStatus: "cancelled" }));
-        else
-          updateRun(path, (r) => ({ ...r, exportStatus: "error", exportError: err instanceof Error ? err.message : String(err) }));
-      }
-      currentExportJob.current = null;
-    }
-    setExporting(false);
-    setCancelling(false);
+  function handleExportAll() {
+    queue.run(
+      files
+        .filter((path) => doneTargets(path).length > 0)
+        .map((path) => ({
+          input: path,
+          start: (outputPath: string) => {
+            const done = doneTargets(path);
+            const subs = subsOf(path, done.map(([track]) => track));
+            return startSegmentedRenderJob(
+              path,
+              runOf(path)!.referenceIndex,
+              done.map(([track, t]) => ({ trackIndex: track.index, segments: t.result!.segments, subtitles: subs[track.index] ?? [] })),
+              outputPath,
+            );
+          },
+          update: (patch) => updateRun(path, (r) => ({ ...r, ...patch(r) })),
+        })),
+    );
   }
 
   // Counted over the tracks to correct as picked now, analyzed or not.
@@ -553,7 +417,7 @@ export function MultiTrackBatch({
                   checked={targetLanguages.includes(lang)}
                   disabled={busy}
                   onChange={() =>
-                    setTargetLanguages((t) => (t.includes(lang) ? t.filter((l) => l !== lang) : [...t, lang]))
+                    setTargetLanguages((t) => toggled(t, lang))
                   }
                 />
                 {languageLabel(lang)}
@@ -645,7 +509,6 @@ export function MultiTrackBatch({
                 const probed = probes[path];
                 const res = resolutions[path];
                 const run = runOf(path);
-                const written = run?.exportResult?.written[0];
                 return (
                   <tr key={path} className={res?.issues.length || probed?.error ? "batch-row-flagged" : undefined}>
                     <td className="batch-index">{i + 1}</td>
@@ -707,41 +570,14 @@ export function MultiTrackBatch({
                               <span className="batch-target-name">
                                 @{info.index} {info.language ?? "?"} :
                               </span>{" "}
-                              {!t && "À analyser"}
-                              {t?.status === "pending" && "En attente"}
-                              {t?.status === "running" && "Analyse en cours..."}
-                              {t?.status === "done" && t.result && describeSegments(t.result.segments)}
-                              {t?.status === "error" && (t.error ?? "Erreur")}
-                              {t?.status === "done" && t.result && (
-                                <button
-                                  className="small-button"
-                                  disabled={busy}
-                                  onClick={() => setEditing({ path, track: info.index })}
-                                >
-                                  Modifier
-                                </button>
-                              )}
-                              {t && (t.status === "running" || t.status === "error") && <LogPanel lines={t.log} />}
+                              <AnalysisStatus run={t} busy={busy} onEdit={() => setEditing({ path, track: info.index })} />
                             </div>
                           );
                         })}
                     </td>
-                    <td className={`batch-status batch-status-${!run || run.exportStatus === "idle" ? "pending" : run.exportStatus}`}>
-                      {(!run || run.exportStatus === "idle") && "—"}
-                      {run?.exportStatus === "running" && "Export en cours..."}
-                      {run?.exportStatus === "done" && written && <span title={written}>{basename(written)}</span>}
-                      {run?.exportStatus === "error" && (run.exportError ?? "Erreur")}
-                      {run?.exportStatus === "cancelled" && "Annulé"}
-                      {run && (run.exportStatus === "running" || run.exportStatus === "error") && (
-                        <LogPanel lines={run.exportLog} />
-                      )}
-                    </td>
+                    <ExportCell entry={run} />
                     <td className="batch-row-actions">
-                      {written && (
-                        <button className="small-button" title="Ouvrir le dossier du fichier écrit" onClick={() => revealItemInDir(written)}>
-                          Dossier
-                        </button>
-                      )}
+                      <RevealButton file={writtenFile(run)} />
                     </td>
                   </tr>
                 );
@@ -751,38 +587,35 @@ export function MultiTrackBatch({
         </div>
       </section>
 
-      <div className="batch-footer panel">
-        <OutputChooser outputDir={outputDir} onChange={onOutputDirChange} disabled={busy} />
-        <span className="batch-progress">
-          {files.length} fichier{files.length > 1 ? "s" : ""}
-          {allTargets.length > 0 && ` · ${analyzedCount}/${allTargets.length} piste${allTargets.length > 1 ? "s" : ""} analysée${analyzedCount > 1 ? "s" : ""}`}
-          {exportedCount > 0 && ` · ${exportedCount} exporté${exportedCount > 1 ? "s" : ""}`}
-          {flaggedCount > 0 && ` · ⚠ ${flaggedCount} à vérifier`}
-        </span>
-        <AnalyzeButton
-          analyzing={analyzing}
-          missing={missingCount}
-          analyzed={analyzedCount}
-          unit="piste"
-          disabled={!analyzable || busy || blocked}
-          blocked={blocked}
-          onAnalyze={handleAnalyze}
-        />
-        {exporting ? (
-          <button className="export-cancel" onClick={cancelExports} disabled={cancelling}>
-            {cancelling ? "Annulation..." : "Annuler l'export"}
-          </button>
-        ) : (
-          <button
-            className="primary-button"
-            onClick={handleExportAll}
-            disabled={analyzedCount === 0 || busy || blocked}
-            title={blocked ? OTHER_MODE_BUSY : undefined}
-          >
-            Exporter tout
-          </button>
-        )}
-      </div>
+      <BatchFooter
+        outputDir={outputDir}
+        onOutputDirChange={onOutputDirChange}
+        busy={busy}
+        blocked={blocked}
+        progress={
+          <>
+            {files.length} fichier{files.length > 1 ? "s" : ""}
+            {allTargets.length > 0 &&
+              ` · ${analyzedCount}/${allTargets.length} piste${allTargets.length > 1 ? "s" : ""} analysée${analyzedCount > 1 ? "s" : ""}`}
+            {exportedCount > 0 && ` · ${exportedCount} exporté${exportedCount > 1 ? "s" : ""}`}
+            {flaggedCount > 0 && ` · ⚠ ${flaggedCount} à vérifier`}
+          </>
+        }
+        analyzeButton={
+          <AnalyzeButton
+            analyzing={analyzing}
+            missing={missingCount}
+            analyzed={analyzedCount}
+            unit="piste"
+            disabled={!analyzable || busy || blocked}
+            blocked={blocked}
+            onAnalyze={handleAnalyze}
+          />
+        }
+        queue={queue}
+        canExport={analyzedCount > 0}
+        onExport={handleExportAll}
+      />
 
       {choosing && choosingTracks && choosingRes && (
         <TrackChoiceModal

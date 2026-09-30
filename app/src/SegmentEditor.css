@@ -1,31 +1,7 @@
-.editor-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-  padding: 1em;
-  box-sizing: border-box;
-}
-
+/* A `fill` Dialog (the whole window, bar the backdrop's margin): the chart
+   takes the height left over, the segment table scrolls in its own frame. */
 .editor-panel {
-  background: var(--surface, #f6f6f6);
-  color: inherit;
-  border-radius: var(--radius, 12px);
-  box-shadow: var(--shadow, 0 4px 16px rgba(0, 0, 0, 0.25));
-  padding: 1.2em 1.4em;
-  width: 100%;
   max-width: 960px;
-  /* The whole window (bar the backdrop's margin), fitted rather than
-     scrolled: the chart takes the height left over, the segment table
-     scrolls in its own frame when long. */
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-  text-align: left;
 }
 
 /* Wider when the waveform column is present -- side by side, both the
@@ -62,25 +38,12 @@
   min-height: 160px;
 }
 
-.editor-header {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.6em;
-}
-
-.editor-header h2 {
-  margin: 0;
-  font-size: 1.1em;
-}
-
 .editor-chart {
   display: block;
   width: 100%;
   height: 100%;
-  border: 1px solid var(--border, rgba(128, 128, 128, 0.25));
-  border-radius: var(--radius-sm, 8px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   box-sizing: border-box;
 }
 
@@ -90,13 +53,13 @@
 
 /* Same red marker as the waveforms' (Waveform.css). */
 .editor-chart .playback-cursor {
-  stroke: var(--danger, #d33);
+  stroke: var(--danger);
   stroke-width: 2;
   pointer-events: none;
 }
 
 .editor-chart .zero-line {
-  stroke: #888;
+  stroke: var(--text-muted);
   stroke-dasharray: 4 3;
 }
 
@@ -117,11 +80,11 @@
 }
 
 .editor-chart .segment-line.constant {
-  stroke: #396cd8;
+  stroke: var(--constant);
 }
 
 .editor-chart .segment-line.drift {
-  stroke: #d38a39;
+  stroke: var(--drift);
 }
 
 .editor-chart .segment-line.low-confidence {
@@ -130,12 +93,12 @@
 
 /* "Retirer" hovered: the segment going away, and its neighbour stretched over it. */
 .editor-chart .segment-line.removal-target {
-  stroke: var(--danger, #cc3333);
+  stroke: var(--danger);
   opacity: 0.45;
 }
 
 .editor-chart .segment-line.removal-ghost {
-  stroke: #2e9e5b;
+  stroke: var(--success);
   stroke-dasharray: 6 4;
   pointer-events: none;
 }
@@ -196,13 +159,13 @@
 }
 
 .boundary-line {
-  stroke: #d33;
+  stroke: var(--danger);
   stroke-width: 1.5;
   stroke-dasharray: 3 2;
 }
 
 .boundary-handle circle {
-  fill: #d33;
+  fill: var(--danger);
 }
 
 /* Its natural height up to 40% of the column, then it scrolls in its own
@@ -211,8 +174,8 @@
   flex: 0 1 auto;
   max-height: 40%;
   min-height: 5.5em;
-  border: 1px solid var(--border, rgba(128, 128, 128, 0.3));
-  border-radius: var(--radius-sm, 8px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
 }
 
 .editor-table {
@@ -225,7 +188,7 @@
 .editor-table td {
   padding: 0.35em 0.5em;
   text-align: center;
-  border: 1px solid var(--border, rgba(128, 128, 128, 0.3));
+  border: 1px solid var(--border);
 }
 
 .editor-table th {
@@ -238,7 +201,7 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-muted);
-  background: var(--surface-alt, rgba(128, 128, 128, 0.08));
+  background: var(--surface-alt);
 }
 
 .editor-table td:last-child {
@@ -262,12 +225,12 @@
 }
 
 .editor-confidence-cell.low {
-  color: var(--danger, #cc3333);
+  color: var(--danger);
   font-weight: 600;
 }
 
 .editor-row-low-confidence {
-  background: color-mix(in srgb, var(--danger, #cc3333) 8%, transparent);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
 }
 
 /* No fixed height: the waveforms keep their own readable minimum (see
@@ -278,7 +241,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--border, rgba(128, 128, 128, 0.3));
+  border-left: 1px solid var(--border);
   padding-left: 1.4em;
   box-sizing: border-box;
 }
@@ -311,7 +274,4 @@
   padding-left: 0;
 }
 
-.editor-header .view-tabs {
-  margin-left: auto;
-  margin-right: 0.8em;
-}
+

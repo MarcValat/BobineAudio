@@ -22,9 +22,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import numpy as np
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from syncaudio import analysis_cache, dsp, waveform_cache
@@ -42,11 +42,14 @@ from syncaudio.models import AudioTrackSpec
 from syncaudio.render import (
     SegmentedTrackCorrection,
     TrackCorrection,
+    check_import_track,
     corrected_clip,
     default_output_path,
     plan_corrections,
     plan_segmented_correction,
     render as render_tracks,
+    resolve_targets,
+    track_key,
 )
 from syncaudio.segments import DEFAULT_HOP_S, DEFAULT_MARGIN_S, DEFAULT_WINDOW_S, Segment, detect_segments
 from syncaudio.subtitles import is_shiftable
@@ -87,8 +90,12 @@ class TrackRef(BaseModel):
         return AudioTrackSpec(raw=raw, path=self.path, stream_index=self.index)
 
 
-def _http_error(exc: FFmpegError) -> HTTPException:
-    return HTTPException(status_code=400, detail=str(exc))
+@app.exception_handler(FFmpegError)
+async def _ffmpeg_error(_request: Request, exc: FFmpegError) -> JSONResponse:
+    """A file ffmpeg can't read (missing, not media, no such track...) is the
+    request's fault: 400 with ffmpeg's explanation, from any route. Jobs
+    report it as their error message (see jobs.py)."""
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
 class JobStarted(BaseModel):
@@ -184,10 +191,7 @@ class ProbeResponse(BaseModel):
 
 @app.get("/probe", response_model=ProbeResponse)
 def probe(path: str) -> ProbeResponse:
-    try:
-        streams = probe_audio_streams(path)
-    except FFmpegError as exc:
-        raise _http_error(exc) from exc
+    streams = probe_audio_streams(path)
     return ProbeResponse(
         path=path,
         tracks=[
@@ -228,10 +232,7 @@ def clip(path: str, index: int, start: float = 0.0, duration: float = 12.0) -> R
     pointless overhead here.
     """
     spec = AudioTrackSpec(raw=f"{path}@{index}", path=path, stream_index=index)
-    try:
-        wav_bytes = extract_wav_clip(spec, start=max(0.0, start), duration=min(duration, _MAX_CLIP_DURATION_S))
-    except FFmpegError as exc:
-        raise _http_error(exc) from exc
+    wav_bytes = extract_wav_clip(spec, start=max(0.0, start), duration=min(duration, _MAX_CLIP_DURATION_S))
     return Response(content=wav_bytes, media_type="audio/wav")
 
 
@@ -252,10 +253,7 @@ def waveform(path: str, index: int, start: float = 0.0, duration: float | None =
     duration for its initial, fully-zoomed-out view.
     """
     spec = AudioTrackSpec(raw=f"{path}@{index}", path=path, stream_index=index)
-    try:
-        mins, maxes, actual_duration = waveform_cache.get_peaks(spec, buckets, start=max(0.0, start), duration=duration)
-    except FFmpegError as exc:
-        raise _http_error(exc) from exc
+    mins, maxes, actual_duration = waveform_cache.get_peaks(spec, buckets, start=max(0.0, start), duration=duration)
     # 4 decimals of full scale are far below a pixel, and halve the JSON of
     # the GUI's whole-track fetch (over a hundred thousand buckets). float64
     # first: a rounded float32 still prints with float32's noise digits.
@@ -360,27 +358,22 @@ def corrected_clip_endpoint(req: CorrectedClipRequest) -> Response:
             start=max(0.0, req.start),
             duration=min(req.duration, _MAX_CLIP_DURATION_S),
         )
-    except FFmpegError as exc:
-        raise _http_error(exc) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return Response(content=wav_bytes, media_type="audio/wav")
 
 
 def _do_segments(req: SegmentsRequest, log: Callable[[str], None] = _NO_LOG) -> SegmentsResponse:
-    try:
-        segs = detect_segments(
-            req.reference.to_spec(),
-            req.track.to_spec(),
-            start=req.start,
-            duration=req.duration,
-            window_s=req.window_s,
-            hop_s=req.hop_s,
-            margin_s=req.margin_s,
-            log=log,
-        )
-    except FFmpegError as exc:
-        raise _http_error(exc) from exc
+    segs = detect_segments(
+        req.reference.to_spec(),
+        req.track.to_spec(),
+        start=req.start,
+        duration=req.duration,
+        window_s=req.window_s,
+        hop_s=req.hop_s,
+        margin_s=req.margin_s,
+        log=log,
+    )
     return SegmentsResponse(
         reference=req.reference.to_spec().raw,
         track=req.track.to_spec().raw,
@@ -397,11 +390,6 @@ def start_segments_job(req: SegmentsRequest) -> JobStarted:
 class SubsPair(BaseModel):
     subs: TrackRef
     audio: TrackRef
-
-
-def _track_key(spec: AudioTrackSpec) -> tuple[str, int]:
-    idx = spec.stream_index if spec.stream_index is not None else 0
-    return (str(Path(spec.path).resolve()), idx)
 
 
 class SegmentOverride(BaseModel):
@@ -450,52 +438,23 @@ class RenderResponse(BaseModel):
     corrections: list[RenderedTrack]
 
 
-def _resolve_targets(input_path: str, reference_index: int, track_indices: list[int] | None, only_imports: bool) -> list[int]:
-    try:
-        streams = probe_audio_streams(input_path)
-    except FFmpegError as exc:
-        raise _http_error(exc) from exc
-    all_indices = [s.index for s in streams]
-    if reference_index not in all_indices:
-        raise HTTPException(400, f"Index de référence {reference_index} absent de {input_path!r} (pistes : {all_indices}).")
-
-    if only_imports and track_indices:
-        raise HTTPException(400, "only_imports et track_indices sont incompatibles.")
-    if only_imports:
-        targets: list[int] = []
-    elif track_indices:
-        targets = sorted(track_indices)
-    else:
-        targets = [i for i in all_indices if i != reference_index]
-    if reference_index in targets:
-        raise HTTPException(400, "La piste de référence ne peut pas aussi être une piste à corriger.")
-    unknown = [i for i in targets if i not in all_indices]
-    if unknown:
-        raise HTTPException(400, f"Index(es) inconnu(s) : {unknown} (pistes disponibles : {all_indices}).")
-    return targets
-
-
 def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> RenderResponse:
-    targets = _resolve_targets(req.input_path, req.reference_index, req.track_indices, req.only_imports)
-
+    # Runs as a job: a ValueError from these checks becomes its error message.
+    if req.only_imports and req.track_indices:
+        raise ValueError("only_imports et track_indices sont incompatibles.")
+    targets = resolve_targets(req.input_path, req.reference_index, req.track_indices, req.only_imports)
     for ref in req.import_audio:
-        try:
-            ext_streams = {s.index for s in probe_audio_streams(ref.path)}
-        except FFmpegError as exc:
-            raise _http_error(exc) from exc
-        idx = ref.index if ref.index is not None else 0
-        if idx not in ext_streams:
-            raise HTTPException(400, f"Index audio {idx} absent de {ref.path!r} (pistes : {sorted(ext_streams)}).")
+        check_import_track(ref.to_spec())
 
     reference_spec = AudioTrackSpec(raw=f"{req.input_path}@{req.reference_index}", path=req.input_path, stream_index=req.reference_index)
     same_file_specs = [AudioTrackSpec(raw=f"{req.input_path}@{i}", path=req.input_path, stream_index=i) for i in targets]
     import_audio_specs = [ref.to_spec() for ref in req.import_audio]
     candidates = same_file_specs + import_audio_specs
-    candidate_keys = [_track_key(c) for c in candidates]
+    candidate_keys = [track_key(c) for c in candidates]
 
     subs_positions: list[int] = []
     for pair in req.subs:
-        key = _track_key(pair.audio.to_spec())
+        key = track_key(pair.audio.to_spec())
         if key not in candidate_keys:
             raise HTTPException(
                 400,
@@ -508,10 +467,10 @@ def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> Rend
 
     try:
         if req.segmented:
-            overrides = {_track_key(o.track.to_spec()): o for o in req.segment_overrides}
+            overrides = {track_key(o.track.to_spec()): o for o in req.segment_overrides}
             seg_corrections: list[SegmentedTrackCorrection] = []
             for spec in candidates:
-                override = overrides.get(_track_key(spec))
+                override = overrides.get(track_key(spec))
                 if override is not None:
                     language = override.language
                     if language is None:
@@ -557,8 +516,6 @@ def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> Rend
             corrections_out = [
                 RenderedTrack(track=c.track.raw, language=c.language, offset_seconds=c.offset_seconds) for c in corrections
             ]
-    except FFmpegError as exc:
-        raise _http_error(exc) from exc
     except Cancelled:
         # Stopped midway: what's on disk is a truncated, unplayable file.
         Path(output_path).unlink(missing_ok=True)

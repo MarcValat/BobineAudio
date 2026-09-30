@@ -1,8 +1,8 @@
 .segment-chart {
   margin: 1em auto;
   max-width: 760px;
-  border: 1px solid var(--border, rgba(128, 128, 128, 0.25));
-  border-radius: var(--radius-sm, 8px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   padding: 0.6em 0.8em;
   box-sizing: border-box;
 }
@@ -26,7 +26,7 @@
 }
 
 .zero-line {
-  stroke: #888;
+  stroke: var(--text-muted);
   stroke-dasharray: 4 3;
   stroke-width: 1;
 }
@@ -49,11 +49,11 @@
 }
 
 .segment-line.constant {
-  stroke: #396cd8;
+  stroke: var(--constant);
 }
 
 .segment-line.drift {
-  stroke: #d38a39;
+  stroke: var(--drift);
 }
 
 /* Dashed: the detection itself isn't sure of this one (confidence ⚠). */
@@ -95,11 +95,11 @@
 }
 
 .legend-swatch.constant {
-  background: #396cd8;
+  background: var(--constant);
 }
 
 .legend-swatch.drift {
-  background: #d38a39;
+  background: var(--drift);
 }
 
 .legend-swatch.low-confidence {

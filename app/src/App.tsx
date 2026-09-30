@@ -5,7 +5,6 @@ import {
   startSegmentsJob,
   startPrefetchJob,
   startSegmentedRenderJob,
-  connectJobWS,
   cancelJob,
   type SubtitleInfo,
   type TrackInfo,
@@ -24,9 +23,13 @@ import { OptionsButton } from "./Options";
 import { UpdateButton } from "./UpdateButton";
 import { pickMediaFiles, pickOutputFile, syncedFileName } from "./mediaDialog";
 import { basename } from "./paths";
-import { UNSHIFTABLE_HINT, subtitleDetails, subtitleLabel, subtitlesFor } from "./subtitles";
+import { assignSubtitles, subtitlesFor, takenByOthers } from "./subtitles";
 import { useElementSize } from "./useElementSize";
 import "./App.css";
+import { devParam, errorMessage, toggled } from "./util";
+import { TrackTable } from "./TrackTable";
+import { SubtitleChecks } from "./SubtitleChecks";
+import { JobCancelled, runJob } from "./jobs";
 
 type EngineStatus = "starting" | "ready" | "unreachable";
 
@@ -139,15 +142,12 @@ function App() {
     if (selected) await openFile(selected);
   }
 
-  // Dev only (stripped from production builds): `?open=<path>` opens a file
-  // without the system dialog, and `?mode=batch` starts on batch mode, for
-  // automated layout screenshots in a plain browser, where Tauri's dialog
-  // doesn't exist.
+  // Dev only (see devParam): `?open=<path>` opens a file, `?mode=batch`
+  // starts on batch mode.
   useEffect(() => {
-    if (!import.meta.env.DEV || engineStatus !== "ready") return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("mode") === "batch") setMode("batch");
-    const path = params.get("open");
+    if (engineStatus !== "ready") return;
+    if (devParam("mode") === "batch") setMode("batch");
+    const path = devParam("open");
     if (path) openFile(path);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engineStatus]);
@@ -178,7 +178,7 @@ function App() {
         prefetchTracks(selected, res.tracks.map((t) => t.index));
       }
     } catch (err) {
-      if (gen === fileGenRef.current) setProbeError(err instanceof Error ? err.message : String(err));
+      if (gen === fileGenRef.current) setProbeError(errorMessage(err));
     }
   }
 
@@ -191,13 +191,11 @@ function App() {
       if (gen === fileGenRef.current) setPrefetching(false);
     };
     setPrefetching(true);
-    startPrefetchJob(path, trackIndices)
-      .then((jobId) => {
-        connectJobWS<PrefetchResponse>(jobId, (event) => {
-          if (event.type !== "log") done();
-        });
+    runJob<PrefetchResponse>(startPrefetchJob(path, trackIndices), () => {})
+      .catch(() => {
+        // the next analysis just does the work itself
       })
-      .catch(done);
+      .finally(done);
   }
 
   function handleReferenceChange(index: number) {
@@ -207,9 +205,7 @@ function App() {
   }
 
   function toggleTarget(index: number) {
-    setTargetIndices((current) =>
-      current.includes(index) ? current.filter((i) => i !== index) : [...current, index],
-    );
+    setTargetIndices((current) => toggled(current, index));
   }
 
   function updateAnalysis(trackIndex: number, patch: Partial<TrackAnalysis> | ((entry: TrackAnalysis) => Partial<TrackAnalysis>)) {
@@ -238,18 +234,13 @@ function App() {
       },
     }));
     try {
-      const jobId = await startSegmentsJob(filePath, refIndex, filePath, trackIndex);
-      connectJobWS<SegmentsResponse>(jobId, (event) => {
-        if (event.type === "log") {
-          update(trackIndex, (e) => ({ log: [...e.log, event.message] }));
-        } else if (event.type === "done") {
-          update(trackIndex, { status: "done", result: event.result });
-        } else if (event.type === "error") {
-          update(trackIndex, { status: "error", error: event.message });
-        }
-      });
+      const result = await runJob<SegmentsResponse>(
+        startSegmentsJob(filePath, refIndex, filePath, trackIndex),
+        (message) => update(trackIndex, (e) => ({ log: [...e.log, message] })),
+      );
+      update(trackIndex, { status: "done", result });
     } catch (err) {
-      update(trackIndex, { status: "error", error: err instanceof Error ? err.message : String(err) });
+      update(trackIndex, { status: "error", error: errorMessage(err) });
     }
   }
 
@@ -271,13 +262,10 @@ function App() {
   // The subtitle tracks retimed with each analyzed track: those picked by
   // hand, or by default its language's forced ones. One subtitle track goes
   // with one audio track at most (the first to claim it).
-  const subsByTrack: Record<number, number[]> = {};
-  const claimedSubs = new Set<number>();
-  for (const t of analyzedTracks) {
-    const wanted = subsChoice[t.index] ?? subtitlesFor(subtitles, t.language, "forced");
-    subsByTrack[t.index] = wanted.filter((i) => !claimedSubs.has(i));
-    subsByTrack[t.index].forEach((i) => claimedSubs.add(i));
-  }
+  const subsByTrack = assignSubtitles(
+    analyzedTracks,
+    (t) => subsChoice[t.index] ?? subtitlesFor(subtitles, t.language, "forced"),
+  );
   const exportTracks = exportableTracks.filter((t) => !exportExcluded.includes(t.index));
   const retimedSubs = exportTracks.flatMap((t) => subsByTrack[t.index] ?? []);
   // What an export would contain now: once it changes (another analysis, a
@@ -309,7 +297,7 @@ function App() {
     }.${(tracks?.length ?? 0) > exportTracks.length + 1 ? " Les autres pistes audio ne sont pas incluses." : ""}`;
 
   function toggleExportTrack(index: number) {
-    setExportExcluded((current) => (current.includes(index) ? current.filter((i) => i !== index) : [...current, index]));
+    setExportExcluded((current) => toggled(current, index));
   }
 
   async function exportFile() {
@@ -322,30 +310,27 @@ function App() {
     }
     setExportState({ ...IDLE_EXPORT, running: true });
     try {
-      const jobId = await startSegmentedRenderJob(
-        filePath,
-        exportReference,
-        exportTracks.map((t) => ({
-          trackIndex: t.index,
-          segments: analyses[t.index].result!.segments,
-          subtitles: subsByTrack[t.index] ?? [],
-        })),
-        outputPath,
+      const result = await runJob<RenderResponse>(
+        startSegmentedRenderJob(
+          filePath,
+          exportReference,
+          exportTracks.map((t) => ({
+            trackIndex: t.index,
+            segments: analyses[t.index].result!.segments,
+            subtitles: subsByTrack[t.index] ?? [],
+          })),
+          outputPath,
+        ),
+        (message) => setExportState((s) => ({ ...s, log: [...s.log, message] })),
+        (jobId) => setExportState((s) => ({ ...s, jobId })),
       );
-      setExportState((s) => ({ ...s, jobId }));
-      connectJobWS<RenderResponse>(jobId, (event) => {
-        if (event.type === "log") {
-          setExportState((s) => ({ ...s, log: [...s.log, event.message] }));
-        } else if (event.type === "done") {
-          setExportState((s) => ({ ...s, running: false, written: event.result.written[0] ?? outputPath }));
-        } else if (event.type === "error") {
-          setExportState((s) => ({ ...s, running: false, jobId: null, error: event.message }));
-        } else if (event.type === "cancelled") {
-          setExportState((s) => ({ ...s, running: false, jobId: null, cancelling: false, cancelled: true }));
-        }
-      });
+      setExportState((s) => ({ ...s, running: false, jobId: null, written: result.written[0] ?? outputPath }));
     } catch (err) {
-      setExportState((s) => ({ ...s, running: false, error: err instanceof Error ? err.message : String(err) }));
+      if (err instanceof JobCancelled) {
+        setExportState((s) => ({ ...s, running: false, jobId: null, cancelling: false, cancelled: true }));
+      } else {
+        setExportState((s) => ({ ...s, running: false, jobId: null, error: errorMessage(err) }));
+      }
     }
   }
 
@@ -357,7 +342,7 @@ function App() {
     try {
       await cancelJob(exportState.jobId);
     } catch (err) {
-      setExportState((s) => ({ ...s, cancelling: false, error: err instanceof Error ? err.message : String(err) }));
+      setExportState((s) => ({ ...s, cancelling: false, error: errorMessage(err) }));
     }
   }
   const editingEntry = editingTrack !== null ? analyses[editingTrack] : null;
@@ -447,42 +432,13 @@ function App() {
             {tracks && tracks.length >= 2 && (
               <>
                 <div className="tracks-table-wrap list-scroll">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Piste</th>
-                        <th>Langue</th>
-                        <th>Codec</th>
-                        <th>Réf.</th>
-                        <th>À corriger</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tracks.map((t) => (
-                        <tr key={t.index}>
-                          <td>@{t.index}</td>
-                          <td>{t.language ?? "?"}</td>
-                          <td>{t.codec ?? "?"}</td>
-                          <td>
-                            <input
-                              type="radio"
-                              name="reference"
-                              checked={referenceIndex === t.index}
-                              onChange={() => handleReferenceChange(t.index)}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="checkbox"
-                              disabled={referenceIndex === t.index}
-                              checked={targetIndices.includes(t.index)}
-                              onChange={() => toggleTarget(t.index)}
-                            />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <TrackTable
+                    tracks={tracks}
+                    reference={referenceIndex}
+                    targets={targetIndices}
+                    onReference={handleReferenceChange}
+                    onToggleTarget={toggleTarget}
+                  />
                 </div>
 
                 <div className="tracks-actions">
@@ -543,37 +499,15 @@ function App() {
                               sous-titres image (PGS, VobSub) ne peuvent pas être recalés.
                             </InfoTip>
                           </span>
-                          {subtitles.map((s) => {
-                            const elsewhere = Object.entries(subsByTrack).some(
-                              ([track, subs]) => Number(track) !== t.index && subs.includes(s.index),
-                            );
-                            const mine = subsByTrack[t.index] ?? [];
-                            return (
-                              <label
-                                key={s.index}
-                                title={
-                                  !s.shiftable
-                                    ? UNSHIFTABLE_HINT
-                                    : elsewhere
-                                      ? "Déjà recalés avec une autre piste audio"
-                                      : subtitleDetails(s)
-                                }
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={mine.includes(s.index)}
-                                  disabled={!s.shiftable || elsewhere || exportState.running}
-                                  onChange={() =>
-                                    setSubsChoice((c) => ({
-                                      ...c,
-                                      [t.index]: mine.includes(s.index) ? mine.filter((i) => i !== s.index) : [...mine, s.index],
-                                    }))
-                                  }
-                                />
-                                {subtitleLabel(s)}
-                              </label>
-                            );
-                          })}
+                          <SubtitleChecks
+                            subtitles={subtitles}
+                            chosen={subsByTrack[t.index] ?? []}
+                            taken={takenByOthers(subsByTrack, t.index)}
+                            disabled={exportState.running}
+                            onToggle={(sub) =>
+                              setSubsChoice((c) => ({ ...c, [t.index]: toggled(subsByTrack[t.index] ?? [], sub) }))
+                            }
+                          />
                         </div>
                       )}
                       <div onClick={(e) => e.stopPropagation()}>
