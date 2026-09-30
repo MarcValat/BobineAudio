@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
+import { devParam, errorMessage } from "./util";
 
 // "error": the download failed, the app still works; "failed": the install
 // did, after the engine was stopped.
@@ -18,9 +19,9 @@ type DownloadEvent =
   | { event: "Progress"; data: { chunkLength: number } }
   | { event: "Finished" };
 
-/** Dev only: `?update=1` shows a pretend update, to see the button in a plain browser. */
+/** Dev only (see devParam): `?update=1` shows a pretend update. */
 function devUpdate(): PendingUpdate | null {
-  if (!import.meta.env.DEV || new URLSearchParams(window.location.search).get("update") !== "1") return null;
+  if (devParam("update") !== "1") return null;
   return {
     version: "9.9.9",
     download: () => Promise.reject(new Error("mise à jour factice (dev)")),
@@ -95,7 +96,7 @@ export function UpdateButton() {
       });
     } catch (err) {
       setPhase("error");
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
       return;
     }
     setPhase("ready");
@@ -113,7 +114,7 @@ export function UpdateButton() {
     } catch (err) {
       // The engine is stopped by now: only a restart brings it back.
       setPhase("failed");
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
     }
   }
 

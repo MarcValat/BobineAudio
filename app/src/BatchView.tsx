@@ -3,6 +3,7 @@ import { loadOutputDir, saveOutputDir } from "./batchShared";
 import { MultiTrackBatch } from "./MultiTrackBatch";
 import { PairsBatch } from "./PairsBatch";
 import "./BatchView.css";
+import { devParam } from "./util";
 
 type BatchMode = "multi" | "pairs";
 
@@ -23,9 +24,9 @@ export function BatchView({ hidden }: { hidden: boolean }) {
   // already uses every core (see batchShared's runJob).
   const [busy, setBusy] = useState<Record<BatchMode, boolean>>({ multi: false, pairs: false });
 
-  // Dev only (stripped from production builds): pairs mode for `?batchRef=`.
+  // Dev only (see devParam): pairs mode for `?batchRef=`.
   useEffect(() => {
-    if (import.meta.env.DEV && new URLSearchParams(window.location.search).get("batchRef")) setMode("pairs");
+    if (devParam("batchRef")) setMode("pairs");
   }, []);
 
   function changeOutputDir(dir: string | null) {

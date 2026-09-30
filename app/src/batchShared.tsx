@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { connectJobWS } from "./api";
 import { pickFolder } from "./mediaDialog";
 import { basename } from "./paths";
+import { loadSetting, saveSetting } from "./util";
 
 export function moved<T>(arr: T[], from: number, to: number): T[] {
   if (to < 0 || to >= arr.length) return arr;
@@ -243,25 +244,9 @@ export function LanguageSelect({
 
 const OUTPUT_DIR_KEY = "syncaudio.batchOutputDir";
 
-/** The folder batch exports go to (null: next to each original), kept for
- * the next session. Browser storage can fail: the choice then just isn't
- * remembered. */
-export function loadOutputDir(): string | null {
-  try {
-    return localStorage.getItem(OUTPUT_DIR_KEY);
-  } catch {
-    return null;
-  }
-}
-
-export function saveOutputDir(dir: string | null): void {
-  try {
-    if (dir) localStorage.setItem(OUTPUT_DIR_KEY, dir);
-    else localStorage.removeItem(OUTPUT_DIR_KEY);
-  } catch {
-    // not remembered this time
-  }
-}
+/** The folder batch exports go to (null: next to each original), kept for the next session. */
+export const loadOutputDir = (): string | null => loadSetting(OUTPUT_DIR_KEY);
+export const saveOutputDir = (dir: string | null): void => saveSetting(OUTPUT_DIR_KEY, dir);
 
 /** "Sortie : à côté des originaux / <dossier>", with the buttons to change it. */
 export function OutputChooser({

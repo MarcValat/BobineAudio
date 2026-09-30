@@ -26,6 +26,7 @@ import { LogPanel } from "./LogPanel";
 import { pickMediaFiles, planOutputPaths } from "./mediaDialog";
 import { basename } from "./paths";
 import { SUBTITLE_MODES, subtitlesFor, type SubtitleMode } from "./subtitles";
+import { devParam, errorMessage } from "./util";
 
 
 interface PairAnalysis {
@@ -67,7 +68,7 @@ function useTracksOf(path: string | undefined): { tracks: TrackInfo[] | null; lo
         if (!cancelled) setTracks(res.tracks);
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+        if (!cancelled) setError(errorMessage(err));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -145,7 +146,7 @@ function AllTracksModal({ referenceFiles, candidateFiles, onClose }: { reference
       paths.map((path) =>
         probe(path)
           .then((res) => [path, { tracks: res.tracks, error: null }] as const)
-          .catch((err) => [path, { tracks: null, error: err instanceof Error ? err.message : String(err) }] as const),
+          .catch((err) => [path, { tracks: null, error: errorMessage(err) }] as const),
       ),
     ).then((results) => {
       if (cancelled) return;
@@ -293,13 +294,10 @@ export function PairsBatch({
     }
   }, [candidateProbe.tracks]);
 
-  // Dev only (stripped from production builds): `?batchRef=a|b&batchCand=c|d`
-  // fills the lists without the system dialog, for automated screenshots.
+  // Dev only (see devParam): `?batchRef=a|b&batchCand=c|d` fills the lists.
   useEffect(() => {
-    if (!import.meta.env.DEV) return;
-    const params = new URLSearchParams(window.location.search);
-    const refs = params.get("batchRef");
-    const cands = params.get("batchCand");
+    const refs = devParam("batchRef");
+    const cands = devParam("batchCand");
     if (refs) setReferenceFiles(refs.split("|"));
     if (cands) setCandidateFiles(cands.split("|"));
   }, []);
@@ -351,7 +349,7 @@ export function PairsBatch({
         );
         updatePair(key, { status: "done", result });
       } catch (err) {
-        updatePair(key, { status: "error", error: err instanceof Error ? err.message : String(err) });
+        updatePair(key, { status: "error", error: errorMessage(err) });
       }
     }
     setAnalyzing(false);
@@ -398,7 +396,7 @@ export function PairsBatch({
     try {
       outputs = await planOutputPaths(toExport.map((i) => referenceFiles[i]), outputDir);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = errorMessage(err);
       for (const key of keys) updatePair(key, { exportStatus: "error", exportError: message });
       setExporting(false);
       return;
@@ -434,7 +432,7 @@ export function PairsBatch({
         updatePair(key, { exportStatus: "done", exportResult: result });
       } catch (err) {
         if (err instanceof JobCancelled) updatePair(key, { exportStatus: "cancelled" });
-        else updatePair(key, { exportStatus: "error", exportError: err instanceof Error ? err.message : String(err) });
+        else updatePair(key, { exportStatus: "error", exportError: errorMessage(err) });
       }
       currentExportJob.current = null;
     }

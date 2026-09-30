@@ -27,6 +27,7 @@ import { basename } from "./paths";
 import { UNSHIFTABLE_HINT, subtitleDetails, subtitleLabel, subtitlesFor } from "./subtitles";
 import { useElementSize } from "./useElementSize";
 import "./App.css";
+import { devParam, errorMessage } from "./util";
 
 type EngineStatus = "starting" | "ready" | "unreachable";
 
@@ -139,15 +140,12 @@ function App() {
     if (selected) await openFile(selected);
   }
 
-  // Dev only (stripped from production builds): `?open=<path>` opens a file
-  // without the system dialog, and `?mode=batch` starts on batch mode, for
-  // automated layout screenshots in a plain browser, where Tauri's dialog
-  // doesn't exist.
+  // Dev only (see devParam): `?open=<path>` opens a file, `?mode=batch`
+  // starts on batch mode.
   useEffect(() => {
-    if (!import.meta.env.DEV || engineStatus !== "ready") return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("mode") === "batch") setMode("batch");
-    const path = params.get("open");
+    if (engineStatus !== "ready") return;
+    if (devParam("mode") === "batch") setMode("batch");
+    const path = devParam("open");
     if (path) openFile(path);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engineStatus]);
@@ -178,7 +176,7 @@ function App() {
         prefetchTracks(selected, res.tracks.map((t) => t.index));
       }
     } catch (err) {
-      if (gen === fileGenRef.current) setProbeError(err instanceof Error ? err.message : String(err));
+      if (gen === fileGenRef.current) setProbeError(errorMessage(err));
     }
   }
 
@@ -249,7 +247,7 @@ function App() {
         }
       });
     } catch (err) {
-      update(trackIndex, { status: "error", error: err instanceof Error ? err.message : String(err) });
+      update(trackIndex, { status: "error", error: errorMessage(err) });
     }
   }
 
@@ -345,7 +343,7 @@ function App() {
         }
       });
     } catch (err) {
-      setExportState((s) => ({ ...s, running: false, error: err instanceof Error ? err.message : String(err) }));
+      setExportState((s) => ({ ...s, running: false, error: errorMessage(err) }));
     }
   }
 
@@ -357,7 +355,7 @@ function App() {
     try {
       await cancelJob(exportState.jobId);
     } catch (err) {
-      setExportState((s) => ({ ...s, cancelling: false, error: err instanceof Error ? err.message : String(err) }));
+      setExportState((s) => ({ ...s, cancelling: false, error: errorMessage(err) }));
     }
   }
   const editingEntry = editingTrack !== null ? analyses[editingTrack] : null;

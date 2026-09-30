@@ -36,6 +36,7 @@ import {
   subtitlesFor,
   type SubtitleMode,
 } from "./subtitles";
+import { devParam, errorMessage } from "./util";
 
 interface FileProbe {
   tracks: TrackInfo[] | null;
@@ -302,17 +303,15 @@ export function MultiTrackBatch({
         .catch((err) =>
           setProbes((p) => ({
             ...p,
-            [path]: { tracks: null, subtitles: [], error: err instanceof Error ? err.message : String(err) },
+            [path]: { tracks: null, subtitles: [], error: errorMessage(err) },
           })),
         );
     }
   }, [files]);
 
-  // Dev only (stripped from production builds): `?batchFiles=a|b` adds files
-  // without the system dialog, for automated screenshots.
+  // Dev only (see devParam): `?batchFiles=a|b` adds files.
   useEffect(() => {
-    if (!import.meta.env.DEV) return;
-    const list = new URLSearchParams(window.location.search).get("batchFiles");
+    const list = devParam("batchFiles");
     if (list) addPaths(list.split("|"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -432,7 +431,7 @@ export function MultiTrackBatch({
           );
           updateTarget(path, target.index, { status: "done", result });
         } catch (err) {
-          updateTarget(path, target.index, { status: "error", error: err instanceof Error ? err.message : String(err) });
+          updateTarget(path, target.index, { status: "error", error: errorMessage(err) });
         }
       }
     }
@@ -466,7 +465,7 @@ export function MultiTrackBatch({
     try {
       outputs = await planOutputPaths(toExport, outputDir);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = errorMessage(err);
       for (const path of toExport) updateRun(path, (r) => ({ ...r, exportStatus: "error", exportError: message }));
       setExporting(false);
       return;
@@ -499,7 +498,7 @@ export function MultiTrackBatch({
       } catch (err) {
         if (err instanceof JobCancelled) updateRun(path, (r) => ({ ...r, exportStatus: "cancelled" }));
         else
-          updateRun(path, (r) => ({ ...r, exportStatus: "error", exportError: err instanceof Error ? err.message : String(err) }));
+          updateRun(path, (r) => ({ ...r, exportStatus: "error", exportError: errorMessage(err) }));
       }
       currentExportJob.current = null;
     }

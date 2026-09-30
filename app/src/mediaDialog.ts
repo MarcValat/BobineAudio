@@ -1,5 +1,6 @@
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { pathsExist } from "./api";
+import { loadSetting, saveSetting } from "./util";
 
 // Videos to take a reference from, and the audio-only files a corrected track
 // can come from (batch mode): anything ffmpeg reads is fine, these are the
@@ -16,24 +17,14 @@ const MEDIA_FILTERS = [
 ];
 const LAST_FOLDER_KEY = "syncaudio.lastFolder";
 
-// Browser storage can be unavailable or throw: the dialog then just opens
-// wherever the system puts it, as before.
+// None remembered: the dialog opens wherever the system puts it.
 function lastFolder(): string | undefined {
-  try {
-    return localStorage.getItem(LAST_FOLDER_KEY) ?? undefined;
-  } catch {
-    return undefined;
-  }
+  return loadSetting(LAST_FOLDER_KEY) ?? undefined;
 }
 
 function rememberFolder(path: string): void {
   const cut = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/"));
-  if (cut <= 0) return;
-  try {
-    localStorage.setItem(LAST_FOLDER_KEY, path.slice(0, cut));
-  } catch {
-    // not remembered this time, nothing else depends on it
-  }
+  if (cut > 0) saveSetting(LAST_FOLDER_KEY, path.slice(0, cut));
 }
 
 /** The system's open dialog for media files, starting in the folder the

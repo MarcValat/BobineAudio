@@ -6,6 +6,7 @@ import { MIN_VIEW_DURATION_S, type TimeView, zoomView } from "./timeView";
 import { formatOffsetMs, formatTime, segmentOffsetLabel } from "./SegmentChart";
 import { Waveform, type HighlightRegion } from "./Waveform";
 import { WaveformNavigator } from "./WaveformNavigator";
+import { errorMessage } from "./util";
 
 const PREVIEW_DURATION_S = 12;
 const WAVEFORM_BUCKETS = 800;
@@ -355,7 +356,7 @@ export function TrackPreview({
         setCandFullPeaks({ min: candWave.peaks_min, max: candWave.peaks_max });
         setView({ start: 0, duration: refWave.duration });
       } catch (err) {
-        if (!cancelled) setWaveformError(err instanceof Error ? err.message : String(err));
+        if (!cancelled) setWaveformError(errorMessage(err));
       } finally {
         if (!cancelled) setWaveformLoading(false);
       }
@@ -518,7 +519,7 @@ export function TrackPreview({
       startCursorLoop();
     } catch (err) {
       if (loadGenerationRef.current !== generation) return;
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
       setLoading(false);
     }
   }
