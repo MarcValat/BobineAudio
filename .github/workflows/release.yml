@@ -74,6 +74,10 @@ jobs:
       # cheaper settings for local builds (see its [profile.release]).
       CARGO_PROFILE_RELEASE_LTO: "fat"
       CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "1"
+      # AppImage: linuxdeploy's own (old) strip fails on the engine's
+      # recently built libraries (Python, numpy, scipy); unstripped, they
+      # just take a little more room.
+      NO_STRIP: "true"
     steps:
       - uses: actions/checkout@v7
 
@@ -151,7 +155,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: app
-          args: --bundles ${{ matrix.bundles }}
+          args: --bundles ${{ matrix.bundles }} --verbose
 
       - name: Attach the installers to the run
         if: needs.create-release.outputs.release_id == ''
