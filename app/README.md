@@ -44,6 +44,8 @@ npm run tauri build
 
 `tauri build` produit un seul installateur, un `.exe` NSIS, dans `src-tauri/target/release/bundle/nsis/` (pas de `.msi` : il n'exécuterait pas les hooks de `windows/installer-hooks.nsh`, qui arrêtent le moteur avant une mise à jour et nettoient son cache à la désinstallation, et la mise à jour automatique n'utilise que le NSIS), plus les signatures de mise à jour (`.sig`) si `TAURI_SIGNING_PRIVATE_KEY` est défini dans l'environnement (voir section suivante) — sans cette variable, les installateurs sont quand même produits, juste sans capacité de mise à jour auto.
 
+Sous Linux, `npm run tauri build -- --bundles deb` produit un paquet `.deb` dans `src-tauri/target/release/bundle/deb/`. Il faut les bibliothèques de développement de WebKitGTK (`sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev`), et le moteur doit avoir été compilé sous Linux (PyInstaller ne compile que pour le système sur lequel il tourne). Pas d'AppImage : celle produite embarquait le WebKitGTK d'Ubuntu 22.04 et affichait une fenêtre blanche sur une distribution récente (« Could not create default EGL display »), alors que le `.deb` utilise celui du système.
+
 N'étant pas signé avec un certificat Authenticode (aucun pour l'instant), l'installateur déclenchera l'avertissement SmartScreen "éditeur inconnu" au premier lancement — c'est attendu.
 
 ## Mise à jour automatique

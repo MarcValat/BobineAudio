@@ -13,12 +13,13 @@
 <p align="center">
   <a href="https://github.com/MarcValat/SyncAudio/releases/latest"><img src="https://img.shields.io/github/v/release/MarcValat/SyncAudio?label=version" alt="Latest version"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011%20(x64)-0078D6?logo=windows" alt="Windows 10 | 11 (x64)">
+  <img src="https://img.shields.io/badge/Linux-Debian%20%7C%20Ubuntu%20(.deb)-E95420?logo=linux&logoColor=white" alt="Linux: Debian | Ubuntu (.deb)">
   <img src="https://img.shields.io/badge/UI-English%20%7C%20Fran%C3%A7ais-555" alt="English | Français">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL%20v3-blue" alt="GPL v3 license"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/MarcValat/SyncAudio/releases/latest"><img src="https://img.shields.io/badge/Download-Windows%20installer-2ea44f?style=for-the-badge&logo=windows" alt="Download the Windows installer"></a>
+  <a href="https://github.com/MarcValat/SyncAudio/releases/latest"><img src="https://img.shields.io/badge/Download-Windows%20%7C%20Linux-2ea44f?style=for-the-badge" alt="Download for Windows or Linux"></a>
 </p>
 
 <picture>
@@ -42,10 +43,17 @@ A dub rarely lines up with the video it's added to: a few frames of delay, an of
 
 ## Install
 
+**Windows 10 and 11:**
+
 1. Download `SyncAudio_x.y.z_x64-setup.exe` from the [latest release](https://github.com/MarcValat/SyncAudio/releases/latest).
 2. Run it. The installer isn't signed with a certificate, so Windows SmartScreen may say *"Windows protected your PC"*: click **More info**, then **Run anyway**.
 
-Nothing else to install: the analysis engine and ffmpeg come with the app. When a new version comes out, the app offers it and installs it in one click.
+**Linux** (Ubuntu 22.04 or newer, Debian and their derivatives: Linux Mint, Pop!_OS…):
+
+1. Download `SyncAudio_x.y.z_amd64.deb` from the [latest release](https://github.com/MarcValat/SyncAudio/releases/latest).
+2. Install it from its folder with `sudo apt install ./SyncAudio_x.y.z_amd64.deb`, then start it from the applications menu or with `syncaudio`.
+
+Nothing else to install: the analysis engine and ffmpeg come with the app. When a new version comes out, the app offers it and installs it in one click (on Linux, after asking for your password).
 
 ## How it works
 

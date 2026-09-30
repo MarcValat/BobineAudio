@@ -13,12 +13,13 @@
 <p align="center">
   <a href="https://github.com/MarcValat/SyncAudio/releases/latest"><img src="https://img.shields.io/github/v/release/MarcValat/SyncAudio?label=version" alt="Dernière version"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011%20(x64)-0078D6?logo=windows" alt="Windows 10 | 11 (x64)">
+  <img src="https://img.shields.io/badge/Linux-Debian%20%7C%20Ubuntu%20(.deb)-E95420?logo=linux&logoColor=white" alt="Linux : Debian | Ubuntu (.deb)">
   <img src="https://img.shields.io/badge/interface-Fran%C3%A7ais%20%7C%20English-555" alt="Français | English">
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-GPL%20v3-blue" alt="Licence GPL v3"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/MarcValat/SyncAudio/releases/latest"><img src="https://img.shields.io/badge/T%C3%A9l%C3%A9charger-installateur%20Windows-2ea44f?style=for-the-badge&logo=windows" alt="Télécharger l'installateur Windows"></a>
+  <a href="https://github.com/MarcValat/SyncAudio/releases/latest"><img src="https://img.shields.io/badge/T%C3%A9l%C3%A9charger-Windows%20%7C%20Linux-2ea44f?style=for-the-badge" alt="Télécharger pour Windows ou Linux"></a>
 </p>
 
 <picture>
@@ -42,10 +43,17 @@ Un doublage colle rarement à la vidéo à laquelle on l'ajoute : quelques image
 
 ## Installation
 
+**Windows 10 et 11 :**
+
 1. Télécharge `SyncAudio_x.y.z_x64-setup.exe` depuis la [dernière release](https://github.com/MarcValat/SyncAudio/releases/latest).
 2. Lance-le. L'installateur n'est pas signé par un certificat, Windows SmartScreen peut donc afficher *« Windows a protégé votre ordinateur »* : clique sur **Informations complémentaires**, puis **Exécuter quand même**.
 
-Rien d'autre à installer : le moteur d'analyse et ffmpeg sont fournis avec l'application. Quand une nouvelle version sort, l'application la propose et l'installe en un clic.
+**Linux** (Ubuntu 22.04 ou plus récent, Debian et leurs dérivées : Linux Mint, Pop!_OS…) :
+
+1. Télécharge `SyncAudio_x.y.z_amd64.deb` depuis la [dernière release](https://github.com/MarcValat/SyncAudio/releases/latest).
+2. Installe-le depuis son dossier avec `sudo apt install ./SyncAudio_x.y.z_amd64.deb`, puis lance-le depuis le menu des applications ou avec `syncaudio`.
+
+Rien d'autre à installer : le moteur d'analyse et ffmpeg sont fournis avec l'application. Quand une nouvelle version sort, l'application la propose et l'installe en un clic (sous Linux, après avoir demandé ton mot de passe).
 
 ## Comment ça marche
 

@@ -172,8 +172,8 @@ Each row is a **pair**: on the left the **reference** file (the video with its o
 
 The **⚙** button at the top right opens Options:
 
-- **Theme**: System (follows Windows), Light or Dark.
-- **Language**: System (French if Windows is in French, English otherwise), Français or English.
+- **Theme**: System (follows the system's light or dark theme), Light or Dark.
+- **Language**: System (French if the system is in French, English otherwise), Français or English.
 - **Default subtitles**: which subtitles are retimed with a corrected track unless picked otherwise. They're the ones ticked by default in single-file mode, and batch mode's starting setting.
 - **Updates**: whether to check for a new version at startup.
 - **Analysis cache**: SyncAudio keeps the analyses already made, so a reopened file shows up at once. "Clear" frees the space; files are just analyzed again.
@@ -189,7 +189,7 @@ The installer isn't signed with a paid certificate. Click "More info", then "Run
 The analysis engine is starting in the background, usually in a second or two. Files can already be opened: their tracks show up as soon as it's ready.
 
 **"The engine isn't responding".**
-Click "Retry". If that's not enough, close and restart the app. If it keeps happening, an antivirus may be blocking the engine (`engine\syncaudio-engine.exe` in the install folder).
+Click "Retry". If that's not enough, close and restart the app. If it keeps happening, an antivirus may be blocking the engine (on Windows, `engine\syncaudio-engine.exe` in the install folder).
 
 **A segment is flagged ⚠ unreliable.**
 The measurements disagree with each other over that stretch, or there are too few of them. It's common over a stretch with no music or sound effects (a narration, an inner voice): detection can then latch onto the dialogue, which is exactly what differs between two languages. Listen to it: if the offset sounds wrong, fix it in the editor or remove the segment.
@@ -198,7 +198,7 @@ The measurements disagree with each other over that stretch, or there are too fe
 The offset is wrong there. Listen to the reference with the final result, find where the echo starts, and adjust the segments in the editor.
 
 **Where are the analyses kept? How much space do they take?**
-In `%LOCALAPPDATA%\SyncAudio\cache`, 512 MB at most: the oldest ones are deleted beyond that. Options show their size and can clear them. Uninstalling removes them.
+On Windows in `%LOCALAPPDATA%\SyncAudio\cache`, on Linux in `~/.cache/syncaudio`: 512 MB at most, the oldest ones being deleted beyond that. Options show their size and can clear them. Uninstalling removes them on Windows; on Linux, clear them from Options first.
 
 **Is my original file changed?**
 No, never. Exporting always writes a new file.

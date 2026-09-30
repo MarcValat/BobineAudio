@@ -172,8 +172,8 @@ Chaque ligne est une **paire** : à gauche le fichier de **référence** (la vid
 
 Le bouton **⚙** en haut à droite ouvre les Options :
 
-- **Thème** : Système (suit Windows), Clair ou Sombre.
-- **Langue** : Système (français si Windows est en français, anglais sinon), Français ou English.
+- **Thème** : Système (suit le thème clair ou sombre du système), Clair ou Sombre.
+- **Langue** : Système (français si le système est en français, anglais sinon), Français ou English.
 - **Sous-titres par défaut** : quels sous-titres sont recalés avec une piste corrigée, sauf choix contraire. Ce sont ceux cochés d'office en fichier unique, et le réglage de départ du mode batch.
 - **Mises à jour** : vérifier ou non au démarrage si une nouvelle version existe.
 - **Cache d'analyse** : SyncAudio garde les analyses déjà faites, pour qu'un fichier rouvert s'affiche tout de suite. « Vider » libère la place ; les fichiers seront simplement réanalysés.
@@ -189,7 +189,7 @@ L'installateur n'est pas signé par un certificat payant. Clique sur « Informat
 Le moteur d'analyse démarre en arrière-plan, en général en une seconde ou deux. On peut déjà ouvrir des fichiers : leurs pistes s'affichent dès qu'il est prêt.
 
 **« Le moteur ne répond pas ».**
-Clique sur « Réessayer ». Si ça ne suffit pas, ferme et relance l'application. Si le problème revient, un antivirus bloque peut-être le moteur (`engine\syncaudio-engine.exe` dans le dossier d'installation).
+Clique sur « Réessayer ». Si ça ne suffit pas, ferme et relance l'application. Si le problème revient, un antivirus bloque peut-être le moteur (sous Windows, `engine\syncaudio-engine.exe` dans le dossier d'installation).
 
 **Un segment est marqué ⚠ peu fiable.**
 Les mesures ne s'accordent pas entre elles sur ce passage, ou sont trop peu nombreuses. C'est fréquent sur un passage sans musique ni bruitage (une narration, une voix intérieure) : la détection peut alors se caler sur les dialogues, qui diffèrent justement entre deux langues. Écoute le passage : si le décalage sonne faux, corrige-le dans l'éditeur ou retire le segment.
@@ -198,7 +198,7 @@ Les mesures ne s'accordent pas entre elles sur ce passage, ou sont trop peu nomb
 Le décalage n'est pas bon à cet endroit. Écoute la référence avec le résultat final, repère où l'écho commence, et ajuste les segments dans l'éditeur.
 
 **Où sont gardées les analyses ? Combien de place prennent-elles ?**
-Dans `%LOCALAPPDATA%\SyncAudio\cache`, 512 Mo au plus : les plus anciennes sont supprimées au-delà. Les Options affichent leur taille et permettent de les vider. La désinstallation les supprime.
+Sous Windows dans `%LOCALAPPDATA%\SyncAudio\cache`, sous Linux dans `~/.cache/syncaudio` : 512 Mo au plus, les plus anciennes étant supprimées au-delà. Les Options affichent leur taille et permettent de les vider. Sous Windows, la désinstallation les supprime ; sous Linux, vide-les d'abord depuis les Options.
 
 **Mon fichier d'origine est-il modifié ?**
 Non, jamais. L'export écrit toujours un nouveau fichier.
