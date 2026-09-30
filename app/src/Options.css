@@ -10,6 +10,10 @@
   gap: 0.6em;
 }
 
+.options-row + .options-row {
+  margin-top: 0.75em;
+}
+
 .options-row label {
   min-width: 5em;
   font-weight: 600;
