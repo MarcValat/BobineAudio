@@ -1,22 +1,23 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import {
-  probe,
-  startSegmentsJob,
-  cancelJob,
-  startCrossFileSegmentedRenderJob,
-  type SegmentsResponse,
-  type RenderResponse,
-  type TrackInfo,
-} from "./api";
-import { JobCancelled, runJob } from "./jobs";
+import { useEffect, useState, type ReactNode } from "react";
+import { probe, startSegmentsJob, startCrossFileSegmentedRenderJob, type SegmentsResponse, type TrackInfo } from "./api";
+import { runJob } from "./jobs";
 import { LanguageSelect } from "./languages";
-import { AnalyzeButton, FileCell, OTHER_MODE_BUSY, OutputChooser } from "./batchShared";
+import {
+  AnalysisStatus,
+  AnalyzeButton,
+  BatchFooter,
+  ExportCell,
+  FileCell,
+  IDLE_EXPORT,
+  RevealButton,
+  useExportQueue,
+  writtenFile,
+  type AnalysisRun,
+  type ExportFields,
+} from "./batchShared";
 import { InfoTip } from "./InfoTip";
-import { describeSegments } from "./SegmentChart";
 import { SegmentEditor } from "./SegmentEditor";
-import { LogPanel } from "./LogPanel";
-import { pickMediaFiles, planOutputPaths } from "./mediaDialog";
+import { pickMediaFiles } from "./mediaDialog";
 import { basename } from "./paths";
 import { SUBTITLE_MODES, subtitlesFor, type SubtitleMode } from "./subtitles";
 import { devParam, errorMessage } from "./util";
@@ -24,18 +25,8 @@ import { Dialog, DialogHeader } from "./Dialog";
 import { TrackTable } from "./TrackTable";
 
 
-interface PairAnalysis {
-  status: "pending" | "running" | "done" | "error";
-  result: SegmentsResponse | null;
-  error: string | null;
-  log: string[];
-  exportStatus: "idle" | "pending" | "running" | "done" | "error" | "cancelled";
-  exportResult: RenderResponse | null;
-  exportError: string | null;
-  exportLog: string[];
-}
-
-const IDLE_EXPORT = { exportStatus: "idle" as const, exportResult: null, exportError: null, exportLog: [] as string[] };
+/** One pair's analysis and export. */
+type PairAnalysis = AnalysisRun & ExportFields;
 
 /** Probes one file's tracks, to fill the track-picker dropdown. Only ever
  * called on the *first* file of each list, not every file: one picked
@@ -242,7 +233,7 @@ export function PairsBatch({
   // pair's analysis, and one that comes back finds its own again.
   const [analyses, setAnalyses] = useState<Record<string, PairAnalysis>>({});
   const [analyzing, setAnalyzing] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const queue = useExportQueue(outputDir);
   const [showTracksModal, setShowTracksModal] = useState(false);
   const [editingPairIndex, setEditingPairIndex] = useState<number | null>(null);
 
@@ -338,77 +329,41 @@ export function PairsBatch({
    * reads `analyses` as it currently stands, so a concurrent re-analysis
    * could rewrite a pair's segments out from under an export already using
    * them. */
-  // "Annuler l'export": stop the file being exported and don't start the next ones.
-  const cancelRequested = useRef(false);
-  const currentExportJob = useRef<string | null>(null);
-  const [cancelling, setCancelling] = useState(false);
-
-  async function cancelExports() {
-    cancelRequested.current = true;
-    setCancelling(true);
-    if (currentExportJob.current) {
-      try {
-        await cancelJob(currentExportJob.current);
-      } catch {
-        // already over: the loop stops before the next file anyway
-      }
-    }
-  }
-
-  async function handleExportAll() {
-    setExporting(true);
-    cancelRequested.current = false;
-    const toExport = pairAnalyses.flatMap((a, i) => (isDone(a) ? [i] : []));
-    const keys = toExport.map(pairKey);
-    let outputs: string[];
-    try {
-      outputs = await planOutputPaths(toExport.map((i) => referenceFiles[i]), outputDir);
-    } catch (err) {
-      const message = errorMessage(err);
-      for (const key of keys) updatePair(key, { exportStatus: "error", exportError: message });
-      setExporting(false);
-      return;
-    }
-    for (const [k, i] of toExport.entries()) {
-      if (cancelRequested.current) break;
-      const key = keys[k];
-      const entry = analyses[key];
-      if (!entry?.result) continue;
-      updatePair(key, { exportStatus: "running", exportLog: [], exportError: null });
-      try {
-        // The candidate file's subtitles in its audio's language come along,
-        // retimed with it (per the subtitle setting).
-        const candidate = subsMode === "none" ? null : await probe(candidateFiles[i]);
-        const audioLanguage =
-          candidate?.tracks.find((t) => t.index === candidateTrackIndex)?.language || candidateLanguage || null;
-        const result = await runJob<RenderResponse>(
-          startCrossFileSegmentedRenderJob(
-            referenceFiles[i],
-            referenceTrackIndex,
-            candidateFiles[i],
-            candidateTrackIndex,
-            entry.result.segments,
-            {
-              outputPath: outputs[k],
-              language: candidateLanguage || null,
-              subtitles: candidate ? subtitlesFor(candidate.subtitles ?? [], audioLanguage, subsMode) : [],
+  function handleExportAll() {
+    queue.run(
+      pairAnalyses.flatMap((a, i) => {
+        if (!isDone(a)) return [];
+        const key = pairKey(i);
+        return [
+          {
+            input: referenceFiles[i],
+            start: async (outputPath: string) => {
+              // The candidate file's subtitles in its audio's language come
+              // along, retimed with it (per the subtitle setting).
+              const candidate = subsMode === "none" ? null : await probe(candidateFiles[i]);
+              const audioLanguage =
+                candidate?.tracks.find((t) => t.index === candidateTrackIndex)?.language || candidateLanguage || null;
+              return startCrossFileSegmentedRenderJob(
+                referenceFiles[i],
+                referenceTrackIndex,
+                candidateFiles[i],
+                candidateTrackIndex,
+                analyses[key].result!.segments,
+                {
+                  outputPath,
+                  language: candidateLanguage || null,
+                  subtitles: candidate ? subtitlesFor(candidate.subtitles ?? [], audioLanguage, subsMode) : [],
+                },
+              );
             },
-          ),
-          (message) => updatePair(key, (a) => ({ exportLog: [...a.exportLog, message] })),
-          (id) => (currentExportJob.current = id),
-        );
-        updatePair(key, { exportStatus: "done", exportResult: result });
-      } catch (err) {
-        if (err instanceof JobCancelled) updatePair(key, { exportStatus: "cancelled" });
-        else updatePair(key, { exportStatus: "error", exportError: errorMessage(err) });
-      }
-      currentExportJob.current = null;
-    }
-    setExporting(false);
-    setCancelling(false);
+            update: (patch: (e: ExportFields) => Partial<ExportFields>) => updatePair(key, patch),
+          },
+        ];
+      }),
+    );
   }
 
-  const busy = analyzing || exporting;
+  const busy = analyzing || queue.exporting;
   useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
 
   // The files' own start times, for the editor's informational "delay
@@ -571,7 +526,6 @@ export function PairsBatch({
               )}
               {Array.from({ length: rowCount }, (_, i) => {
                 const a = analysisOf(i);
-                const written = a?.exportResult?.written[0];
                 return (
                   <tr key={i} className={i >= pairCount ? "batch-row-unpaired" : undefined}>
                     <td className="batch-index">{i + 1}</td>
@@ -588,38 +542,15 @@ export function PairsBatch({
                       onChange={setCandidateFiles}
                     />
                     <td className={`batch-status batch-status-${a?.status ?? "pending"}`}>
-                      {!a && (i < pairCount ? "À analyser" : "⚠ Sans paire")}
-                      {a?.status === "pending" && "En attente"}
-                      {a?.status === "running" && "Analyse en cours..."}
-                      {a?.status === "done" && a.result && describeSegments(a.result.segments)}
-                      {a?.status === "error" && (a.error ?? "Erreur")}
-                      {a?.status === "done" && a.result && (
-                        <button className="small-button" disabled={busy} onClick={() => setEditingPairIndex(i)}>
-                          Modifier
-                        </button>
-                      )}
-                      {/* Only while it runs (progress) or when it failed (why): a
-                          done row stays one line. */}
-                      {a && (a.status === "running" || a.status === "error") && <LogPanel lines={a.log} />}
-                    </td>
-                    <td className={`batch-status batch-status-${!a || a.exportStatus === "idle" ? "pending" : a.exportStatus}`}>
-                      {(!a || a.exportStatus === "idle") && "—"}
-                      {a?.exportStatus === "running" && "Export en cours..."}
-                      {a?.exportStatus === "done" && written && (
-                        <span title={written}>{basename(written)}</span>
-                      )}
-                      {a?.exportStatus === "error" && (a.exportError ?? "Erreur")}
-                      {a?.exportStatus === "cancelled" && "Annulé"}
-                      {a && (a.exportStatus === "running" || a.exportStatus === "error") && (
-                        <LogPanel lines={a.exportLog} />
+                      {i < pairCount ? (
+                        <AnalysisStatus run={a} busy={busy} onEdit={() => setEditingPairIndex(i)} />
+                      ) : (
+                        "⚠ Sans paire"
                       )}
                     </td>
+                    <ExportCell entry={a} />
                     <td className="batch-row-actions">
-                      {written && (
-                        <button className="small-button" title="Ouvrir le dossier du fichier écrit" onClick={() => revealItemInDir(written)}>
-                          Dossier
-                        </button>
-                      )}
+                      <RevealButton file={writtenFile(a)} />
                     </td>
                   </tr>
                 );
@@ -629,38 +560,34 @@ export function PairsBatch({
         </div>
       </section>
 
-      <div className="batch-footer panel">
-        <OutputChooser outputDir={outputDir} onChange={onOutputDirChange} disabled={busy} />
-        <span className="batch-progress">
-          {pairCount} paire{pairCount > 1 ? "s" : ""}
-          {analyzedCount > 0 && ` · ${analyzedCount}/${pairCount} analysée${analyzedCount > 1 ? "s" : ""}`}
-          {exportedCount > 0 && ` · ${exportedCount} exportée${exportedCount > 1 ? "s" : ""}`}
-          {rowCount > pairCount && ` · ${rowCount - pairCount} fichier${rowCount - pairCount > 1 ? "s" : ""} sans paire`}
-        </span>
-        <AnalyzeButton
-          analyzing={analyzing}
-          missing={pairCount - analyzedCount}
-          analyzed={analyzedCount}
-          unit="paire"
-          disabled={pairCount === 0 || busy || blocked}
-          blocked={blocked}
-          onAnalyze={handleAnalyze}
-        />
-        {exporting ? (
-          <button className="export-cancel" onClick={cancelExports} disabled={cancelling}>
-            {cancelling ? "Annulation..." : "Annuler l'export"}
-          </button>
-        ) : (
-          <button
-            className="primary-button"
-            onClick={handleExportAll}
-            disabled={analyzedCount === 0 || busy || blocked}
-            title={blocked ? OTHER_MODE_BUSY : undefined}
-          >
-            Exporter tout
-          </button>
-        )}
-      </div>
+      <BatchFooter
+        outputDir={outputDir}
+        onOutputDirChange={onOutputDirChange}
+        busy={busy}
+        blocked={blocked}
+        progress={
+          <>
+            {pairCount} paire{pairCount > 1 ? "s" : ""}
+            {analyzedCount > 0 && ` · ${analyzedCount}/${pairCount} analysée${analyzedCount > 1 ? "s" : ""}`}
+            {exportedCount > 0 && ` · ${exportedCount} exportée${exportedCount > 1 ? "s" : ""}`}
+            {rowCount > pairCount && ` · ${rowCount - pairCount} fichier${rowCount - pairCount > 1 ? "s" : ""} sans paire`}
+          </>
+        }
+        analyzeButton={
+          <AnalyzeButton
+            analyzing={analyzing}
+            missing={pairCount - analyzedCount}
+            analyzed={analyzedCount}
+            unit="paire"
+            disabled={pairCount === 0 || busy || blocked}
+            blocked={blocked}
+            onAnalyze={handleAnalyze}
+          />
+        }
+        queue={queue}
+        canExport={analyzedCount > 0}
+        onExport={handleExportAll}
+      />
 
       {showTracksModal && (
         <AllTracksModal referenceFiles={referenceFiles} candidateFiles={candidateFiles} onClose={() => setShowTracksModal(false)} />

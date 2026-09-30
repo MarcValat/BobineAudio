@@ -1,23 +1,23 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import {
-  probe,
-  cancelJob,
-  startSegmentedRenderJob,
-  startSegmentsJob,
-  type RenderResponse,
-  type SegmentsResponse,
-  type SubtitleInfo,
-  type TrackInfo,
-} from "./api";
-import { JobCancelled, runJob, type RunStatus } from "./jobs";
+import { probe, startSegmentedRenderJob, startSegmentsJob, type SegmentsResponse, type SubtitleInfo, type TrackInfo } from "./api";
+import { runJob } from "./jobs";
 import { languageLabel, LanguageSelect } from "./languages";
-import { AnalyzeButton, FileCell, OTHER_MODE_BUSY, OutputChooser } from "./batchShared";
+import {
+  AnalysisStatus,
+  AnalyzeButton,
+  BatchFooter,
+  ExportCell,
+  FileCell,
+  IDLE_EXPORT,
+  RevealButton,
+  useExportQueue,
+  writtenFile,
+  type AnalysisRun,
+  type ExportFields,
+} from "./batchShared";
 import { InfoTip } from "./InfoTip";
-import { LogPanel } from "./LogPanel";
-import { pickMediaFiles, planOutputPaths } from "./mediaDialog";
+import { pickMediaFiles } from "./mediaDialog";
 import { basename } from "./paths";
-import { describeSegments } from "./SegmentChart";
 import { SegmentEditor } from "./SegmentEditor";
 import { assignSubtitles, SUBTITLE_MODES, type SubtitleMode, subtitlesFor, takenByOthers } from "./subtitles";
 import { devParam, errorMessage, toggled } from "./util";
@@ -49,23 +49,12 @@ interface Resolution {
   manual: boolean;
 }
 
-interface TargetRun {
-  status: RunStatus;
-  result: SegmentsResponse | null;
-  error: string | null;
-  log: string[];
-}
-
 /** One file's analyses (one per corrected track) and its single export. Kept
  * with the reference they were made against: a different one since makes
  * them stale. */
-interface FileRun {
+interface FileRun extends ExportFields {
   referenceIndex: number;
-  targets: Record<number, TargetRun>;
-  exportStatus: RunStatus;
-  exportResult: RenderResponse | null;
-  exportError: string | null;
-  exportLog: string[];
+  targets: Record<number, AnalysisRun>;
 }
 
 function resolve(tracks: TrackInfo[], referenceLanguage: string, targetLanguages: string[], choice?: TrackChoice): Resolution {
@@ -208,10 +197,10 @@ export function MultiTrackBatch({
   const [subsMode, setSubsMode] = useState<SubtitleMode>("forced");
   const [runs, setRuns] = useState<Record<string, FileRun>>({});
   const [analyzing, setAnalyzing] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const queue = useExportQueue(outputDir);
   const [choosing, setChoosing] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ path: string; track: number } | null>(null);
-  const busy = analyzing || exporting;
+  const busy = analyzing || queue.exporting;
   useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
 
   /** Adds files not in the list yet (checked against the list as it really
@@ -293,7 +282,7 @@ export function MultiTrackBatch({
     setRuns((current) => (current[path] ? { ...current, [path]: update(current[path]) } : current));
   }
 
-  function updateTarget(path: string, track: number, patch: Partial<TargetRun> | ((t: TargetRun) => Partial<TargetRun>)) {
+  function updateTarget(path: string, track: number, patch: Partial<AnalysisRun> | ((t: AnalysisRun) => Partial<AnalysisRun>)) {
     updateRun(path, (run) => {
       const target = run.targets[track];
       const next = typeof patch === "function" ? patch(target) : patch;
@@ -303,13 +292,13 @@ export function MultiTrackBatch({
 
   /** A file's tracks to correct (as picked now) whose analysis against its
    * current reference succeeded -- what its export holds. */
-  function doneTargets(path: string): [TrackInfo, TargetRun][] {
+  function doneTargets(path: string): [TrackInfo, AnalysisRun][] {
     const run = runOf(path);
     const res = resolutions[path];
     if (!run || !res) return [];
     return res.targets.flatMap((t) => {
       const target = run.targets[t.index];
-      return target?.status === "done" && target.result ? [[t, target] as [TrackInfo, TargetRun]] : [];
+      return target?.status === "done" && target.result ? [[t, target] as [TrackInfo, AnalysisRun]] : [];
     });
   }
 
@@ -333,14 +322,11 @@ export function MultiTrackBatch({
           targets: {
             ...keep?.targets,
             ...Object.fromEntries(
-              targets.map((t) => [t.index, { status: "pending" as RunStatus, result: null, error: null, log: [] }]),
+              targets.map((t) => [t.index, { status: "pending", result: null, error: null, log: [] } satisfies AnalysisRun]),
             ),
           },
           // What it held changes: the last export no longer matches.
-          exportStatus: "idle",
-          exportResult: null,
-          exportError: null,
-          exportLog: [],
+          ...IDLE_EXPORT,
         };
       }
       return next;
@@ -364,70 +350,25 @@ export function MultiTrackBatch({
 
   /** One export per file, holding every corrected track whose analysis
    * succeeded, with its segments as edited ("Modifier"). */
-  // "Annuler l'export": stop the file being exported and don't start the next ones.
-  const cancelRequested = useRef(false);
-  const currentExportJob = useRef<string | null>(null);
-  const [cancelling, setCancelling] = useState(false);
-
-  async function cancelExports() {
-    cancelRequested.current = true;
-    setCancelling(true);
-    if (currentExportJob.current) {
-      try {
-        await cancelJob(currentExportJob.current);
-      } catch {
-        // already over: the loop stops before the next file anyway
-      }
-    }
-  }
-
-  async function handleExportAll() {
-    setExporting(true);
-    cancelRequested.current = false;
-    const toExport = files.filter((path) => doneTargets(path).length > 0);
-    let outputs: string[];
-    try {
-      outputs = await planOutputPaths(toExport, outputDir);
-    } catch (err) {
-      const message = errorMessage(err);
-      for (const path of toExport) updateRun(path, (r) => ({ ...r, exportStatus: "error", exportError: message }));
-      setExporting(false);
-      return;
-    }
-    for (const [k, path] of toExport.entries()) {
-      if (cancelRequested.current) break;
-      const run = runOf(path)!;
-      const done = doneTargets(path);
-      updateRun(path, (r) => ({ ...r, exportStatus: "running", exportLog: [], exportError: null }));
-      const subs = subsOf(
-        path,
-        done.map(([track]) => track),
-      );
-      try {
-        const result = await runJob<RenderResponse>(
-          startSegmentedRenderJob(
-            path,
-            run.referenceIndex,
-            done.map(([track, t]) => ({
-              trackIndex: track.index,
-              segments: t.result!.segments,
-              subtitles: subs[track.index] ?? [],
-            })),
-            outputs[k],
-          ),
-          (message) => updateRun(path, (r) => ({ ...r, exportLog: [...r.exportLog, message] })),
-          (id) => (currentExportJob.current = id),
-        );
-        updateRun(path, (r) => ({ ...r, exportStatus: "done", exportResult: result }));
-      } catch (err) {
-        if (err instanceof JobCancelled) updateRun(path, (r) => ({ ...r, exportStatus: "cancelled" }));
-        else
-          updateRun(path, (r) => ({ ...r, exportStatus: "error", exportError: errorMessage(err) }));
-      }
-      currentExportJob.current = null;
-    }
-    setExporting(false);
-    setCancelling(false);
+  function handleExportAll() {
+    queue.run(
+      files
+        .filter((path) => doneTargets(path).length > 0)
+        .map((path) => ({
+          input: path,
+          start: (outputPath: string) => {
+            const done = doneTargets(path);
+            const subs = subsOf(path, done.map(([track]) => track));
+            return startSegmentedRenderJob(
+              path,
+              runOf(path)!.referenceIndex,
+              done.map(([track, t]) => ({ trackIndex: track.index, segments: t.result!.segments, subtitles: subs[track.index] ?? [] })),
+              outputPath,
+            );
+          },
+          update: (patch) => updateRun(path, (r) => ({ ...r, ...patch(r) })),
+        })),
+    );
   }
 
   // Counted over the tracks to correct as picked now, analyzed or not.
@@ -568,7 +509,6 @@ export function MultiTrackBatch({
                 const probed = probes[path];
                 const res = resolutions[path];
                 const run = runOf(path);
-                const written = run?.exportResult?.written[0];
                 return (
                   <tr key={path} className={res?.issues.length || probed?.error ? "batch-row-flagged" : undefined}>
                     <td className="batch-index">{i + 1}</td>
@@ -630,41 +570,14 @@ export function MultiTrackBatch({
                               <span className="batch-target-name">
                                 @{info.index} {info.language ?? "?"} :
                               </span>{" "}
-                              {!t && "À analyser"}
-                              {t?.status === "pending" && "En attente"}
-                              {t?.status === "running" && "Analyse en cours..."}
-                              {t?.status === "done" && t.result && describeSegments(t.result.segments)}
-                              {t?.status === "error" && (t.error ?? "Erreur")}
-                              {t?.status === "done" && t.result && (
-                                <button
-                                  className="small-button"
-                                  disabled={busy}
-                                  onClick={() => setEditing({ path, track: info.index })}
-                                >
-                                  Modifier
-                                </button>
-                              )}
-                              {t && (t.status === "running" || t.status === "error") && <LogPanel lines={t.log} />}
+                              <AnalysisStatus run={t} busy={busy} onEdit={() => setEditing({ path, track: info.index })} />
                             </div>
                           );
                         })}
                     </td>
-                    <td className={`batch-status batch-status-${!run || run.exportStatus === "idle" ? "pending" : run.exportStatus}`}>
-                      {(!run || run.exportStatus === "idle") && "—"}
-                      {run?.exportStatus === "running" && "Export en cours..."}
-                      {run?.exportStatus === "done" && written && <span title={written}>{basename(written)}</span>}
-                      {run?.exportStatus === "error" && (run.exportError ?? "Erreur")}
-                      {run?.exportStatus === "cancelled" && "Annulé"}
-                      {run && (run.exportStatus === "running" || run.exportStatus === "error") && (
-                        <LogPanel lines={run.exportLog} />
-                      )}
-                    </td>
+                    <ExportCell entry={run} />
                     <td className="batch-row-actions">
-                      {written && (
-                        <button className="small-button" title="Ouvrir le dossier du fichier écrit" onClick={() => revealItemInDir(written)}>
-                          Dossier
-                        </button>
-                      )}
+                      <RevealButton file={writtenFile(run)} />
                     </td>
                   </tr>
                 );
@@ -674,38 +587,35 @@ export function MultiTrackBatch({
         </div>
       </section>
 
-      <div className="batch-footer panel">
-        <OutputChooser outputDir={outputDir} onChange={onOutputDirChange} disabled={busy} />
-        <span className="batch-progress">
-          {files.length} fichier{files.length > 1 ? "s" : ""}
-          {allTargets.length > 0 && ` · ${analyzedCount}/${allTargets.length} piste${allTargets.length > 1 ? "s" : ""} analysée${analyzedCount > 1 ? "s" : ""}`}
-          {exportedCount > 0 && ` · ${exportedCount} exporté${exportedCount > 1 ? "s" : ""}`}
-          {flaggedCount > 0 && ` · ⚠ ${flaggedCount} à vérifier`}
-        </span>
-        <AnalyzeButton
-          analyzing={analyzing}
-          missing={missingCount}
-          analyzed={analyzedCount}
-          unit="piste"
-          disabled={!analyzable || busy || blocked}
-          blocked={blocked}
-          onAnalyze={handleAnalyze}
-        />
-        {exporting ? (
-          <button className="export-cancel" onClick={cancelExports} disabled={cancelling}>
-            {cancelling ? "Annulation..." : "Annuler l'export"}
-          </button>
-        ) : (
-          <button
-            className="primary-button"
-            onClick={handleExportAll}
-            disabled={analyzedCount === 0 || busy || blocked}
-            title={blocked ? OTHER_MODE_BUSY : undefined}
-          >
-            Exporter tout
-          </button>
-        )}
-      </div>
+      <BatchFooter
+        outputDir={outputDir}
+        onOutputDirChange={onOutputDirChange}
+        busy={busy}
+        blocked={blocked}
+        progress={
+          <>
+            {files.length} fichier{files.length > 1 ? "s" : ""}
+            {allTargets.length > 0 &&
+              ` · ${analyzedCount}/${allTargets.length} piste${allTargets.length > 1 ? "s" : ""} analysée${analyzedCount > 1 ? "s" : ""}`}
+            {exportedCount > 0 && ` · ${exportedCount} exporté${exportedCount > 1 ? "s" : ""}`}
+            {flaggedCount > 0 && ` · ⚠ ${flaggedCount} à vérifier`}
+          </>
+        }
+        analyzeButton={
+          <AnalyzeButton
+            analyzing={analyzing}
+            missing={missingCount}
+            analyzed={analyzedCount}
+            unit="piste"
+            disabled={!analyzable || busy || blocked}
+            blocked={blocked}
+            onAnalyze={handleAnalyze}
+          />
+        }
+        queue={queue}
+        canExport={analyzedCount > 0}
+        onExport={handleExportAll}
+      />
 
       {choosing && choosingTracks && choosingRes && (
         <TrackChoiceModal
