@@ -1,6 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { applyTheme, loadTheme } from "./theme";
+
+// Before the first render, so a forced theme never flashes the other one.
+applyTheme(loadTheme());
 
 // The WebView's default right-click menu (Reload/Inspect/Save as...) has
 // nothing useful for this app's users -- keep it in `npm run tauri dev`

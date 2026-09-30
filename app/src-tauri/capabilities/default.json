@@ -10,6 +10,7 @@
     "opener:default",
     "dialog:default",
     "updater:default",
-    "process:default"
+    "process:default",
+    "core:window:allow-set-theme"
   ]
 }
