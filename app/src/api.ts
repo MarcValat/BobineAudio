@@ -1,9 +1,7 @@
+// Client for the syncaudio FastAPI sidecar (engine/src/syncaudio/server.py),
+// spawned by src-tauri/src/lib.rs; its address and startup are in engine.ts.
+import { ENGINE_URL, engineReady } from "./engine";
 import { t } from "./i18n";
-// Client for the syncaudio FastAPI sidecar (engine/src/syncaudio/server.py).
-// Dev-time only: the sidecar is spawned by src-tauri/src/lib.rs via `uv run`.
-// Phase 6 packaging will need this base URL/port to stay in sync with
-// whatever bundled sidecar binary replaces that dev-time spawn.
-const BASE_URL = "http://127.0.0.1:8756";
 
 export interface TrackInfo {
   index: number;
@@ -70,38 +68,36 @@ async function readErrorDetail(resp: Response): Promise<string> {
   }
 }
 
-export async function checkHealth(): Promise<boolean> {
-  try {
-    const resp = await fetch(`${BASE_URL}/health`);
-    return resp.ok;
-  } catch {
-    return false;
-  }
+/** A request to the engine, once it's up (see engineReady): made while it
+ * starts, it just goes through a moment later. */
+async function engineFetch(path: string, init?: RequestInit): Promise<Response> {
+  await engineReady();
+  return fetch(`${ENGINE_URL}${path}`, init);
 }
 
 export async function probe(path: string): Promise<ProbeResponse> {
-  const resp = await fetch(`${BASE_URL}/probe?path=${encodeURIComponent(path)}`);
+  const resp = await engineFetch(`/probe?path=${encodeURIComponent(path)}`);
   if (!resp.ok) throw new Error(await readErrorDetail(resp));
   return resp.json();
 }
 
 /** How many bytes the engine's analysis cache takes on disk. */
 export async function getCacheSize(): Promise<number> {
-  const resp = await fetch(`${BASE_URL}/cache`);
+  const resp = await engineFetch(`/cache`);
   if (!resp.ok) throw new Error(await readErrorDetail(resp));
   return (await resp.json()).bytes;
 }
 
 /** Empties the analysis cache; resolves to what's left, in bytes. */
 export async function clearCache(): Promise<number> {
-  const resp = await fetch(`${BASE_URL}/cache`, { method: "DELETE" });
+  const resp = await engineFetch(`/cache`, { method: "DELETE" });
   if (!resp.ok) throw new Error(await readErrorDetail(resp));
   return (await resp.json()).bytes;
 }
 
 /** The language of the engine's messages (job logs, errors). */
 export async function setEngineLanguage(language: string): Promise<void> {
-  const resp = await fetch(`${BASE_URL}/language`, {
+  const resp = await engineFetch(`/language`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ language }),
@@ -112,7 +108,7 @@ export async function setEngineLanguage(language: string): Promise<void> {
 /** Which of `paths` already exist, in order. */
 export async function pathsExist(paths: string[]): Promise<boolean[]> {
   if (paths.length === 0) return [];
-  const resp = await fetch(`${BASE_URL}/paths/exist`, {
+  const resp = await engineFetch(`/paths/exist`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ paths }),
@@ -124,7 +120,7 @@ export async function pathsExist(paths: string[]): Promise<boolean[]> {
 /** The files dropped on the window (see the engine's /paths/expand): a
  * folder stands for its files with one of `extensions`, in name order. */
 export async function expandPaths(paths: string[], extensions: string[]): Promise<string[]> {
-  const resp = await fetch(`${BASE_URL}/paths/expand`, {
+  const resp = await engineFetch(`/paths/expand`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ paths, extensions }),
@@ -147,7 +143,7 @@ export interface PrefetchResponse {
  * the job's completion or handle its errors specially.
  */
 export async function startPrefetchJob(path: string, trackIndices: number[]): Promise<string> {
-  const resp = await fetch(`${BASE_URL}/jobs/prefetch`, {
+  const resp = await engineFetch(`/jobs/prefetch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tracks: trackIndices.map((index) => ({ path, index })) }),
@@ -168,7 +164,7 @@ export async function fetchClip(path: string, index: number, start: number, dura
   // time the user seeks, and must never come back stale from the browser's
   // HTTP cache (the sidecar's plain Response doesn't set any cache headers
   // of its own to prevent that).
-  const resp = await fetch(`${BASE_URL}/clip?${params.toString()}`, { cache: "no-store" });
+  const resp = await engineFetch(`/clip?${params.toString()}`, { cache: "no-store" });
   if (!resp.ok) throw new Error(await readErrorDetail(resp));
   return resp.blob();
 }
@@ -186,7 +182,7 @@ export async function fetchCorrectedClip(
   start: number,
   duration: number,
 ): Promise<Blob> {
-  const resp = await fetch(`${BASE_URL}/corrected-clip`, {
+  const resp = await engineFetch(`/corrected-clip`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path, index, segments, start, duration }),
@@ -217,7 +213,7 @@ export async function fetchWaveform(
 ): Promise<WaveformResponse> {
   const params = new URLSearchParams({ path, index: String(index), start: String(start), buckets: String(buckets) });
   if (duration !== null) params.set("duration", String(duration));
-  const resp = await fetch(`${BASE_URL}/waveform?${params.toString()}`);
+  const resp = await engineFetch(`/waveform?${params.toString()}`);
   if (!resp.ok) throw new Error(await readErrorDetail(resp));
   return resp.json();
 }
@@ -229,7 +225,7 @@ export async function startSegmentsJob(
   trackIndex: number,
   options?: { windowS?: number; hopS?: number; marginS?: number },
 ): Promise<string> {
-  const resp = await fetch(`${BASE_URL}/jobs/segments`, {
+  const resp = await engineFetch(`/jobs/segments`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -269,7 +265,7 @@ export async function startSegmentedRenderJob(
   tracks: TrackSegments[],
   outputPath: string,
 ): Promise<string> {
-  const resp = await fetch(`${BASE_URL}/jobs/render`, {
+  const resp = await engineFetch(`/jobs/render`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -313,7 +309,7 @@ export async function startCrossFileSegmentedRenderJob(
   segments: SegmentOut[],
   options: { outputPath?: string; language?: string | null; subtitles?: number[] } = {},
 ): Promise<string> {
-  const resp = await fetch(`${BASE_URL}/jobs/render`, {
+  const resp = await engineFetch(`/jobs/render`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -349,7 +345,7 @@ export type JobEvent<TResult> =
  * its ffmpeg run, removes a half-written file, and the job's WebSocket
  * ends with a "cancelled" event. */
 export async function cancelJob(jobId: string): Promise<void> {
-  const resp = await fetch(`${BASE_URL}/jobs/${jobId}/cancel`, { method: "POST" });
+  const resp = await engineFetch(`/jobs/${jobId}/cancel`, { method: "POST" });
   if (!resp.ok) throw new Error(await readErrorDetail(resp));
 }
 
@@ -362,7 +358,7 @@ export async function cancelJob(jobId: string): Promise<void> {
  * way to know something went wrong.
  */
 export function connectJobWS<TResult>(jobId: string, onEvent: (event: JobEvent<TResult>) => void): () => void {
-  const ws = new WebSocket(`ws://127.0.0.1:8756/jobs/${jobId}/ws`);
+  const ws = new WebSocket(`${ENGINE_URL.replace("http", "ws")}/jobs/${jobId}/ws`);
   let settled = false;
 
   ws.onmessage = (ev) => {

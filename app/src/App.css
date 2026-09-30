@@ -137,12 +137,6 @@ body {
 /* Full-screen splash while the sidecar isn't reachable yet -- nothing else
    in the app is usable before then, so it replaces the whole shell instead
    of sitting as a banner over an inert one. */
-.startup-screen {
-  align-items: center;
-  justify-content: center;
-  gap: 1em;
-}
-
 .spinner {
   width: 36px;
   height: 36px;
@@ -158,13 +152,25 @@ body {
   }
 }
 
-.startup-text {
+/* The engine's startup, top right (EngineStatus.tsx). */
+.engine-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  margin-right: 0.4em;
+  font-size: 0.9em;
   color: var(--text-muted);
-  font-size: 1.05em;
+  white-space: nowrap;
 }
 
-.startup-text.error {
+.engine-status-error {
   color: var(--danger);
+}
+
+.spinner-small {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
 }
 
 .file-open-button {
