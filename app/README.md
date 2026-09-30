@@ -48,7 +48,7 @@ N'étant pas signé avec un certificat Authenticode (aucun pour l'instant), l'in
 
 ## Mise à jour automatique
 
-`tauri-plugin-updater` vérifie au démarrage (`src/UpdateBanner.tsx`) si une release plus récente existe sur GitHub, via l'URL configurée dans `src-tauri/tauri.conf.json` (`plugins.updater.endpoints`, convention `.../releases/latest/download/latest.json`). Chaque installateur publié doit être signé avec la même paire de clés que celle dont la clé publique est intégrée dans ce fichier.
+`tauri-plugin-updater` vérifie au démarrage (`src/UpdateButton.tsx`, désactivable dans les Options) si une release plus récente existe sur GitHub, via l'URL configurée dans `src-tauri/tauri.conf.json` (`plugins.updater.endpoints`, convention `.../releases/latest/download/latest.json`). Chaque installateur publié doit être signé avec la même paire de clés que celle dont la clé publique est intégrée dans ce fichier.
 
 La paire de clés a été générée une fois (`npx tauri signer generate -w .tauri-keys/syncaudio.key`) ; `.tauri-keys/` est gitignoré — **ne jamais commit la clé privée**. Pour publier une release signée, deux variables d'environnement doivent être disponibles au moment du `tauri build` (localement, ou en secrets CI — voir `.github/workflows/release.yml`) :
 
@@ -69,7 +69,7 @@ Secrets requis côté GitHub (Settings > Secrets and variables > Actions) : `TAU
 - `src/BatchView.tsx` — mode batch : deux listes de fichiers appariées par position, un couple de pistes référence/à corriger appliqué à toute la série, analyse/export en un clic.
 - `src/SegmentChart.tsx` / `SegmentEditor.tsx` — graphe décalage-vs-temps et éditeur manuel des segments (glisser une frontière, fusionner/supprimer, saisie numérique, score de confiance par segment avec option "Ignorer les segments peu fiables").
 - `src/TrackPreview.tsx` / `Waveform.tsx` / `WaveformNavigator.tsx` — aperçu avant export : formes d'onde zoomables (référence / candidate / résultat, surlignage façon diff), barre de navigation sur la piste entière, lecture audio synchronisée (Web Audio API, pour un démarrage simultané précis des pistes comparées). Le « Résultat final » est fidèle au fichier exporté : l'extrait écouté est produit par le moteur avec le même filtre que le rendu (`POST /corrected-clip`), et sa forme d'onde suit la même logique segment par segment (`src/resultPlan.ts`) — sauts, contenu en trop sauté, blancs là où la piste doublée manque de contenu.
-- `src/UpdateBanner.tsx` — vérification/installation de mise à jour au démarrage.
+- `src/UpdateButton.tsx` — vérification de mise à jour au démarrage, et son installation depuis l'icône à côté des Options.
 - `src/api.ts` — client du sidecar HTTP/WebSocket.
 - `src-tauri/` — coquille Rust : démarrage/arrêt du sidecar (`src/lib.rs`), config de la fenêtre/du bundle/de l'updater (`tauri.conf.json`), icônes (`icons/`, `icon-source.svg` éditable), hooks de l'installateur NSIS (`windows/installer-hooks.nsh`).
 
