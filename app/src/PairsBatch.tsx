@@ -18,6 +18,7 @@ import {
 } from "./batchShared";
 import { InfoTip } from "./InfoTip";
 import { SegmentEditor } from "./SegmentEditor";
+import { DropZone } from "./DropZone";
 import { pickMediaFiles } from "./mediaDialog";
 import { DropOverlay, useFileDrop } from "./FileDrop";
 import { basename } from "./paths";
@@ -269,9 +270,9 @@ export function PairsBatch({
     if (cands) setCandidateFiles(cands.split("|"));
   }, []);
 
-  function addFiles(setFiles: (update: (files: string[]) => string[]) => void) {
+  function addFiles(setFiles: (update: (files: string[]) => string[]) => void, title: string) {
     return async () => {
-      const selected = await pickMediaFiles(true);
+      const selected = await pickMediaFiles(true, title);
       if (selected) setFiles((files) => [...files, ...selected]);
     };
   }
@@ -492,7 +493,7 @@ export function PairsBatch({
                     <span>{m.common.reference}</span>
                     <button
                       className="small-button"
-                      onClick={addFiles(setReferenceFiles)}
+                      onClick={addFiles(setReferenceFiles, m.pairs.pickReferences)}
                       disabled={busy}
                       title={m.pairs.addReferenceHint}
                     >
@@ -505,7 +506,7 @@ export function PairsBatch({
                     <span>{m.common.toCorrect}</span>
                     <button
                       className="small-button"
-                      onClick={addFiles(setCandidateFiles)}
+                      onClick={addFiles(setCandidateFiles, m.pairs.pickCandidates)}
                       disabled={busy}
                       title={m.pairs.addCandidateHint}
                     >
@@ -521,8 +522,10 @@ export function PairsBatch({
             <tbody>
               {rowCount === 0 && (
                 <tr>
-                  <td colSpan={6} className="placeholder">
-                    {m.pairs.empty}
+                  <td colSpan={6} className="batch-empty">
+                    <DropZone title={m.files.dropZoneMany} disabled={dropBlocked !== null} onClick={addFiles(setReferenceFiles, m.pairs.pickReferences)}>
+                      {m.pairs.empty}
+                    </DropZone>
                   </td>
                 </tr>
               )}
@@ -615,7 +618,7 @@ export function PairsBatch({
       <DropOverlay
         drag={fileDrag}
         blocked={dropBlocked}
-        split={[m.common.reference, m.common.toCorrect]}
+        split={[m.pairs.pickReferences, m.pairs.pickCandidates]}
         hint={m.files.folderHint}
       />
     </main>

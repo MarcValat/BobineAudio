@@ -503,3 +503,10 @@ td.batch-index {
   align-items: center;
   gap: 0.3em;
 }
+
+/* The empty table: a cell of its own, the drop zone inset in it (as in
+   Bobine Subs). */
+.batch-table-wrap td.batch-empty {
+  padding: 0.8em;
+  background: var(--surface);
+}

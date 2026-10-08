@@ -14,6 +14,7 @@ import {
 } from "./api";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { SegmentChart, describeSegments } from "./SegmentChart";
+import { DropZone } from "./DropZone";
 import { InfoTip } from "./InfoTip";
 import { LogPanel } from "./LogPanel";
 import { SegmentEditor } from "./SegmentEditor";
@@ -595,9 +596,12 @@ function App() {
             )}
           </div>
           <div className="analysis-view" ref={analysisViewRef}>
-            {!shownEntry && (
-              <p className="placeholder">{t.single.pickAndAnalyze}</p>
+            {!filePath && (
+              <DropZone title={t.files.dropZoneOne} onClick={handleOpenFile}>
+                {t.files.dropZoneOneHint}
+              </DropZone>
             )}
+            {filePath && !shownEntry && <p className="placeholder">{t.single.pickAndAnalyze}</p>}
             {shownEntry?.status === "running" && !shownEntry.result && <p className="placeholder">Analyse en cours...</p>}
             {shownEntry?.status === "error" && <p className="error">{shownEntry.error}</p>}
             {shownTrack && shownEntry?.result && (
