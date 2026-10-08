@@ -6,6 +6,7 @@ export const fr = {
     close: "Fermer",
     cancel: "Annuler",
     retry: "Réessayer",
+    percent: (n: number) => `${n} %`,
     help: "Aide",
     error: "Erreur",
     httpError: (status: number) => `Erreur ${status}`,
@@ -309,6 +310,7 @@ export const fr = {
     offsetEnd: "Décal. fin",
     offsetEndHint: "Décalage à la fin du segment, en millisecondes",
     confidence: "Confiance",
+    lowConfidence: "Peu fiable : à vérifier",
     confidenceHint:
       "Fiabilité de cette détection (décalage, dérive ou constant). Un score bas vient de mesures qui ne s'accordent pas entre elles, ou trop peu nombreuses : à vérifier à l'écoute, sans être forcément faux.",
     actions: "Actions",
