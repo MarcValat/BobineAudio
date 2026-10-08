@@ -118,20 +118,22 @@ function TrackChoiceModal({
   return (
     <Dialog onClose={onClose} className="batch-choice-panel" labelledBy="choice-title">
       <DialogHeader id="choice-title" title={m.multi.tracksOf(basename(path))} titleTooltip={path} onClose={onClose} closeLabel={m.common.cancel} />
-        <TrackTable
-          className="batch-tracks-table"
-          tracks={tracks}
-          radioName="choice-reference"
-          reference={choice.reference}
-          targets={choice.targets}
-          onReference={(index) => setChoice((c) => ({ ...c, reference: index, targets: c.targets.filter((i) => i !== index) }))}
-          onToggleTarget={(index) =>
-            setChoice((c) => ({
-              ...c,
-              targets: toggled(c.targets, index),
-            }))
-          }
-        />
+        <div className="tracks-table-wrap">
+          <TrackTable
+            className="batch-tracks-table"
+            tracks={tracks}
+            radioName="choice-reference"
+            reference={choice.reference}
+            targets={choice.targets}
+            onReference={(index) => setChoice((c) => ({ ...c, reference: index, targets: c.targets.filter((i) => i !== index) }))}
+            onToggleTarget={(index) =>
+              setChoice((c) => ({
+                ...c,
+                targets: toggled(c.targets, index),
+              }))
+            }
+          />
+        </div>
         {subtitles.length > 0 && choice.targets.length > 0 && (
           <div className="batch-choice-subs">
             <h3>

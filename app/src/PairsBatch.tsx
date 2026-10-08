@@ -168,7 +168,9 @@ function AllTracksModal({ referenceFiles, candidateFiles, onClose }: { reference
                 {loading && !entry && <p className="placeholder">{m.pairs.probing}</p>}
                 {entry?.error && <p className="error">{entry.error}</p>}
                 {entry?.tracks && (
-                  <TrackTable className="batch-tracks-table" tracks={entry.tracks} showChannels />
+                  <div className="tracks-table-wrap">
+                    <TrackTable className="batch-tracks-table" tracks={entry.tracks} showChannels />
+                  </div>
                 )}
               </div>
             );
