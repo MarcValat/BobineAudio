@@ -191,17 +191,22 @@ export interface AnalysisRun {
 /** An analysis's status for its table cell, as in Bobine Subs: on the left
  * what it's at, its result or why it failed (the log while it runs or once
  * it failed); on the right "Modifier" and a "Réanalyser" icon (this one
- * alone again). `name` heads it when a row holds several (a file's tracks). */
+ * alone again). `name` heads it when a row holds several (a file's tracks).
+ * "Modifier" stays usable while the others are analyzed (those lose their
+ * result as they're queued, so no edit can be overwritten); not during an
+ * export, which writes what's edited. */
 export function AnalysisStatus({
   run,
   name,
   busy,
+  exporting,
   onEdit,
   onReanalyze,
 }: {
   run: AnalysisRun | undefined;
   name?: string;
   busy: boolean;
+  exporting: boolean;
   onEdit: () => void;
   onReanalyze: () => void;
 }) {
@@ -220,7 +225,7 @@ export function AnalysisStatus({
       </div>
       <div className="batch-row-buttons">
         {status === "done" && run?.result && (
-          <button className="small-button" disabled={busy} onClick={onEdit}>
+          <button className="small-button" disabled={exporting} onClick={onEdit}>
             {t.common.edit}
           </button>
         )}

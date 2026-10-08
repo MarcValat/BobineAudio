@@ -554,6 +554,7 @@ export function PairsBatch({
                         <AnalysisStatus
                           run={a}
                           busy={busy}
+                          exporting={queue.exporting}
                           onEdit={() => setEditingPairIndex(i)}
                           onReanalyze={() => runPlan([i])}
                         />

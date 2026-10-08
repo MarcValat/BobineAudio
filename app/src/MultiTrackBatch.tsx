@@ -593,6 +593,7 @@ export function MultiTrackBatch({
                                 run={t}
                                 name={`@${info.index} ${info.language ?? "?"} :`}
                                 busy={busy}
+                                exporting={queue.exporting}
                                 onEdit={() => setEditing({ path, track: info.index })}
                                 onReanalyze={() => reanalyzeTrack(path, info)}
                               />
