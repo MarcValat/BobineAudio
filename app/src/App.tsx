@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   probe,
   startSegmentsJob,
@@ -18,15 +18,16 @@ import { InfoTip } from "./InfoTip";
 import { LogPanel } from "./LogPanel";
 import { SegmentEditor } from "./SegmentEditor";
 import { TrackPreview } from "./TrackPreview";
-import { BatchView } from "./BatchView";
+import { BatchView, type BatchMode } from "./BatchView";
 import { OptionsButton } from "./Options";
+import { PillSwitch } from "./PillSwitch";
 import { UpdateButton } from "./UpdateButton";
 import { pickMediaFiles, pickOutputFile, syncedFileName } from "./mediaDialog";
 import { basename } from "./paths";
 import { assignSubtitles, subtitlesFor, takenByOthers } from "./subtitles";
 import { useElementSize } from "./useElementSize";
 import "./App.css";
-import { devParam, errorMessage, toggled } from "./util";
+import { devParam, errorMessage, loadSetting, saveSetting, toggled } from "./util";
 import { TrackTable } from "./TrackTable";
 import { SubtitleChecks } from "./SubtitleChecks";
 import { JobCancelled, runJob } from "./jobs";
@@ -75,6 +76,9 @@ const IDLE_EXPORT: ExportState = {
   error: null,
 };
 
+// The batch sub-mode last used, picked again next time.
+const BATCH_MODE_KEY = "syncaudio.batchMode";
+
 // Height of the analysis panel's content below which the chart and the
 // waveforms are shown one at a time (see compactAnalysis).
 const COMPACT_ANALYSIS_HEIGHT = 520;
@@ -82,6 +86,16 @@ const COMPACT_ANALYSIS_HEIGHT = 520;
 function App() {
   const t = useT();
   const [mode, setMode] = useState<"single" | "batch">("single");
+  // Dev only (see devParam): pairs mode for `?batchRef=`.
+  const [batchMode, setBatchMode] = useState<BatchMode>(() =>
+    devParam("batchRef") || loadSetting(BATCH_MODE_KEY) === "pairs" ? "pairs" : "multi",
+  );
+  // A batch analysis or export is running: the other sub-mode waits.
+  const [batchBusy, setBatchBusy] = useState(false);
+  const chooseBatchMode = useCallback((next: BatchMode) => {
+    setBatchMode(next);
+    saveSetting(BATCH_MODE_KEY, next === "multi" ? null : next);
+  }, []);
   const [filePath, setFilePath] = useState<string | null>(null);
   const [tracks, setTracks] = useState<TrackInfo[] | null>(null);
   const [subtitles, setSubtitles] = useState<SubtitleInfo[]>([]);
@@ -345,9 +359,33 @@ function App() {
           <button className={mode === "single" ? "primary-button" : ""} onClick={() => setMode("single")}>
             {t.modes.single}
           </button>
-          <button className={mode === "batch" ? "primary-button" : ""} onClick={() => setMode("batch")}>
-            {t.modes.batch}
-          </button>
+          {/* Batch, and its sub-modes in a drawer that unrolls from under it
+              (folded away, and out of the tab order, outside Batch). */}
+          <div className={`batch-group${mode === "batch" ? " open" : ""}`}>
+            <button
+              className={mode === "batch" ? "primary-button batch-main-button" : "batch-main-button"}
+              onClick={() => setMode("batch")}
+              aria-expanded={mode === "batch"}
+            >
+              {t.modes.batch}
+            </button>
+            <div className="batch-drawer" inert={mode !== "batch"}>
+              <div className="batch-drawer-clip">
+                <PillSwitch
+                  className="batch-submodes"
+                  label={t.modes.batchModes}
+                  options={[
+                    ["multi", t.batch.multiMode],
+                    ["pairs", t.batch.pairsMode],
+                  ]}
+                  value={batchMode}
+                  onChange={chooseBatchMode}
+                  disabled={batchBusy}
+                  disabledTitle={t.modes.batchBusy}
+                />
+              </div>
+            </div>
+          </div>
         </div>
         <div className="top-actions">
           <EngineStatusBadge />
@@ -363,7 +401,7 @@ function App() {
           (not the `hidden` attribute): `[hidden]` is a user-agent-origin
           style, which always loses to .batch-main's own author-origin
           `display: grid` regardless of specificity. */}
-      <BatchView hidden={mode !== "batch"} />
+      <BatchView hidden={mode !== "batch"} mode={batchMode} onBusyChange={setBatchBusy} />
 
       {mode === "single" && (
       <main className="app-main">

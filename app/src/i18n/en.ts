@@ -38,6 +38,8 @@ export const en: Messages = {
   modes: {
     single: "Single file",
     batch: "Batch",
+    batchModes: "Batch mode",
+    batchBusy: "Processing is under way: wait for it to finish.",
   },
 
   options: {

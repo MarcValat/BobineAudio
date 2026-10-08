@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { probe, startSegmentedRenderJob, startSegmentsJob, type SegmentsResponse, type SubtitleInfo, type TrackInfo } from "./api";
 import { runJob } from "./jobs";
 import { languageLabel, LanguageSelect } from "./languages";
@@ -174,14 +174,12 @@ function TrackChoiceModal({
  * Each file's export holds all its corrected tracks. */
 export function MultiTrackBatch({
   hidden,
-  modeSwitch,
   outputDir,
   onOutputDirChange,
   blocked,
   onBusyChange,
 }: {
   hidden: boolean;
-  modeSwitch: ReactNode;
   outputDir: string | null;
   onOutputDirChange: (dir: string | null) => void;
   /** The other batch mode is working: nothing starts here meanwhile. */
@@ -396,7 +394,6 @@ export function MultiTrackBatch({
   return (
     <main className="batch-main" style={hidden ? { display: "none" } : undefined}>
       <div className="batch-config panel">
-        {modeSwitch}
         <label>
           {m.multi.reference}
           <LanguageSelect

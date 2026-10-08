@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { probe, startSegmentsJob, startCrossFileSegmentedRenderJob, type SegmentsResponse, type TrackInfo } from "./api";
 import { runJob } from "./jobs";
 import { LanguageSelect } from "./languages";
@@ -212,14 +212,12 @@ function AllTracksModal({ referenceFiles, candidateFiles, onClose }: { reference
  * the imported file lists or analysis results. */
 export function PairsBatch({
   hidden,
-  modeSwitch,
   outputDir,
   onOutputDirChange,
   blocked,
   onBusyChange,
 }: {
   hidden: boolean;
-  modeSwitch: ReactNode;
   outputDir: string | null;
   onOutputDirChange: (dir: string | null) => void;
   /** The other batch mode is working: nothing starts here meanwhile. */
@@ -410,7 +408,6 @@ export function PairsBatch({
   return (
     <main className="batch-main" style={hidden ? { display: "none" } : undefined}>
       <div className="batch-config panel">
-        {modeSwitch}
         <TrackPicker
           label={m.common.reference}
           tracks={referenceProbe.tracks}

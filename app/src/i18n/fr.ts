@@ -39,6 +39,8 @@ export const fr = {
   modes: {
     single: "Fichier unique",
     batch: "Batch",
+    batchModes: "Mode batch",
+    batchBusy: "Un traitement est en cours : attends sa fin.",
   },
 
   options: {
