@@ -1,17 +1,17 @@
 <p align="center"><a href="README.md">English</a> | Français</p>
 
 <p align="center">
-  <img src="app/src-tauri/icons/128x128@2x.png" width="112" alt="Icône de SyncAudio">
+  <img src="app/src-tauri/icons/128x128@2x.png" width="112" alt="Icône de Bobine Audio">
 </p>
 
-<h1 align="center">SyncAudio</h1>
+<h1 align="center">Bobine Audio</h1>
 
 <p align="center">
   <b>Remet un doublage en phase avec sa vidéo</b>, en se basant sur la musique et les bruitages communs aux deux versions plutôt que sur les dialogues.
 </p>
 
 <p align="center">
-  <a href="https://github.com/MarcValat/SyncAudio/releases/latest"><img src="https://img.shields.io/github/v/release/MarcValat/SyncAudio?label=version" alt="Dernière version"></a>
+  <a href="https://github.com/MarcValat/BobineAudio/releases/latest"><img src="https://img.shields.io/github/v/release/MarcValat/BobineAudio?label=version" alt="Dernière version"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011%20(x64)-0078D6?logo=windows" alt="Windows 10 | 11 (x64)">
   <img src="https://img.shields.io/badge/Linux-Debian%20%7C%20Ubuntu%20(.deb)-E95420?logo=linux&logoColor=white" alt="Linux : Debian | Ubuntu (.deb)">
   <img src="https://img.shields.io/badge/interface-Fran%C3%A7ais%20%7C%20English-555" alt="Français | English">
@@ -19,17 +19,17 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/MarcValat/SyncAudio/releases/latest"><img src="https://img.shields.io/badge/T%C3%A9l%C3%A9charger-Windows%20%7C%20Linux-2ea44f?style=for-the-badge" alt="Télécharger pour Windows ou Linux"></a>
+  <a href="https://github.com/MarcValat/BobineAudio/releases/latest"><img src="https://img.shields.io/badge/T%C3%A9l%C3%A9charger-Windows%20%7C%20Linux-2ea44f?style=for-the-badge" alt="Télécharger pour Windows ou Linux"></a>
 </p>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/main-fr-dark.png">
-  <img src="docs/screenshots/main-fr-light.png" alt="SyncAudio : décalage en fonction du temps, puis la référence, la piste à corriger et le résultat final en formes d'onde">
+  <img src="docs/screenshots/main-fr-light.png" alt="Bobine Audio : décalage en fonction du temps, puis la référence, la piste à corriger et le résultat final en formes d'onde">
 </picture>
 
 ## Pourquoi
 
-Un doublage colle rarement à la vidéo à laquelle on l'ajoute : quelques images de retard, un décalage qui **dérive** peu à peu à cause d'une cadence différente, ou des **sauts** là où la version doublée a été montée autrement (une scène plus longue ou plus courte, une coupure pub). Se caler sur les dialogues ne marche pas, puisque ce sont justement eux qui diffèrent d'une langue à l'autre. SyncAudio compare plutôt ce que les deux versions ont en commun : musique, bruitages, ambiances.
+Un doublage colle rarement à la vidéo à laquelle on l'ajoute : quelques images de retard, un décalage qui **dérive** peu à peu à cause d'une cadence différente, ou des **sauts** là où la version doublée a été montée autrement (une scène plus longue ou plus courte, une coupure pub). Se caler sur les dialogues ne marche pas, puisque ce sont justement eux qui diffèrent d'une langue à l'autre. Bobine Audio compare plutôt ce que les deux versions ont en commun : musique, bruitages, ambiances.
 
 ## Fonctionnalités
 
@@ -45,13 +45,13 @@ Un doublage colle rarement à la vidéo à laquelle on l'ajoute : quelques image
 
 **Windows 10 et 11 :**
 
-1. Télécharge `SyncAudio_x.y.z_x64-setup.exe` depuis la [dernière release](https://github.com/MarcValat/SyncAudio/releases/latest).
+1. Télécharge `Bobine.Audio_x.y.z_x64-setup.exe` depuis la [dernière release](https://github.com/MarcValat/BobineAudio/releases/latest).
 2. Lance-le. L'installateur n'est pas signé par un certificat, Windows SmartScreen peut donc afficher *« Windows a protégé votre ordinateur »* : clique sur **Informations complémentaires**, puis **Exécuter quand même**.
 
 **Linux** (Ubuntu 22.04 ou plus récent, Debian et leurs dérivées : Linux Mint, Pop!_OS…) :
 
-1. Télécharge `SyncAudio_x.y.z_amd64.deb` depuis la [dernière release](https://github.com/MarcValat/SyncAudio/releases/latest).
-2. Installe-le depuis son dossier avec `sudo apt install ./SyncAudio_x.y.z_amd64.deb`, puis lance-le depuis le menu des applications ou avec `syncaudio`.
+1. Télécharge `Bobine.Audio_x.y.z_amd64.deb` depuis la [dernière release](https://github.com/MarcValat/BobineAudio/releases/latest).
+2. Installe-le depuis son dossier avec `sudo apt install ./Bobine.Audio_x.y.z_amd64.deb`, puis lance-le depuis le menu des applications ou avec `syncaudio`.
 
 Rien d'autre à installer : le moteur d'analyse et ffmpeg sont fournis avec l'application. Quand une nouvelle version sort, l'application la propose et l'installe en un clic (sous Linux, après avoir demandé ton mot de passe).
 
@@ -80,6 +80,6 @@ Rien d'autre à installer : le moteur d'analyse et ffmpeg sont fournis avec l'ap
 
 ## Licence
 
-Copyright © 2026 Marc Valat. SyncAudio est un logiciel libre, distribué sous [licence publique générale GNU v3](LICENSE) : tu peux l'utiliser, l'étudier, le partager et le modifier, et toute version distribuée, modifiée ou non, doit rester sous la même licence avec son code source disponible.
+Copyright © 2026 Marc Valat. Bobine Audio est un logiciel libre, distribué sous [licence publique générale GNU v3](LICENSE) : tu peux l'utiliser, l'étudier, le partager et le modifier, et toute version distribuée, modifiée ou non, doit rester sous la même licence avec son code source disponible.
 
-L'installateur fournit aussi [FFmpeg](https://ffmpeg.org/) (une version de [gyan.dev](https://www.gyan.dev/ffmpeg/builds/), via [imageio-ffmpeg](https://github.com/imageio/imageio-ffmpeg)), que SyncAudio lance comme programme séparé. Cette version est elle aussi sous GPL v3 ; son code source est disponible auprès de FFmpeg et de gyan.dev.
+L'installateur fournit aussi [FFmpeg](https://ffmpeg.org/) (une version de [gyan.dev](https://www.gyan.dev/ffmpeg/builds/), via [imageio-ffmpeg](https://github.com/imageio/imageio-ffmpeg)), que Bobine Audio lance comme programme séparé. Cette version est elle aussi sous GPL v3 ; son code source est disponible auprès de FFmpeg et de gyan.dev.

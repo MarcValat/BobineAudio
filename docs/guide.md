@@ -2,7 +2,7 @@
 
 # User guide
 
-This guide explains how to use SyncAudio, from opening a file to exporting it, one file at a time or in batch mode. For installing it, see the [README](../README.md#install).
+This guide explains how to use Bobine Audio, from opening a file to exporting it, one file at a time or in batch mode. For installing it, see the [README](../README.md#install).
 
 ## Contents
 
@@ -19,7 +19,7 @@ This guide explains how to use SyncAudio, from opening a file to exporting it, o
 ## Words to know
 
 - **Reference**: the audio track that is in sync with the video, usually the original version. It is never changed: it's the one everything is lined up on.
-- **Track to correct**: the out-of-sync track, usually a dub. It's the one SyncAudio puts back in sync with the reference.
+- **Track to correct**: the out-of-sync track, usually a dub. It's the one Bobine Audio puts back in sync with the reference.
 - **Offset**: the gap between the two tracks at a given moment, in milliseconds. **+** means the track to correct is **late** on the reference, **−** that it's **early**.
 - **Segment**: a stretch of the file over which the offset follows one rule. A file that is equally off from start to end has one segment; a file cut differently has several.
 - **Constant, drift, jump**:
@@ -37,7 +37,7 @@ This is **Single file** mode, for a file that already holds the reference and th
    - **Ref.** column: the reference track (the first one by default);
    - **To correct** column: the tracks to put back in sync (all the others by default).
 
-   Meanwhile, "Preparing the tracks..." means SyncAudio is already reading the audio in the background, so the analysis starts sooner.
+   Meanwhile, "Preparing the tracks..." means Bobine Audio is already reading the audio in the background, so the analysis starts sooner.
 3. **Click "Analyze"**. Each ticked track shows up under "Analyzed tracks" with a summary: "3 segments · 2 jumps". Click a track to show its result on the right.
 4. **Check the result** (see [Reading the result](#reading-the-result)), and correct it by hand if needed ("Edit segments").
 5. **Export** with "Export the synchronized file".
@@ -152,7 +152,7 @@ In both modes:
   <img src="screenshots/batch-en-light.png" alt="Multitrack files batch mode, with three analyzed episodes">
 </picture>
 
-Tracks are picked **by language**, for every file at once: the **reference** language at the top, then the languages **to correct**. That's more reliable than a track number, which can change from one episode to the next. When the first file is added, SyncAudio suggests its first track as the reference and every other language to correct.
+Tracks are picked **by language**, for every file at once: the **reference** language at the top, then the languages **to correct**. That's more reliable than a track number, which can change from one episode to the next. When the first file is added, Bobine Audio suggests its first track as the reference and every other language to correct.
 
 - A file where a language is missing or appears more than once is flagged **⚠**: "Choose" sets its tracks (and subtitles) by hand, "By language" goes back to the automatic pick.
 - The "Tracks" column sums up what will be done: `@0 jpn → @1 fre + ST @1` means "track 1 synced to track 0, with subtitle track 1".
@@ -176,7 +176,7 @@ The **⚙** button at the top right opens Options:
 - **Language**: System (French if the system is in French, English otherwise), Français or English.
 - **Default subtitles**: which subtitles are retimed with a corrected track unless picked otherwise. They're the ones ticked by default in single-file mode, and batch mode's starting setting.
 - **Updates**: whether to check for a new version at startup.
-- **Analysis cache**: SyncAudio keeps the analyses already made, so a reopened file shows up at once. "Clear" frees the space; files are just analyzed again.
+- **Analysis cache**: Bobine Audio keeps the analyses already made, so a reopened file shows up at once. "Clear" frees the space; files are just analyzed again.
 
 When an update is available, an icon shows next to the ⚙: "Install and restart" downloads it, installs it and restarts the app. An analysis or export in progress is interrupted then.
 
@@ -198,7 +198,7 @@ The measurements disagree with each other over that stretch, or there are too fe
 The offset is wrong there. Listen to the reference with the final result, find where the echo starts, and adjust the segments in the editor.
 
 **Where are the analyses kept? How much space do they take?**
-On Windows in `%LOCALAPPDATA%\SyncAudio\cache`, on Linux in `~/.cache/syncaudio`: 512 MB at most, the oldest ones being deleted beyond that. Options show their size and can clear them. Uninstalling removes them on Windows; on Linux, clear them from Options first.
+On Windows in `%LOCALAPPDATA%\Bobine Audio\cache`, on Linux in `~/.cache/bobine-audio`: 512 MB at most, the oldest ones being deleted beyond that. Options show their size and can clear them. Uninstalling removes them on Windows; on Linux, clear them from Options first.
 
 **Is my original file changed?**
 No, never. Exporting always writes a new file.

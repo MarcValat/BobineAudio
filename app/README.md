@@ -1,6 +1,6 @@
-# SyncAudio (app)
+# Bobine Audio (app)
 
-GUI standalone de [SyncAudio](../README.md) (Tauri v2 + React/TypeScript) : ouvrir un fichier (ou une série entière en mode batch), choisir la piste de référence et les pistes à corriger, lancer l'analyse (décalage constant, dérive ou sauts), vérifier le résultat par un aperçu visuel (formes d'onde, style diff) et sonore avant d'exporter, éditer manuellement les segments détectés si besoin — y compris ignorer en un clic ceux dont le score de confiance est trop faible pour être fiable.
+GUI standalone de [Bobine Audio](../README.md) (Tauri v2 + React/TypeScript) : ouvrir un fichier (ou une série entière en mode batch), choisir la piste de référence et les pistes à corriger, lancer l'analyse (décalage constant, dérive ou sauts), vérifier le résultat par un aperçu visuel (formes d'onde, style diff) et sonore avant d'exporter, éditer manuellement les segments détectés si besoin — y compris ignorer en un clic ceux dont le score de confiance est trop faible pour être fiable.
 
 Ne contient aucune logique de détection/correction elle-même : elle pilote le moteur Python (`../engine/`), lancé au démarrage comme process séparé (« sidecar ») exposant une API HTTP + WebSocket locale (`127.0.0.1:8756`). Voir [`engine/README.md`](../engine/README.md) pour le détail du moteur et de son API.
 
@@ -61,7 +61,7 @@ TAURI_SIGNING_PRIVATE_KEY_PASSWORD=<mot de passe choisi à la génération, vide
 
 ## Publier une release
 
-Le dépôt canonique est sur GitLab, mais les releases se font sur GitHub (`https://github.com/MarcValat/SyncAudio`), via le mirroring GitLab -> GitHub existant. Pousser un tag `vX.Y.Z` (qui doit être mirroré vers GitHub — vérifier que le mirroring inclut bien les tags, pas juste les branches, dans les réglages GitLab) déclenche `.github/workflows/release.yml` : tests du moteur, build du sidecar, puis `tauri-apps/tauri-action` compile et publie les installateurs + `latest.json` en release GitHub (créée en brouillon — à valider/publier manuellement une fois vérifiée).
+Le dépôt canonique est sur GitLab, mais les releases se font sur GitHub (`https://github.com/MarcValat/BobineAudio`), via le mirroring GitLab -> GitHub existant. Pousser un tag `vX.Y.Z` (qui doit être mirroré vers GitHub — vérifier que le mirroring inclut bien les tags, pas juste les branches, dans les réglages GitLab) déclenche `.github/workflows/release.yml` : tests du moteur, build du sidecar, puis `tauri-apps/tauri-action` compile et publie les installateurs + `latest.json` en release GitHub (créée en brouillon — à valider/publier manuellement une fois vérifiée).
 
 Secrets requis côté GitHub (Settings > Secrets and variables > Actions) : `TAURI_SIGNING_PRIVATE_KEY` et `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (mêmes valeurs que ci-dessus). `GITHUB_TOKEN` est fourni automatiquement.
 
