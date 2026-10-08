@@ -161,6 +161,8 @@ export const fr = {
     openFile: "Ouvrir un fichier",
     exportRunningHint: "Un export est en cours : attends sa fin ou annule-le.",
     tracks: "Pistes",
+    tracksHint:
+      "Réf. : la piste audio déjà bien calée, qui sert de modèle (souvent la VO). À corriger : les pistes à recaler sur elle (souvent les doublages) ; coches-en plusieurs pour les analyser ensemble.",
     preparing: "Préparation des pistes...",
     preparingHint: "Lecture des pistes audio en arrière-plan, pour que l'analyse démarre plus vite.",
     openToSeeTracks: "Ouvre un fichier pour voir ses pistes.",

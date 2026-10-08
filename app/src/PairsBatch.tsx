@@ -573,7 +573,7 @@ export function PairsBatch({
         progress={
           <>
             {m.pairs.progressPairs(pairCount)}
-            {analyzedCount > 0 && m.pairs.progressAnalyzed(analyzedCount, pairCount)}
+            {m.pairs.progressAnalyzed(analyzedCount, pairCount)}
             {exportedCount > 0 && m.pairs.progressExported(exportedCount)}
             {rowCount > pairCount && m.pairs.progressUnpaired(rowCount - pairCount)}
           </>

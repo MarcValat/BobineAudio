@@ -158,6 +158,8 @@ export const en: Messages = {
     openFile: "Open a file",
     exportRunningHint: "An export is running: wait for it to finish or cancel it.",
     tracks: "Tracks",
+    tracksHint:
+      "Ref.: the audio track already in sync, used as the model (often the original version). To correct: the tracks to bring in line with it (often dubs); tick several to analyze them together.",
     preparing: "Preparing the tracks...",
     preparingHint: "Reading the audio tracks in the background, so the analysis starts sooner.",
     openToSeeTracks: "Open a file to see its tracks.",

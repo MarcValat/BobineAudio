@@ -481,6 +481,12 @@ body {
   color: var(--text-muted);
 }
 
+/* A card title is all capitals: on the baseline (InfoTip.css) the circle
+   hangs below them, raised here to center on them. */
+.panel h2 .info-tip {
+  vertical-align: 0.14em;
+}
+
 .placeholder {
   opacity: 0.6;
   font-style: italic;

@@ -417,7 +417,9 @@ function App() {
           </button>
 
           <section className="panel field-tracks">
-            <h2>{t.single.tracks}</h2>
+            <h2>
+              {t.single.tracks} <InfoTip>{t.single.tracksHint}</InfoTip>
+            </h2>
             {filePath && (
               <p className="file-path" title={filePath}>
                 {basename(filePath)}
