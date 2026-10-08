@@ -221,7 +221,6 @@ export const en: Messages = {
     backNextToOriginalsHint: "Write each export next to its original",
     toAnalyze: "To analyze",
     pending: "Waiting",
-    folder: "Folder",
     folderHint: "Open the written file's folder",
     exportAll: "Export all",
   },

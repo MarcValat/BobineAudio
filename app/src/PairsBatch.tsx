@@ -486,7 +486,7 @@ export function PairsBatch({
               <col />
               <col className="batch-col-status" />
               <col className="batch-col-status" />
-              <col className="batch-col-actions" />
+              <col className="batch-col-folder" />
             </colgroup>
             <thead>
               <tr>

@@ -136,9 +136,6 @@
   width: 20%;
 }
 
-.batch-col-actions {
-  width: 10.5em;
-}
 
 .batch-table-wrap td {
   vertical-align: top;
@@ -213,20 +210,12 @@ td.batch-index {
   white-space: nowrap;
 }
 
-.batch-row-actions {
-  white-space: nowrap;
-  text-align: right;
-}
-
-/* .batch-table-wrap td's own padding shorthand would otherwise outrank
-   this single-class rule (one extra class in the selector beats one). */
+/* .batch-table-wrap td's own padding and vertical-align would otherwise
+   outrank a single-class rule. */
 .batch-table-wrap td.batch-row-actions {
-  padding-right: 1em;
-}
-
-.batch-row-actions button {
-  padding: 0.15em 0.5em;
-  margin-left: 0.2em;
+  padding: 0.45em 0.3em;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .batch-track-status {
@@ -369,8 +358,9 @@ td.batch-index {
   width: 24%;
 }
 
+/* The written file's folder: an icon centered in a narrow column. */
 .batch-col-folder {
-  width: 6.5em;
+  width: 3.2em;
 }
 
 /* A file's tracks: which are used, what's off (⚠), and "Choisir". */
@@ -437,8 +427,8 @@ td.batch-index {
   gap: 0.3em;
 }
 
-/* A small button holding an icon only (Réanalyser). */
-.batch-row-buttons .icon-small-button {
+/* A small button holding an icon only (Réanalyser, the folder). */
+.batch-table-wrap .icon-small-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;

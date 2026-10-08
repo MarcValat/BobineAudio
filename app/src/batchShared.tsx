@@ -6,7 +6,7 @@ import { LogPanel } from "./LogPanel";
 import { pickFolder, planOutputPaths } from "./mediaDialog";
 import { basename } from "./paths";
 import { describeSegments } from "./SegmentChart";
-import { RedoIcon } from "./icons";
+import { FolderIcon, RedoIcon } from "./icons";
 import { errorMessage, loadSetting, saveSetting } from "./util";
 import { t, useT } from "./i18n";
 
@@ -270,13 +270,18 @@ export function ExportCell({ entry }: { entry: ExportFields | undefined | null }
   );
 }
 
-/** The row's "Dossier" button, once its export is written. */
+/** The row's folder icon, once its export is written (as in Bobine Subs). */
 export function RevealButton({ file }: { file: string | undefined }) {
   const t = useT();
   if (!file) return null;
   return (
-    <button className="small-button" title={t.batch.folderHint} onClick={() => revealItemInDir(file)}>
-      {t.batch.folder}
+    <button
+      className="small-button icon-small-button"
+      title={t.batch.folderHint}
+      aria-label={t.batch.folderHint}
+      onClick={() => revealItemInDir(file)}
+    >
+      <FolderIcon />
     </button>
   );
 }

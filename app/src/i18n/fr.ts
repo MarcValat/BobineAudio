@@ -224,7 +224,6 @@ export const fr = {
     backNextToOriginalsHint: "Écrire chaque export à côté de son original",
     toAnalyze: "À analyser",
     pending: "En attente",
-    folder: "Dossier",
     folderHint: "Ouvrir le dossier du fichier écrit",
     exportAll: "Exporter tout",
   },
