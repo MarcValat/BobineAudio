@@ -70,7 +70,7 @@ export const fr = {
     failedTitle: "La mise à jour a échoué",
     availableTitle: (version: string) => `Mise à jour disponible : v${version}`,
     failedHeading: "Échec de la mise à jour",
-    availableHeading: (version: string) => `SyncAudio v${version} est disponible`,
+    availableHeading: (version: string) => `Bobine Audio v${version} est disponible`,
     restartNote:
       "L'application redémarre une fois la mise à jour téléchargée : une analyse ou un export en cours sera interrompu.",
     install: "Installer et redémarrer",

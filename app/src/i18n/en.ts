@@ -68,7 +68,7 @@ export const en: Messages = {
     failedTitle: "The update failed",
     availableTitle: (version) => `Update available: v${version}`,
     failedHeading: "Update failed",
-    availableHeading: (version) => `SyncAudio v${version} is available`,
+    availableHeading: (version) => `Bobine Audio v${version} is available`,
     restartNote: "The app restarts once the update is downloaded: an analysis or export in progress will be interrupted.",
     install: "Install and restart",
     downloading: (percent) => `Downloading... ${percent !== null ? `${percent}%` : ""}`,
