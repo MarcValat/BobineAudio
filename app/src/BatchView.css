@@ -403,7 +403,7 @@ td.batch-index {
 }
 
 .batch-tracks-actions button,
-.batch-target button {
+.batch-row-buttons button {
   padding: 0.1em 0.5em;
 }
 
@@ -417,8 +417,42 @@ td.batch-index {
   color: var(--text);
 }
 
-.batch-target button {
-  margin-left: 0.4em;
+/* A row's result on the left, its buttons on the right (as in Bobine
+   Subs). */
+.batch-analysis-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.batch-analysis-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.batch-row-buttons {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+}
+
+/* A small button holding an icon only (Réanalyser). */
+.batch-row-buttons .icon-small-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25em 0.45em;
+}
+
+.icon-small-button svg {
+  width: 1.05em;
+  height: 1.05em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .batch-row-flagged td.batch-index {

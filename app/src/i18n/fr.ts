@@ -202,6 +202,8 @@ export const fr = {
     subtitles: "Sous-titres",
     reanalyzeAll: "Tout réanalyser",
     reanalyzeHint: "Réanalyse tout, y compris ce qui l'est déjà : les modifications faites avec « Modifier » sont perdues.",
+    reanalyzeOne: "Réanalyser",
+    reanalyzeOneHint: "Réanalyser celle-ci seule : ses modifications faites avec « Modifier » sont perdues.",
     analyzeAll: "Analyser tout",
     analyzeRestHint: (unit: "track" | "pair") =>
       `Analyse seulement les ${unit === "track" ? "pistes" : "paires"} qui ne le sont pas encore ; les autres et leurs modifications sont gardées.`,

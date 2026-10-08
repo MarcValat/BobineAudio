@@ -6,6 +6,7 @@ import { LogPanel } from "./LogPanel";
 import { pickFolder, planOutputPaths } from "./mediaDialog";
 import { basename } from "./paths";
 import { describeSegments } from "./SegmentChart";
+import { RedoIcon } from "./icons";
 import { errorMessage, loadSetting, saveSetting } from "./util";
 import { t, useT } from "./i18n";
 
@@ -187,32 +188,55 @@ export interface AnalysisRun {
   log: string[];
 }
 
-/** An analysis's status for its table cell: what it's at, its result with
- * "Modifier", or why it failed; the log while it runs or once it failed. */
+/** An analysis's status for its table cell, as in Bobine Subs: on the left
+ * what it's at, its result or why it failed (the log while it runs or once
+ * it failed); on the right "Modifier" and a "Réanalyser" icon (this one
+ * alone again). `name` heads it when a row holds several (a file's tracks). */
 export function AnalysisStatus({
   run,
+  name,
   busy,
   onEdit,
+  onReanalyze,
 }: {
   run: AnalysisRun | undefined;
+  name?: string;
   busy: boolean;
   onEdit: () => void;
+  onReanalyze: () => void;
 }) {
   const t = useT();
-  if (!run) return <>{t.batch.toAnalyze}</>;
+  const status = run?.status;
   return (
-    <>
-      {run.status === "pending" && t.batch.pending}
-      {run.status === "running" && t.common.analysisRunning}
-      {run.status === "done" && run.result && describeSegments(run.result.segments)}
-      {run.status === "error" && (run.error ?? t.common.error)}
-      {run.status === "done" && run.result && (
-        <button className="small-button" disabled={busy} onClick={onEdit}>
-          {t.common.edit}
-        </button>
-      )}
-      {(run.status === "running" || run.status === "error") && <LogPanel lines={run.log} />}
-    </>
+    <div className="batch-analysis-cell">
+      <div className="batch-analysis-text">
+        {name && <span className="batch-target-name">{name} </span>}
+        {!run && t.batch.toAnalyze}
+        {status === "pending" && t.batch.pending}
+        {status === "running" && t.common.analysisRunning}
+        {status === "done" && run?.result && describeSegments(run.result.segments)}
+        {status === "error" && (run?.error ?? t.common.error)}
+        {run && (status === "running" || status === "error") && <LogPanel lines={run.log} />}
+      </div>
+      <div className="batch-row-buttons">
+        {status === "done" && run?.result && (
+          <button className="small-button" disabled={busy} onClick={onEdit}>
+            {t.common.edit}
+          </button>
+        )}
+        {(status === "done" || status === "error") && (
+          <button
+            className="small-button icon-small-button"
+            disabled={busy}
+            onClick={onReanalyze}
+            aria-label={t.batch.reanalyzeOne}
+            title={t.batch.reanalyzeOneHint}
+          >
+            <RedoIcon />
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 

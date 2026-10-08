@@ -313,14 +313,26 @@ export function MultiTrackBatch({
    * languages, failed ones), keeping the rest and any edit made to them; or
    * all of them again (`all`). */
   async function handleAnalyze(all: boolean) {
+    await runPlan(
+      files.flatMap((path) => {
+        const res = resolutions[path];
+        if (!res?.reference || res.targets.length === 0) return [];
+        const run = runOf(path);
+        const targets = all ? res.targets : res.targets.filter((t) => run?.targets[t.index]?.status !== "done");
+        return targets.length > 0 ? [{ path, reference: res.reference, targets, keep: all ? null : run }] : [];
+      }),
+    );
+  }
+
+  /** "Réanalyser" on one corrected track of a file: that one alone again
+   * (its edits are lost), the file's others kept. */
+  function reanalyzeTrack(path: string, track: TrackInfo) {
+    const reference = resolutions[path]?.reference;
+    if (reference) runPlan([{ path, reference, targets: [track], keep: runOf(path) }]);
+  }
+
+  async function runPlan(plan: { path: string; reference: TrackInfo; targets: TrackInfo[]; keep: FileRun | null }[]) {
     setAnalyzing(true);
-    const plan = files.flatMap((path) => {
-      const res = resolutions[path];
-      if (!res?.reference || res.targets.length === 0) return [];
-      const run = runOf(path);
-      const targets = all ? res.targets : res.targets.filter((t) => run?.targets[t.index]?.status !== "done");
-      return targets.length > 0 ? [{ path, reference: res.reference, targets, keep: all ? null : run }] : [];
-    });
     setRuns((current) => {
       const next = { ...current };
       for (const { path, reference, targets, keep } of plan) {
@@ -577,10 +589,13 @@ export function MultiTrackBatch({
                           const t = run?.targets[info.index];
                           return (
                             <div key={info.index} className={`batch-target batch-status-${t?.status ?? "pending"}`}>
-                              <span className="batch-target-name">
-                                @{info.index} {info.language ?? "?"} :
-                              </span>{" "}
-                              <AnalysisStatus run={t} busy={busy} onEdit={() => setEditing({ path, track: info.index })} />
+                              <AnalysisStatus
+                                run={t}
+                                name={`@${info.index} ${info.language ?? "?"} :`}
+                                busy={busy}
+                                onEdit={() => setEditing({ path, track: info.index })}
+                                onReanalyze={() => reanalyzeTrack(path, info)}
+                              />
                             </div>
                           );
                         })}

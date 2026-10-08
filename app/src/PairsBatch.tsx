@@ -298,12 +298,13 @@ export function PairsBatch({
   /** Analyzes the pairs that aren't yet (new ones, failed ones), keeping the
    * rest and any edit made to them; or all of them again (`all`). */
   async function handleAnalyze(all: boolean) {
+    await runPlan(Array.from({ length: pairCount }, (_, i) => i).filter((i) => all || !isDone(analyses[pairKey(i)])));
+  }
+
+  /** Analyzes these pairs (by row), each one's result and edits replaced. */
+  async function runPlan(rows: number[]) {
     setAnalyzing(true);
-    const plan = Array.from({ length: pairCount }, (_, i) => ({
-      key: pairKey(i),
-      reference: referenceFiles[i],
-      candidate: candidateFiles[i],
-    })).filter(({ key }) => all || !isDone(analyses[key]));
+    const plan = rows.map((i) => ({ key: pairKey(i), reference: referenceFiles[i], candidate: candidateFiles[i] }));
     const [referenceTrack, candidateTrack] = [referenceTrackIndex, candidateTrackIndex];
     setAnalyses((current) => {
       const next = { ...current };
@@ -550,7 +551,12 @@ export function PairsBatch({
                     />
                     <td className={`batch-status batch-status-${a?.status ?? "pending"}`}>
                       {i < pairCount ? (
-                        <AnalysisStatus run={a} busy={busy} onEdit={() => setEditingPairIndex(i)} />
+                        <AnalysisStatus
+                          run={a}
+                          busy={busy}
+                          onEdit={() => setEditingPairIndex(i)}
+                          onReanalyze={() => runPlan([i])}
+                        />
                       ) : (
                         m.pairs.unpaired
                       )}
