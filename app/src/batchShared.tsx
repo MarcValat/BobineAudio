@@ -245,6 +245,24 @@ export function AnalysisStatus({
   );
 }
 
+/** Where a row stands, for the colored bar at its left (as the single-file
+ * view's analyzed tracks, and Bobine Subs' rows): something running, waiting,
+ * failed or flagged, exported, every analysis done, or nothing done yet. A
+ * row holds one analysis (a pair) or several (a file's corrected tracks). */
+export function rowState(
+  analyses: (AnalysisRun | undefined)[],
+  exportStatus: RunStatus | undefined,
+  problem: boolean,
+): string {
+  const statuses = analyses.map((a) => a?.status);
+  if (statuses.includes("running") || exportStatus === "running") return "running";
+  if (statuses.includes("pending")) return "queued";
+  if (problem || statuses.includes("error") || exportStatus === "error") return "error";
+  if (exportStatus === "done") return "exported";
+  if (statuses.length > 0 && statuses.every((s) => s === "done")) return "analyzed";
+  return "idle";
+}
+
 /** One file's export, as both batch modes keep it. */
 export interface ExportFields {
   exportStatus: RunStatus;

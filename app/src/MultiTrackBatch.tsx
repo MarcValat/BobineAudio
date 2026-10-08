@@ -10,6 +10,7 @@ import {
   FileCell,
   IDLE_EXPORT,
   RevealButton,
+  rowState,
   useExportQueue,
   dropBlockedReason,
   writtenFile,
@@ -532,7 +533,14 @@ export function MultiTrackBatch({
                 const res = resolutions[path];
                 const run = runOf(path);
                 return (
-                  <tr key={path} className={res?.issues.length || probed?.error ? "batch-row-flagged" : undefined}>
+                  <tr
+                    key={path}
+                    className={`batch-row-state-${rowState(
+                      res?.reference ? res.targets.map((t) => run?.targets[t.index]) : [],
+                      run?.exportStatus,
+                      !!(res?.issues.length || probed?.error),
+                    )}${res?.issues.length || probed?.error ? " batch-row-flagged" : ""}`}
+                  >
                     <td className="batch-index">{i + 1}</td>
                     <FileCell files={files} index={i} disabled={busy} onChange={(update) => setFiles(update)} />
                     <td className="batch-tracks-cell">

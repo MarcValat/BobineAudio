@@ -10,6 +10,7 @@ import {
   FileCell,
   IDLE_EXPORT,
   RevealButton,
+  rowState,
   useExportQueue,
   dropBlockedReason,
   writtenFile,
@@ -535,7 +536,12 @@ export function PairsBatch({
               {Array.from({ length: rowCount }, (_, i) => {
                 const a = analysisOf(i);
                 return (
-                  <tr key={i} className={i >= pairCount ? "batch-row-unpaired" : undefined}>
+                  <tr
+                    key={i}
+                    className={`batch-row-state-${rowState(i < pairCount ? [a] : [], a?.exportStatus, i >= pairCount)}${
+                      i >= pairCount ? " batch-row-unpaired" : ""
+                    }`}
+                  >
                     <td className="batch-index">{i + 1}</td>
                     <FileCell
                       files={referenceFiles}
