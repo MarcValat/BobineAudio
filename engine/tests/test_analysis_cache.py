@@ -218,3 +218,42 @@ def test_prefetch_decodes_a_file_once_for_all_its_tracks(tmp_path: Path, monkeyp
     assert single_calls == []
     for spec, env in zip(specs, expected):
         assert np.array_equal(get_envelope(spec)[0], env)
+
+
+def _point_cache_roots_at(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SYNCAUDIO_CACHE_DIR")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+
+
+def test_cache_dir_follows_the_bobine_audio_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _point_cache_roots_at(tmp_path, monkeypatch)
+    for platform, expected in (("win32", tmp_path / "Bobine Audio" / "cache"), ("linux", tmp_path / "bobine-audio")):
+        monkeypatch.setattr(analysis_cache.sys, "platform", platform)
+        assert analysis_cache.cache_dir() == expected / "envelopes"
+
+
+@pytest.mark.parametrize("platform", ["win32", "linux"])
+def test_remove_legacy_cache_drops_the_syncaudio_one(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, platform: str) -> None:
+    _point_cache_roots_at(tmp_path, monkeypatch)
+    monkeypatch.setattr(analysis_cache.sys, "platform", platform)
+    legacy = tmp_path / "SyncAudio" / "cache" if platform == "win32" else tmp_path / "syncaudio"
+    (legacy / "envelopes").mkdir(parents=True)
+    (legacy / "envelopes" / "old.npy").write_bytes(b"x")
+    current = analysis_cache.cache_dir()
+    current.mkdir(parents=True)
+
+    analysis_cache.remove_legacy_cache()
+
+    assert not legacy.exists()
+    assert not (tmp_path / "SyncAudio").exists()
+    assert current.is_dir()
+
+
+def test_remove_legacy_cache_leaves_an_explicit_cache_dir_alone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    legacy = tmp_path / "SyncAudio" / "cache" if analysis_cache.sys.platform == "win32" else tmp_path / "syncaudio"
+    legacy.mkdir(parents=True)
+    analysis_cache.remove_legacy_cache()  # SYNCAUDIO_CACHE_DIR="" from conftest
+    assert legacy.is_dir()

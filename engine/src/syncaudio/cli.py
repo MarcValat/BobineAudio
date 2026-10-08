@@ -37,7 +37,7 @@ def _log(message: str, quiet: bool) -> None:
 
 @click.group()
 def cli() -> None:
-    """SyncAudio — aligne des pistes audio multilingues sur leur musique/bruitages communs."""
+    """Bobine Audio — aligne des pistes audio multilingues sur leur musique/bruitages communs."""
 
 
 @cli.command()
@@ -493,7 +493,7 @@ def serve(host: str, port: int, parent_pid: int | None) -> None:
     if sys.stderr is None:
         sys.stderr = open(os.devnull, "w", encoding="utf-8")
 
-    click.echo(f"SyncAudio sidecar sur http://{host}:{port} (docs : /docs)", err=True)
+    click.echo(f"Bobine Audio sidecar sur http://{host}:{port} (docs : /docs)", err=True)
     # The app object, not the "module:attr" string form -- the string form
     # has uvicorn re-import the module by name at runtime, which relies on
     # a real importable package on disk and silently fails inside a
