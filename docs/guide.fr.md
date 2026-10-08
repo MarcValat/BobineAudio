@@ -2,7 +2,7 @@
 
 # Guide d'utilisation
 
-Ce guide explique comment utiliser SyncAudio, de l'ouverture d'un fichier à l'export, en fichier unique comme en mode batch. Pour l'installation, voir le [README](../README.fr.md#installation).
+Ce guide explique comment utiliser Bobine Audio, de l'ouverture d'un fichier à l'export, en fichier unique comme en mode batch. Pour l'installation, voir le [README](../README.fr.md#installation).
 
 ## Sommaire
 
@@ -19,7 +19,7 @@ Ce guide explique comment utiliser SyncAudio, de l'ouverture d'un fichier à l'e
 ## Les mots à connaître
 
 - **Référence** : la piste audio calée sur la vidéo, en général la version originale. Elle n'est jamais modifiée : c'est elle qui sert de repère.
-- **Piste à corriger** : la piste décalée, en général un doublage. C'est elle que SyncAudio recale sur la référence.
+- **Piste à corriger** : la piste décalée, en général un doublage. C'est elle que Bobine Audio recale sur la référence.
 - **Décalage** : l'écart entre les deux pistes à un instant donné, en millisecondes. **+** veut dire que la piste à corriger est **en retard** sur la référence, **−** qu'elle est **en avance**.
 - **Segment** : un morceau du fichier sur lequel le décalage suit une même règle. Un fichier bien calé du début à la fin n'a qu'un segment ; un fichier monté différemment en a plusieurs.
 - **Constant, dérive, saut** :
@@ -37,7 +37,7 @@ C'est le mode **Fichier unique**, pour un fichier qui contient déjà la référ
    - colonne **Réf.** : la piste de référence (par défaut, la première) ;
    - colonne **À corriger** : les pistes à recaler (par défaut, toutes les autres).
 
-   Pendant ce temps, « Préparation des pistes… » indique que SyncAudio lit déjà l'audio en arrière-plan, pour que l'analyse démarre plus vite.
+   Pendant ce temps, « Préparation des pistes… » indique que Bobine Audio lit déjà l'audio en arrière-plan, pour que l'analyse démarre plus vite.
 3. **Clique sur « Analyser »**. Chaque piste cochée apparaît dans « Pistes analysées », avec un résumé : « 3 segments · 2 sauts ». Clique sur une piste pour afficher son résultat à droite.
 4. **Vérifie le résultat** (voir [Lire le résultat](#lire-le-résultat)), et corrige-le à la main si besoin (« Modifier les segments »).
 5. **Exporte** avec « Exporter le fichier synchronisé ».
@@ -152,7 +152,7 @@ Dans les deux modes :
   <img src="screenshots/batch-fr-light.png" alt="Le mode batch fichiers multipistes, avec trois épisodes analysés">
 </picture>
 
-Les pistes sont choisies **par langue**, pour tous les fichiers à la fois : la langue de **référence** en haut, puis les langues **à corriger**. C'est plus fiable qu'un numéro de piste, qui peut changer d'un épisode à l'autre. Au premier fichier ajouté, SyncAudio propose sa première piste comme référence et toutes les autres langues à corriger.
+Les pistes sont choisies **par langue**, pour tous les fichiers à la fois : la langue de **référence** en haut, puis les langues **à corriger**. C'est plus fiable qu'un numéro de piste, qui peut changer d'un épisode à l'autre. Au premier fichier ajouté, Bobine Audio propose sa première piste comme référence et toutes les autres langues à corriger.
 
 - Un fichier où une langue manque ou apparaît plusieurs fois est signalé **⚠** : « Choisir » permet de fixer ses pistes à la main (et ses sous-titres), « Par langue » revient au choix automatique.
 - La colonne « Pistes » résume ce qui sera fait : `@0 jpn → @1 fre + ST @1` veut dire « piste 1 recalée sur la piste 0, avec la piste de sous-titres 1 ».
@@ -176,7 +176,7 @@ Le bouton **⚙** en haut à droite ouvre les Options :
 - **Langue** : Système (français si le système est en français, anglais sinon), Français ou English.
 - **Sous-titres par défaut** : quels sous-titres sont recalés avec une piste corrigée, sauf choix contraire. Ce sont ceux cochés d'office en fichier unique, et le réglage de départ du mode batch.
 - **Mises à jour** : vérifier ou non au démarrage si une nouvelle version existe.
-- **Cache d'analyse** : SyncAudio garde les analyses déjà faites, pour qu'un fichier rouvert s'affiche tout de suite. « Vider » libère la place ; les fichiers seront simplement réanalysés.
+- **Cache d'analyse** : Bobine Audio garde les analyses déjà faites, pour qu'un fichier rouvert s'affiche tout de suite. « Vider » libère la place ; les fichiers seront simplement réanalysés.
 
 Quand une mise à jour est disponible, une icône apparaît à côté du ⚙ : « Installer et redémarrer » la télécharge, l'installe et relance l'application. Une analyse ou un export en cours est alors interrompu.
 
@@ -198,7 +198,7 @@ Les mesures ne s'accordent pas entre elles sur ce passage, ou sont trop peu nomb
 Le décalage n'est pas bon à cet endroit. Écoute la référence avec le résultat final, repère où l'écho commence, et ajuste les segments dans l'éditeur.
 
 **Où sont gardées les analyses ? Combien de place prennent-elles ?**
-Sous Windows dans `%LOCALAPPDATA%\SyncAudio\cache`, sous Linux dans `~/.cache/syncaudio` : 512 Mo au plus, les plus anciennes étant supprimées au-delà. Les Options affichent leur taille et permettent de les vider. Sous Windows, la désinstallation les supprime ; sous Linux, vide-les d'abord depuis les Options.
+Sous Windows dans `%LOCALAPPDATA%\Bobine Audio\cache`, sous Linux dans `~/.cache/bobine-audio` : 512 Mo au plus, les plus anciennes étant supprimées au-delà. Les Options affichent leur taille et permettent de les vider. Sous Windows, la désinstallation les supprime ; sous Linux, vide-les d'abord depuis les Options.
 
 **Mon fichier d'origine est-il modifié ?**
 Non, jamais. L'export écrit toujours un nouveau fichier.

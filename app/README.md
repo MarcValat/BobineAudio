@@ -1,6 +1,6 @@
-# SyncAudio (app)
+# Bobine Audio (app)
 
-GUI standalone de [SyncAudio](../README.md) (Tauri v2 + React/TypeScript) : ouvrir un fichier (ou une série entière en mode batch), choisir la piste de référence et les pistes à corriger, lancer l'analyse (décalage constant, dérive ou sauts), vérifier le résultat par un aperçu visuel (formes d'onde, style diff) et sonore avant d'exporter, éditer manuellement les segments détectés si besoin — y compris ignorer en un clic ceux dont le score de confiance est trop faible pour être fiable.
+GUI standalone de [Bobine Audio](../README.md) (Tauri v2 + React/TypeScript) : ouvrir un fichier (ou une série entière en mode batch), choisir la piste de référence et les pistes à corriger, lancer l'analyse (décalage constant, dérive ou sauts), vérifier le résultat par un aperçu visuel (formes d'onde, style diff) et sonore avant d'exporter, éditer manuellement les segments détectés si besoin — y compris ignorer en un clic ceux dont le score de confiance est trop faible pour être fiable.
 
 Ne contient aucune logique de détection/correction elle-même : elle pilote le moteur Python (`../engine/`), lancé au démarrage comme process séparé (« sidecar ») exposant une API HTTP + WebSocket locale (`127.0.0.1:8756`). Voir [`engine/README.md`](../engine/README.md) pour le détail du moteur et de son API.
 
@@ -61,7 +61,7 @@ TAURI_SIGNING_PRIVATE_KEY_PASSWORD=<mot de passe choisi à la génération, vide
 
 ## Publier une release
 
-Le dépôt canonique est sur GitLab, mais les releases se font sur GitHub (`https://github.com/MarcValat/SyncAudio`), via le mirroring GitLab -> GitHub existant. Pousser un tag `vX.Y.Z` (qui doit être mirroré vers GitHub — vérifier que le mirroring inclut bien les tags, pas juste les branches, dans les réglages GitLab) déclenche `.github/workflows/release.yml` : tests du moteur, build du sidecar, puis `tauri-apps/tauri-action` compile et publie les installateurs + `latest.json` en release GitHub (créée en brouillon — à valider/publier manuellement une fois vérifiée).
+Le dépôt canonique est sur GitLab, mais les releases se font sur GitHub (`https://github.com/MarcValat/BobineAudio`), via le mirroring GitLab -> GitHub existant. Pousser un tag `vX.Y.Z` (qui doit être mirroré vers GitHub — vérifier que le mirroring inclut bien les tags, pas juste les branches, dans les réglages GitLab) déclenche `.github/workflows/release.yml` : tests du moteur, build du sidecar, puis `tauri-apps/tauri-action` compile et publie les installateurs + `latest.json` en release GitHub (créée en brouillon — à valider/publier manuellement une fois vérifiée).
 
 Secrets requis côté GitHub (Settings > Secrets and variables > Actions) : `TAURI_SIGNING_PRIVATE_KEY` et `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (mêmes valeurs que ci-dessus). `GITHUB_TOKEN` est fourni automatiquement.
 
@@ -73,6 +73,6 @@ Secrets requis côté GitHub (Settings > Secrets and variables > Actions) : `TAU
 - `src/TrackPreview.tsx` / `Waveform.tsx` / `WaveformNavigator.tsx` — aperçu avant export : formes d'onde zoomables (référence / candidate / résultat, surlignage façon diff), barre de navigation sur la piste entière, lecture audio synchronisée (Web Audio API, pour un démarrage simultané précis des pistes comparées). Le « Résultat final » est fidèle au fichier exporté : l'extrait écouté est produit par le moteur avec le même filtre que le rendu (`POST /corrected-clip`), et sa forme d'onde suit la même logique segment par segment (`src/resultPlan.ts`) — sauts, contenu en trop sauté, blancs là où la piste doublée manque de contenu.
 - `src/UpdateButton.tsx` — vérification de mise à jour au démarrage, et son installation depuis l'icône à côté des Options.
 - `src/api.ts` — client du sidecar HTTP/WebSocket.
-- `src-tauri/` — coquille Rust : démarrage/arrêt du sidecar (`src/lib.rs`), config de la fenêtre/du bundle/de l'updater (`tauri.conf.json`), icônes (`icons/`, `icon-source.svg` éditable), hooks de l'installateur NSIS (`windows/installer-hooks.nsh`).
+- `src-tauri/` — coquille Rust : démarrage/arrêt du sidecar (`src/lib.rs`), config de la fenêtre/du bundle/de l'updater (`tauri.conf.json`), icônes (`icons/` : `icon-source.svg` éditable, et `icon-source-small.svg` pour les tailles de 16 à 48 px du `.ico`), hooks de l'installateur NSIS (`windows/installer-hooks.nsh`).
 
 Le moteur ne doit jamais survivre à l'UI (sinon son `.exe` reste verrouillé et la mise à jour suivante échoue), quelle que soit la façon dont l'UI se termine — fermeture, crash, kill forcé, ou updater. Trois garde-fous indépendants : un Job Object Windows "kill on close" qui contient le moteur (`src/lib.rs`), le moteur qui surveille lui-même le PID de l'UI et s'arrête s'il disparaît (`engine/src/syncaudio/parent_watchdog.py`), et l'installateur qui tue tout moteur restant avant de copier les fichiers (`windows/installer-hooks.nsh`, ce qui couvre aussi une mise à jour depuis une ancienne version).

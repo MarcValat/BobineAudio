@@ -74,7 +74,7 @@ jobs:
         # can be missing from it yet (v1.4.0's builds then quietly published
         # nothing).
         run: |
-          id=$(gh api -X POST "repos/$GH_REPO/releases" -f tag_name="$TAG" -f name="SyncAudio $TAG" -F draft=true --jq .id)
+          id=$(gh api -X POST "repos/$GH_REPO/releases" -f tag_name="$TAG" -f name="Bobine Audio $TAG" -F draft=true --jq .id)
           test -n "$id"
           echo "release_id=$id" >> "$GITHUB_OUTPUT"
 

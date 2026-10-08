@@ -1,17 +1,17 @@
 <p align="center">English | <a href="README.fr.md">Français</a></p>
 
 <p align="center">
-  <img src="app/src-tauri/icons/128x128@2x.png" width="112" alt="SyncAudio icon">
+  <img src="app/src-tauri/icons/128x128@2x.png" width="112" alt="Bobine Audio icon">
 </p>
 
-<h1 align="center">SyncAudio</h1>
+<h1 align="center">Bobine Audio</h1>
 
 <p align="center">
   <b>Put a dub back in sync with its video</b>, from the music and sound effects both versions share rather than from the dialogue.
 </p>
 
 <p align="center">
-  <a href="https://github.com/MarcValat/SyncAudio/releases/latest"><img src="https://img.shields.io/github/v/release/MarcValat/SyncAudio?label=version" alt="Latest version"></a>
+  <a href="https://github.com/MarcValat/BobineAudio/releases/latest"><img src="https://img.shields.io/github/v/release/MarcValat/BobineAudio?label=version" alt="Latest version"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011%20(x64)-0078D6?logo=windows" alt="Windows 10 | 11 (x64)">
   <img src="https://img.shields.io/badge/Linux-Debian%20%7C%20Ubuntu%20(.deb)-E95420?logo=linux&logoColor=white" alt="Linux: Debian | Ubuntu (.deb)">
   <img src="https://img.shields.io/badge/UI-English%20%7C%20Fran%C3%A7ais-555" alt="English | Français">
@@ -19,17 +19,17 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/MarcValat/SyncAudio/releases/latest"><img src="https://img.shields.io/badge/Download-Windows%20%7C%20Linux-2ea44f?style=for-the-badge" alt="Download for Windows or Linux"></a>
+  <a href="https://github.com/MarcValat/BobineAudio/releases/latest"><img src="https://img.shields.io/badge/Download-Windows%20%7C%20Linux-2ea44f?style=for-the-badge" alt="Download for Windows or Linux"></a>
 </p>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/main-en-dark.png">
-  <img src="docs/screenshots/main-en-light.png" alt="SyncAudio: offset over time, then the reference, the track to correct and the final result, as waveforms">
+  <img src="docs/screenshots/main-en-light.png" alt="Bobine Audio: offset over time, then the reference, the track to correct and the final result, as waveforms">
 </picture>
 
 ## Why
 
-A dub rarely lines up with the video it's added to: a few frames of delay, an offset that slowly **drifts** because of a different frame rate, or **jumps** where the dubbed version was cut differently (a scene longer or shorter, an ad break). Syncing on the dialogue doesn't work, since the dialogue is exactly what differs between two languages. SyncAudio compares what they have in common instead: music, sound effects, ambience.
+A dub rarely lines up with the video it's added to: a few frames of delay, an offset that slowly **drifts** because of a different frame rate, or **jumps** where the dubbed version was cut differently (a scene longer or shorter, an ad break). Syncing on the dialogue doesn't work, since the dialogue is exactly what differs between two languages. Bobine Audio compares what they have in common instead: music, sound effects, ambience.
 
 ## Features
 
@@ -45,13 +45,13 @@ A dub rarely lines up with the video it's added to: a few frames of delay, an of
 
 **Windows 10 and 11:**
 
-1. Download `SyncAudio_x.y.z_x64-setup.exe` from the [latest release](https://github.com/MarcValat/SyncAudio/releases/latest).
+1. Download `Bobine.Audio_x.y.z_x64-setup.exe` from the [latest release](https://github.com/MarcValat/BobineAudio/releases/latest).
 2. Run it. The installer isn't signed with a certificate, so Windows SmartScreen may say *"Windows protected your PC"*: click **More info**, then **Run anyway**.
 
 **Linux** (Ubuntu 22.04 or newer, Debian and their derivatives: Linux Mint, Pop!_OS…):
 
-1. Download `SyncAudio_x.y.z_amd64.deb` from the [latest release](https://github.com/MarcValat/SyncAudio/releases/latest).
-2. Install it from its folder with `sudo apt install ./SyncAudio_x.y.z_amd64.deb`, then start it from the applications menu or with `syncaudio`.
+1. Download `Bobine.Audio_x.y.z_amd64.deb` from the [latest release](https://github.com/MarcValat/BobineAudio/releases/latest).
+2. Install it from its folder with `sudo apt install ./Bobine.Audio_x.y.z_amd64.deb`, then start it from the applications menu or with `syncaudio`.
 
 Nothing else to install: the analysis engine and ffmpeg come with the app. When a new version comes out, the app offers it and installs it in one click (on Linux, after asking for your password).
 
@@ -82,6 +82,6 @@ Both are documented in French.
 
 ## License
 
-Copyright © 2026 Marc Valat. SyncAudio is free software, released under the [GNU General Public License v3](LICENSE): you may use, study, share and modify it, and any version you distribute, modified or not, must stay under the same license with its source code available.
+Copyright © 2026 Marc Valat. Bobine Audio is free software, released under the [GNU General Public License v3](LICENSE): you may use, study, share and modify it, and any version you distribute, modified or not, must stay under the same license with its source code available.
 
-The installer also ships [FFmpeg](https://ffmpeg.org/) (a [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) build, through [imageio-ffmpeg](https://github.com/imageio/imageio-ffmpeg)), which SyncAudio runs as a separate program. That build is also under the GPL v3; its source code is available from FFmpeg and gyan.dev.
+The installer also ships [FFmpeg](https://ffmpeg.org/) (a [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) build, through [imageio-ffmpeg](https://github.com/imageio/imageio-ffmpeg)), which Bobine Audio runs as a separate program. That build is also under the GPL v3; its source code is available from FFmpeg and gyan.dev.

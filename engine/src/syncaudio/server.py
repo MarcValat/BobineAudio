@@ -62,10 +62,11 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # up: /health answers (and the app opens) right away, and they're ready
     # well before anyone has picked a file to analyze.
     threading.Thread(target=dsp.warm_up, name="syncaudio-warm-up", daemon=True).start()
+    threading.Thread(target=analysis_cache.remove_legacy_cache, name="syncaudio-legacy-cache", daemon=True).start()
     yield
 
 
-app = FastAPI(title="SyncAudio", version="0.1.0", lifespan=_lifespan)
+app = FastAPI(title="Bobine Audio", version="0.1.0", lifespan=_lifespan)
 
 # The sidecar only ever binds to 127.0.0.1 (see `syncaudio serve`), so it's
 # never reachable from outside the machine -- wide-open CORS here just lets

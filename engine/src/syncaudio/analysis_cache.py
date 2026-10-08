@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shutil
 import sys
 import tempfile
 import threading
@@ -66,16 +67,36 @@ def _key(spec: AudioTrackSpec, sample_rate: int, start: float, duration: float |
     return (*identity, _stream_index(spec), sample_rate, start, duration)
 
 
+def _app_cache_root(windows_name: str, posix_name: str) -> Path:
+    if sys.platform == "win32":
+        return Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / windows_name / "cache"
+    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / posix_name
+
+
 def cache_dir() -> Path | None:
     """Where envelopes persist across sessions; ``SYNCAUDIO_CACHE_DIR=""`` disables it."""
     override = os.environ.get("SYNCAUDIO_CACHE_DIR")
     if override is not None:
         return Path(override) if override else None
+    return _app_cache_root("Bobine Audio", "bobine-audio") / "envelopes"
+
+
+def remove_legacy_cache() -> None:
+    """Drop the cache kept while the app was named SyncAudio (up to 1.4.x).
+
+    On Windows the installer's run of the old uninstaller already removes
+    it; on Linux nothing else would, leaving up to 512MB behind for good.
+    Best effort, and never with an explicit ``SYNCAUDIO_CACHE_DIR``.
+    """
+    if os.environ.get("SYNCAUDIO_CACHE_DIR") is not None:
+        return
+    legacy = _app_cache_root("SyncAudio", "syncaudio")
+    shutil.rmtree(legacy, ignore_errors=True)
     if sys.platform == "win32":
-        base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "SyncAudio" / "cache"
-    else:
-        base = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "syncaudio"
-    return base / "envelopes"
+        try:
+            legacy.parent.rmdir()  # the old install folder, only if empty
+        except OSError:
+            pass
 
 
 def _disk_path(key: _CacheKey) -> Path | None:

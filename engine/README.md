@@ -1,4 +1,4 @@
-# SyncAudio
+# Bobine Audio
 
 Calcule le décalage temporel entre des pistes audio de langues différentes (doublages) d'un même contenu, en se basant sur la musique et les bruitages (M&E) qu'elles ont en commun plutôt que sur les dialogues, qui diffèrent d'une langue à l'autre.
 
@@ -213,7 +213,7 @@ uv run python benchmarks/regress.py check    # compare, échoue au moindre écar
 
 Les enveloppes calculées sont gardées en mémoire et **sur disque** : rouvrir un fichier déjà analysé, même après redémarrage de l'app, saute entièrement l'analyse (~15 ms au lieu de ~1,5 s pour deux pistes de 6 min). Une entrée est liée à l'identité du fichier (chemin, taille, date de modification) : un fichier modifié ou remplacé est toujours réanalysé.
 
-- Emplacement : `%LOCALAPPDATA%\SyncAudio\cache\envelopes` sous Windows, `~/.cache/syncaudio/envelopes` ailleurs (~0,5 Mo par heure d'audio). Le dossier peut être supprimé à tout moment.
+- Emplacement : `%LOCALAPPDATA%\Bobine Audio\cache\envelopes` sous Windows, `~/.cache/bobine-audio/envelopes` ailleurs (~0,5 Mo par heure d'audio). Le dossier peut être supprimé à tout moment.
 - Taille bornée à 512 Mo, les entrées les moins récemment utilisées sont supprimées en premier.
 - `SYNCAUDIO_CACHE_DIR` change l'emplacement ; vide (`SYNCAUDIO_CACHE_DIR=`), il désactive le cache disque (c'est le cas dans les tests et `benchmarks/regress.py`).
 - `ENVELOPE_VERSION` (`features.py`) fait partie de la clé : à incrémenter si un changement modifie les valeurs d'enveloppe.
