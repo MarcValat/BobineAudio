@@ -802,21 +802,8 @@ button:focus-visible {
 }
 
 /* Segments / Écoute, when the panel is too low for both at once. */
-.view-tabs {
+.view-switch {
   flex: 0 0 auto;
-  display: flex;
-  gap: 0.3em;
-}
-
-.view-tabs button {
-  padding: 0.3em 0.9em;
-  font-size: 0.85em;
-}
-
-.view-tabs button.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-fg);
 }
 
 /* The chart on top, the waveforms taking every pixel left. */

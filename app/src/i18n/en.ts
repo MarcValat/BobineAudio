@@ -23,6 +23,7 @@ export const en: Messages = {
     export: "Export",
     segments: "Segments",
     listen: "Listen",
+    view: "View",
     log: (n) => `Log (${n})`,
     labelled: (label) => `${label}:`,
     connectionLost: "Connection lost before the job finished (did the engine crash?).",
