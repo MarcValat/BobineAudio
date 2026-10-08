@@ -27,11 +27,12 @@ function rememberFolder(path: string): void {
 }
 
 /** The system's open dialog for media files, starting in the folder the
- * last pick came from (single file and batch mode alike). */
-export async function pickMediaFiles(multiple: false): Promise<string | null>;
-export async function pickMediaFiles(multiple: true): Promise<string[] | null>;
-export async function pickMediaFiles(multiple: boolean): Promise<string | string[] | null> {
-  const selected = await open({ multiple, filters: mediaFilters(), defaultPath: lastFolder() });
+ * last pick came from (single file and batch mode alike); `title` says
+ * what's being picked when it isn't obvious (a pair's side). */
+export async function pickMediaFiles(multiple: false, title?: string): Promise<string | null>;
+export async function pickMediaFiles(multiple: true, title?: string): Promise<string[] | null>;
+export async function pickMediaFiles(multiple: boolean, title?: string): Promise<string | string[] | null> {
+  const selected = await open({ title, multiple, filters: mediaFilters(), defaultPath: lastFolder() });
   if (!selected) return null;
   const files = Array.isArray(selected) ? selected : [selected];
   if (files.length > 0) rememberFolder(files[0]);

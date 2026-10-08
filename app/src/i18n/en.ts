@@ -269,6 +269,8 @@ export const en: Messages = {
       "One row = one pair: the reference (track never changed, e.g. the original version) and the file whose track is resynchronized and brought in (e.g. a dub). Files are paired in order: ↑ ↓ to fix a column's order.",
     addReferenceHint: "Add reference files (track never changed, e.g. the original version), one per episode",
     addCandidateHint: "Add files whose track needs resynchronizing (e.g. a dub), one per episode",
+    pickReferences: "Reference files",
+    pickCandidates: "To correct: videos or audio files",
     empty: "On the window's left, the reference files; on its right, the ones to correct, one per episode: they're paired in order.",
     unpaired: "⚠ No pair",
     progressPairs: (n) => `${n} pair${n === 1 ? "" : "s"}`,
