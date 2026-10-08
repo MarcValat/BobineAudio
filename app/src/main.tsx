@@ -4,6 +4,9 @@ import App from "./App";
 import { LanguageProvider } from "./i18n";
 import { applyTheme, loadTheme } from "./theme";
 import { engineReady } from "./engine";
+// Inter, bundled: the same text on Windows and Linux, no network needed.
+import "@fontsource-variable/inter";
+import "@fontsource-variable/inter/wght-italic.css";
 
 // Before the first render, so a forced theme never flashes the other one.
 applyTheme(loadTheme());

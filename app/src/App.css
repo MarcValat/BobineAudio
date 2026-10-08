@@ -30,13 +30,10 @@
   --scrollbar-thumb: light-dark(rgba(15, 15, 15, 0.22), rgba(255, 255, 255, 0.2));
   --scrollbar-thumb-hover: light-dark(rgba(15, 15, 15, 0.4), rgba(255, 255, 255, 0.38));
 
-  /* Native system-font stacks, not a webfont: this is a desktop app (no
-     network dependency to resolve correctly), and "Inter, Avenir, ..."
-     never actually resolved to any of those on Windows (none installed)
-     -- it silently fell through to plain Arial. This stack instead
-     resolves to each OS's own clean, modern UI font (Segoe UI on Windows,
-     San Francisco on macOS, Roboto/the desktop's default on Linux). */
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  /* Inter (bundled, see main.tsx) for the whole Bobine suite: a system
+     stack read as Segoe UI on Windows but as whatever the desktop picks on
+     Linux. The rest is only a fallback. */
+  --font-sans: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   --font-mono: ui-monospace, "Cascadia Code", "Segoe UI Mono", Consolas, "SF Mono", Menlo, monospace;
 
   font-family: var(--font-sans);
@@ -879,6 +876,12 @@ button:focus-visible {
    window; a header may wrap at a space ("TO CORRECT"), never inside a word. */
 .field-tracks td {
   white-space: nowrap;
+}
+
+/* .panel's overflow-wrap: anywhere (for paths) would split a header that
+   doesn't fit at a letter ("PIST|E"), with Inter wider than Segoe UI. */
+.field-tracks th {
+  overflow-wrap: normal;
 }
 
 .field-tracks th {
