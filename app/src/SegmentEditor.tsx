@@ -10,6 +10,7 @@ import {
   offsetTicks,
   segmentOffsetLabel,
 } from "./SegmentChart";
+import { ConfidenceGauge } from "./ConfidenceGauge";
 import { InfoTip } from "./InfoTip";
 import { PillSwitch } from "./PillSwitch";
 import { type TimeView, WHEEL_ZOOM_IN_FACTOR, WHEEL_ZOOM_OUT_FACTOR, useWheel, zoomView } from "./timeView";
@@ -698,12 +699,8 @@ export function SegmentEditor({
                           onBlur={() => handleCellBlur(`offsetEnd-${i}`)}
                         />
                       </td>
-                      <td
-                        className={seg.confidence < LOW_CONFIDENCE_THRESHOLD ? "editor-confidence-cell low" : "editor-confidence-cell"}
-                        title={t.editor.confidenceHint}
-                      >
-                        {seg.confidence < LOW_CONFIDENCE_THRESHOLD ? "⚠ " : ""}
-                        {Math.round(seg.confidence * 100)}%
+                      <td className="editor-confidence-cell" title={t.editor.confidenceHint}>
+                        <ConfidenceGauge value={seg.confidence} />
                       </td>
                       <td>
                         <button

@@ -191,11 +191,13 @@
   border: 1px solid var(--border);
 }
 
+/* Headers may wrap at a space ("DÉCAL. / DÉBUT (ms)"): kept on one line,
+   with the confidence gauge they made the table wider than a 1280px
+   editor and cut the number fields. */
 .editor-table th {
   position: sticky;
   top: 0;
   z-index: 1;
-  white-space: nowrap;
   font-size: 0.75em;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -220,13 +222,12 @@
 }
 
 .editor-confidence-cell {
-  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.editor-confidence-cell.low {
-  color: var(--danger);
-  font-weight: 600;
+/* A shorter bar than elsewhere: this table's number fields need the room. */
+.editor-confidence-cell .confidence-bar {
+  width: 2.5em;
 }
 
 .editor-row-low-confidence {

@@ -5,6 +5,7 @@ export const en: Messages = {
     close: "Close",
     cancel: "Cancel",
     retry: "Retry",
+    percent: (n) => `${n}%`,
     help: "Help",
     error: "Error",
     httpError: (status) => `Error ${status}`,
@@ -305,6 +306,7 @@ export const en: Messages = {
     offsetEnd: "End offset",
     offsetEndHint: "Offset at the segment's end, in milliseconds",
     confidence: "Confidence",
+    lowConfidence: "Unreliable: worth checking",
     confidenceHint:
       "How reliable this detection is (offset, drift or constant). A low score comes from measurements that disagree with each other, or too few of them: worth checking by ear, without necessarily being wrong.",
     actions: "Actions",
