@@ -350,11 +350,6 @@ td.batch-index {
   text-align: center;
 }
 
-/* Fichiers multipistes / Paires de fichiers, first in the settings bar. */
-.batch-mode {
-  margin-right: 0.6em;
-}
-
 /* The languages to correct, one checkbox each. */
 .batch-languages {
   display: flex;
