@@ -603,7 +603,7 @@ export function MultiTrackBatch({
         progress={
           <>
             {m.multi.progressFiles(files.length)}
-            {allTargets.length > 0 && m.multi.progressAnalyzed(analyzedCount, allTargets.length)}
+            {m.multi.progressAnalyzed(analyzedCount, allTargets.length)}
             {exportedCount > 0 && m.multi.progressExported(exportedCount)}
             {flaggedCount > 0 && m.multi.progressFlagged(flaggedCount)}
           </>
