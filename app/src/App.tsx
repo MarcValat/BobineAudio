@@ -577,24 +577,16 @@ function App() {
             {/* Too little height for the chart and readable waveforms at
                 once: one at a time, as tabs. */}
             {compactAnalysis && shownEntry?.result && (
-              <div className="view-tabs" role="tablist">
-                <button
-                  role="tab"
-                  aria-selected={analysisView === "segments"}
-                  className={analysisView === "segments" ? "active" : ""}
-                  onClick={() => setAnalysisView("segments")}
-                >
-                  {t.common.segments}
-                </button>
-                <button
-                  role="tab"
-                  aria-selected={analysisView === "listen"}
-                  className={analysisView === "listen" ? "active" : ""}
-                  onClick={() => setAnalysisView("listen")}
-                >
-                  {t.common.listen}
-                </button>
-              </div>
+              <PillSwitch
+                className="view-switch"
+                label={t.common.view}
+                options={[
+                  ["segments", t.common.segments],
+                  ["listen", t.common.listen],
+                ]}
+                value={analysisView}
+                onChange={setAnalysisView}
+              />
             )}
             {shownTrack && shownEntry?.result && (
               <button className="small-button analysis-edit" onClick={() => setEditingTrack(shownTrack.index)}>

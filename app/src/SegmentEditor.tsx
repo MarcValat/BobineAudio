@@ -11,6 +11,7 @@ import {
   segmentOffsetLabel,
 } from "./SegmentChart";
 import { InfoTip } from "./InfoTip";
+import { PillSwitch } from "./PillSwitch";
 import { type TimeView, WHEEL_ZOOM_IN_FACTOR, WHEEL_ZOOM_OUT_FACTOR, useWheel, zoomView } from "./timeView";
 import { TrackPreview, type TrackPreviewHandle } from "./TrackPreview";
 import { useElementSize } from "./useElementSize";
@@ -481,24 +482,16 @@ export function SegmentEditor({
         >
           {/* Too narrow for the chart and the preview side by side: one at a time. */}
           {narrow && (
-            <div className="view-tabs" role="tablist">
-              <button
-                role="tab"
-                aria-selected={editorView === "segments"}
-                className={editorView === "segments" ? "active" : ""}
-                onClick={() => setEditorView("segments")}
-              >
-                {t.common.segments}
-              </button>
-              <button
-                role="tab"
-                aria-selected={editorView === "listen"}
-                className={editorView === "listen" ? "active" : ""}
-                onClick={() => setEditorView("listen")}
-              >
-                {t.common.listen}
-              </button>
-            </div>
+            <PillSwitch
+              className="view-switch"
+              label={t.common.view}
+              options={[
+                ["segments", t.common.segments],
+                ["listen", t.common.listen],
+              ]}
+              value={editorView}
+              onChange={setEditorView}
+            />
           )}
           {confirmingClose ? (
             <div className="editor-confirm-close" role="alertdialog">

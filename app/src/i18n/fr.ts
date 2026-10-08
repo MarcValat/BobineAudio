@@ -24,6 +24,7 @@ export const fr = {
     export: "Export",
     segments: "Segments",
     listen: "Écoute",
+    view: "Affichage",
     log: (n: number) => `Journal (${n})`,
     labelled: (label: string) => `${label} :`,
     connectionLost: "Connexion interrompue avant la fin du traitement (le moteur a-t-il planté ?).",
