@@ -17,6 +17,7 @@ import {
   type ExportFields,
 } from "./batchShared";
 import { InfoTip } from "./InfoTip";
+import { DropZone } from "./DropZone";
 import { pickMediaFiles } from "./mediaDialog";
 import { DropOverlay, useFileDrop } from "./FileDrop";
 import { basename } from "./paths";
@@ -498,8 +499,17 @@ export function MultiTrackBatch({
             <tbody>
               {files.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="placeholder">
-                    {m.multi.empty}
+                  <td colSpan={6} className="batch-empty">
+                    <DropZone
+                      title={m.files.dropZoneMany}
+                      disabled={dropBlocked !== null}
+                      onClick={async () => {
+                        const selected = await pickMediaFiles(true);
+                        if (selected) addPaths(selected);
+                      }}
+                    >
+                      {m.multi.empty}
+                    </DropZone>
                   </td>
                 </tr>
               )}

@@ -87,6 +87,9 @@ export const en: Messages = {
     dropToOpen: "Drop to open the file",
     dropToAdd: "Drop to add to the batch",
     folderHint: "A folder adds its video and audio files, in name order",
+    dropZoneOne: "Drop a video here",
+    dropZoneOneHint: "or click to open a file: its reference track and the ones to correct are all in it.",
+    dropZoneMany: "Drop files or folders here",
   },
 
   tracks: {
@@ -235,7 +238,7 @@ export const en: Messages = {
     file: "File",
     addHint: "Add files that each hold the reference and the tracks to correct",
     tracks: "Tracks",
-    empty: "Add the files to process: each one holds the reference and the track(s) to correct.",
+    empty: "Videos that each hold the reference and the track(s) to correct.",
     readingTracks: "Reading tracks...",
     nothing: "nothing",
     manual: " (manual)",
@@ -266,7 +269,7 @@ export const en: Messages = {
       "One row = one pair: the reference (track never changed, e.g. the original version) and the file whose track is resynchronized and brought in (e.g. a dub). Files are paired in order: ↑ ↓ to fix a column's order.",
     addReferenceHint: "Add reference files (track never changed, e.g. the original version), one per episode",
     addCandidateHint: "Add files whose track needs resynchronizing (e.g. a dub), one per episode",
-    empty: "Add the reference files and the files to correct, one per episode.",
+    empty: "On the window's left, the reference files; on its right, the ones to correct, one per episode: they're paired in order.",
     unpaired: "⚠ No pair",
     progressPairs: (n) => `${n} pair${n === 1 ? "" : "s"}`,
     progressAnalyzed: (done, total) => ` · ${done}/${total} analyzed`,

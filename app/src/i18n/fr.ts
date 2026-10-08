@@ -90,6 +90,9 @@ export const fr = {
     dropToOpen: "Déposer pour ouvrir le fichier",
     dropToAdd: "Déposer pour ajouter au lot",
     folderHint: "Un dossier ajoute ses fichiers vidéo et audio, par ordre de nom",
+    dropZoneOne: "Glisse une vidéo ici",
+    dropZoneOneHint: "ou clique pour ouvrir un fichier : sa piste de référence et celles à corriger y sont toutes.",
+    dropZoneMany: "Glisse des fichiers ou des dossiers ici",
   },
 
   tracks: {
@@ -238,7 +241,7 @@ export const fr = {
     file: "Fichier",
     addHint: "Ajouter des fichiers qui contiennent chacun la référence et les pistes à corriger",
     tracks: "Pistes",
-    empty: "Ajoute les fichiers à traiter : chacun contient la référence et la ou les pistes à corriger.",
+    empty: "Des vidéos qui contiennent chacune la référence et la ou les pistes à corriger.",
     readingTracks: "Lecture des pistes...",
     nothing: "rien",
     manual: " (manuel)",
@@ -270,7 +273,7 @@ export const fr = {
       "Une ligne = une paire : la référence (piste jamais modifiée, ex. VO) et le fichier dont la piste est resynchronisée puis intégrée (ex. VF). Les fichiers sont appariés dans l'ordre : ↑ ↓ pour corriger l'ordre d'une colonne.",
     addReferenceHint: "Ajouter des fichiers de référence (piste jamais modifiée, ex. VO), un par épisode",
     addCandidateHint: "Ajouter des fichiers dont la piste est à resynchroniser (ex. VF), un par épisode",
-    empty: "Ajoute les fichiers de référence et les fichiers à corriger, un par épisode.",
+    empty: "À gauche de la fenêtre, les fichiers de référence ; à droite, ceux à corriger, un par épisode : ils sont appariés dans l'ordre.",
     unpaired: "⚠ Sans paire",
     progressPairs: (n: number) => `${n} paire${n > 1 ? "s" : ""}`,
     progressAnalyzed: (done: number, total: number) => ` · ${done}/${total} analysée${done > 1 ? "s" : ""}`,

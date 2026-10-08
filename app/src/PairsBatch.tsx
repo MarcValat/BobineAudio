@@ -18,6 +18,7 @@ import {
 } from "./batchShared";
 import { InfoTip } from "./InfoTip";
 import { SegmentEditor } from "./SegmentEditor";
+import { DropZone } from "./DropZone";
 import { pickMediaFiles } from "./mediaDialog";
 import { DropOverlay, useFileDrop } from "./FileDrop";
 import { basename } from "./paths";
@@ -521,8 +522,10 @@ export function PairsBatch({
             <tbody>
               {rowCount === 0 && (
                 <tr>
-                  <td colSpan={6} className="placeholder">
-                    {m.pairs.empty}
+                  <td colSpan={6} className="batch-empty">
+                    <DropZone title={m.files.dropZoneMany} disabled={dropBlocked !== null} onClick={addFiles(setReferenceFiles)}>
+                      {m.pairs.empty}
+                    </DropZone>
                   </td>
                 </tr>
               )}
