@@ -199,6 +199,8 @@ export const en: Messages = {
     subtitles: "Subtitles",
     reanalyzeAll: "Reanalyze all",
     reanalyzeHint: "Analyzes everything again, including what already is: changes made with “Edit” are lost.",
+    reanalyzeOne: "Reanalyze",
+    reanalyzeOneHint: "Reanalyze this one alone: its changes made with “Edit” are lost.",
     analyzeAll: "Analyze all",
     analyzeRestHint: (unit) =>
       `Analyzes only the ${unit === "track" ? "tracks" : "pairs"} that aren't yet; the others and their changes are kept.`,
@@ -219,7 +221,6 @@ export const en: Messages = {
     backNextToOriginalsHint: "Write each export next to its original",
     toAnalyze: "To analyze",
     pending: "Waiting",
-    folder: "Folder",
     folderHint: "Open the written file's folder",
     exportAll: "Export all",
   },

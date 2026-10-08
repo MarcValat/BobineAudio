@@ -10,6 +10,7 @@ import {
   FileCell,
   IDLE_EXPORT,
   RevealButton,
+  rowState,
   useExportQueue,
   dropBlockedReason,
   writtenFile,
@@ -298,12 +299,13 @@ export function PairsBatch({
   /** Analyzes the pairs that aren't yet (new ones, failed ones), keeping the
    * rest and any edit made to them; or all of them again (`all`). */
   async function handleAnalyze(all: boolean) {
+    await runPlan(Array.from({ length: pairCount }, (_, i) => i).filter((i) => all || !isDone(analyses[pairKey(i)])));
+  }
+
+  /** Analyzes these pairs (by row), each one's result and edits replaced. */
+  async function runPlan(rows: number[]) {
     setAnalyzing(true);
-    const plan = Array.from({ length: pairCount }, (_, i) => ({
-      key: pairKey(i),
-      reference: referenceFiles[i],
-      candidate: candidateFiles[i],
-    })).filter(({ key }) => all || !isDone(analyses[key]));
+    const plan = rows.map((i) => ({ key: pairKey(i), reference: referenceFiles[i], candidate: candidateFiles[i] }));
     const [referenceTrack, candidateTrack] = [referenceTrackIndex, candidateTrackIndex];
     setAnalyses((current) => {
       const next = { ...current };
@@ -485,7 +487,7 @@ export function PairsBatch({
               <col />
               <col className="batch-col-status" />
               <col className="batch-col-status" />
-              <col className="batch-col-actions" />
+              <col className="batch-col-folder" />
             </colgroup>
             <thead>
               <tr>
@@ -534,7 +536,12 @@ export function PairsBatch({
               {Array.from({ length: rowCount }, (_, i) => {
                 const a = analysisOf(i);
                 return (
-                  <tr key={i} className={i >= pairCount ? "batch-row-unpaired" : undefined}>
+                  <tr
+                    key={i}
+                    className={`batch-row-state-${rowState(i < pairCount ? [a] : [], a?.exportStatus, i >= pairCount)}${
+                      i >= pairCount ? " batch-row-unpaired" : ""
+                    }`}
+                  >
                     <td className="batch-index">{i + 1}</td>
                     <FileCell
                       files={referenceFiles}
@@ -550,7 +557,13 @@ export function PairsBatch({
                     />
                     <td className={`batch-status batch-status-${a?.status ?? "pending"}`}>
                       {i < pairCount ? (
-                        <AnalysisStatus run={a} busy={busy} onEdit={() => setEditingPairIndex(i)} />
+                        <AnalysisStatus
+                          run={a}
+                          busy={busy}
+                          exporting={queue.exporting}
+                          onEdit={() => setEditingPairIndex(i)}
+                          onReanalyze={() => runPlan([i])}
+                        />
                       ) : (
                         m.pairs.unpaired
                       )}

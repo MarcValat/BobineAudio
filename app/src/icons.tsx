@@ -35,6 +35,25 @@ export function FilmDropIcon() {
   );
 }
 
+/** A circular arrow: do it again. */
+export function RedoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+      <path d="M20 4v5h-5" />
+    </svg>
+  );
+}
+
+/** A folder: open where a file was written. */
+export function FolderIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    </svg>
+  );
+}
+
 export function PlusIcon() {
   return (
     <svg viewBox="0 0 12 12" aria-hidden="true">
