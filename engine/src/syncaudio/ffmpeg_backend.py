@@ -157,6 +157,7 @@ def probe_audio_streams(path: str) -> list[AudioStreamInfo]:
     if "Invalid data found" in stderr or "No such file or directory" in stderr:
         raise FFmpegError(tr("Impossible de lire {path!r} :\n{details}", path=path, details=stderr))
 
+    tags = probe_stream_tags(path, "Audio")
     streams: list[AudioStreamInfo] = []
     for line in stderr.splitlines():
         match = _STREAM_RE.match(line)
@@ -173,6 +174,7 @@ def probe_audio_streams(path: str) -> list[AudioStreamInfo]:
                 channels=channels,
                 sample_rate=int(match.group("rate")),
                 bit_rate=int(bitrate_match["kbps"]) * 1000 if bitrate_match else None,
+                title=tags[len(streams)].get("title") if len(streams) < len(tags) else None,
             )
         )
     if not streams:

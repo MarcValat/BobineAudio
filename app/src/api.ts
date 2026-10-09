@@ -7,6 +7,8 @@ export interface TrackInfo {
   index: number;
   codec: string | null;
   language: string | null;
+  // Its name in the container, if any (shown on hover).
+  title?: string | null;
   channels: number | null;
   sample_rate: number | null;
   // Container-level presentation delay (e.g. from mkvtoolnix's --sync), if

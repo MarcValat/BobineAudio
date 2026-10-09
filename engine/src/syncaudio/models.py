@@ -51,6 +51,8 @@ class AudioStreamInfo:
     # None there, since Matroska doesn't carry a bitrate field ffmpeg can
     # read without actually decoding).
     bit_rate: int | None = None
+    # The track's name in the container ("Original", "Commentaire"...), if any.
+    title: str | None = None
 
 
 @dataclass(frozen=True)

@@ -87,6 +87,8 @@ def multi_track_mkv(tmp_path_factory: pytest.TempPathFactory) -> Path:
         "2:a",
         "-metadata:s:a:0",
         "language=eng",
+        "-metadata:s:a:0",
+        "title=Original",
         "-metadata:s:a:1",
         "language=fre",
         "-shortest",
@@ -210,6 +212,7 @@ def test_probe_and_extract_multi_track_mkv(multi_track_mkv: Path) -> None:
     assert len(streams) == 2
     assert {s.language for s in streams} == {"eng", "fre"}
     assert [s.index for s in streams] == [0, 1]
+    assert [s.title for s in streams] == ["Original", None]
 
     spec_first = parse_track_spec(f"{multi_track_mkv}@0")
     spec_second = parse_track_spec(f"{multi_track_mkv}@1")

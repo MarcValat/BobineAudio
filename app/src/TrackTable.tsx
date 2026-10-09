@@ -41,7 +41,8 @@ export function TrackTable({
       </thead>
       <tbody>
         {tracks.map((tr) => (
-          <tr key={tr.index}>
+          // Its name in the container on hover, as in Bobine Subs.
+          <tr key={tr.index} title={tr.title ? t.tracks.titled(tr.title) : undefined}>
             <td>@{tr.index}</td>
             <td>{tr.language ?? "?"}</td>
             <td>{tr.codec ?? "?"}</td>
