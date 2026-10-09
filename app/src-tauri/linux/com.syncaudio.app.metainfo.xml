@@ -13,8 +13,13 @@
     <p>Bobine Audio lines up a video's dubbed audio tracks on its original one: it finds the offset, the drift and the jumps, then writes a corrected file.</p>
     <p xml:lang="fr">Bobine Audio recale les pistes audio doublées d'une vidéo sur sa piste d'origine : il trouve le décalage, la dérive et les sauts, puis écrit un fichier corrigé.</p>
   </description>
-  <launchable type="desktop-id">com.syncaudio.app.desktop</launchable>
+  <launchable type="desktop-id">syncaudio.desktop</launchable>
   <icon type="stock">bobine-audio</icon>
+  <!-- The same icon online too (metainfo allows no local path): software
+       centers that don't find a stock name in the icon theme (Discover)
+       show it from here. -->
+  <icon type="remote" width="128" height="128">https://raw.githubusercontent.com/MarcValat/BobineAudio/main/app/src-tauri/icons/128x128.png</icon>
+  <icon type="remote" width="256" height="256">https://raw.githubusercontent.com/MarcValat/BobineAudio/main/app/src-tauri/icons/128x128@2x.png</icon>
   <url type="homepage">https://github.com/MarcValat/BobineAudio</url>
   <url type="bugtracker">https://github.com/MarcValat/BobineAudio/issues</url>
   <pkgname>bobine-audio</pkgname>

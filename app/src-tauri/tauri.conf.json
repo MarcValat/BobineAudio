@@ -45,7 +45,7 @@
         "replaces": ["sync-audio"],
         "desktopTemplate": "./linux/hidden.desktop.hbs",
         "files": {
-          "/usr/share/applications/com.syncaudio.app.desktop": "./linux/com.syncaudio.app.desktop",
+          "/usr/share/applications/syncaudio.desktop": "./linux/syncaudio.desktop",
           "/usr/share/metainfo/com.syncaudio.app.metainfo.xml": "./linux/com.syncaudio.app.metainfo.xml",
           "/usr/share/icons/hicolor/32x32/apps/bobine-audio.png": "./icons/32x32.png",
           "/usr/share/icons/hicolor/64x64/apps/bobine-audio.png": "./icons/64x64.png",
