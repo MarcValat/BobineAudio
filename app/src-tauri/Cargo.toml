@@ -26,6 +26,7 @@ tauri-plugin-dialog = "2.7.3"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-window-state = "2"
+tauri-plugin-single-instance = "2"
 
 [target.'cfg(windows)'.dependencies]
 # Already in the dependency tree via tauri; used for the kill-on-close Job

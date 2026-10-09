@@ -20,7 +20,7 @@ export function runJob<T>(
     jobId
       .then((id) => {
         onStart?.(id);
-        connectJobWS<T>(id, (event) => {
+        return connectJobWS<T>(id, (event) => {
           if (event.type === "log") onLog(event.message);
           else if (event.type === "done") resolve(event.result);
           else if (event.type === "error") reject(new Error(event.message));
