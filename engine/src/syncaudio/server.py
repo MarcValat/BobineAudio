@@ -228,6 +228,8 @@ class TrackInfo(BaseModel):
     index: int
     codec: str | None
     language: str | None
+    # Its name in the container, if any: shown on hover in the tracks tables.
+    title: str | None = None
     channels: int | None
     sample_rate: int | None
     # Container-level presentation delay (e.g. from mkvtoolnix's --sync), if
@@ -265,6 +267,7 @@ def probe(path: str) -> ProbeResponse:
                 index=s.index,
                 codec=s.codec,
                 language=s.language,
+                title=s.title,
                 channels=s.channels,
                 sample_rate=s.sample_rate,
                 start_time=probe_stream_start_time(path, s.index),
