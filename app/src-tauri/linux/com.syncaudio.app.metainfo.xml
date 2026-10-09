@@ -15,11 +15,6 @@
   </description>
   <launchable type="desktop-id">syncaudio.desktop</launchable>
   <icon type="stock">bobine-audio</icon>
-  <!-- The same icon online too (metainfo allows no local path): software
-       centers that don't find a stock name in the icon theme (Discover)
-       show it from here. -->
-  <icon type="remote" width="128" height="128">https://raw.githubusercontent.com/MarcValat/BobineAudio/main/app/src-tauri/icons/128x128.png</icon>
-  <icon type="remote" width="256" height="256">https://raw.githubusercontent.com/MarcValat/BobineAudio/main/app/src-tauri/icons/128x128@2x.png</icon>
   <url type="homepage">https://github.com/MarcValat/BobineAudio</url>
   <url type="bugtracker">https://github.com/MarcValat/BobineAudio/issues</url>
   <pkgname>bobine-audio</pkgname>
