@@ -1,6 +1,6 @@
 // Client for the syncaudio FastAPI sidecar (engine/src/syncaudio/server.py),
 // spawned by src-tauri/src/lib.rs; its address and startup are in engine.ts.
-import { ENGINE_URL, engineReady } from "./engine";
+import { engineReady, getEngineUrl } from "./engine";
 import { t } from "./i18n";
 
 export interface TrackInfo {
@@ -74,7 +74,7 @@ async function readErrorDetail(resp: Response): Promise<string> {
  * starts, it just goes through a moment later. */
 async function engineFetch(path: string, init?: RequestInit): Promise<Response> {
   await engineReady();
-  return fetch(`${ENGINE_URL}${path}`, init);
+  return fetch(`${await getEngineUrl()}${path}`, init);
 }
 
 export async function probe(path: string): Promise<ProbeResponse> {
@@ -359,8 +359,11 @@ export async function cancelJob(jobId: string): Promise<void> {
  * this, the caller's UI would stay stuck in "in progress" forever with no
  * way to know something went wrong.
  */
-export function connectJobWS<TResult>(jobId: string, onEvent: (event: JobEvent<TResult>) => void): () => void {
-  const ws = new WebSocket(`${ENGINE_URL.replace("http", "ws")}/jobs/${jobId}/ws`);
+export async function connectJobWS<TResult>(
+  jobId: string,
+  onEvent: (event: JobEvent<TResult>) => void,
+): Promise<() => void> {
+  const ws = new WebSocket(`${(await getEngineUrl()).replace("http", "ws")}/jobs/${jobId}/ws`);
   let settled = false;
 
   ws.onmessage = (ev) => {

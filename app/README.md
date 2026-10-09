@@ -2,7 +2,7 @@
 
 GUI standalone de [Bobine Audio](../README.md) (Tauri v2 + React/TypeScript) : ouvrir un fichier (ou une série entière en mode batch), choisir la piste de référence et les pistes à corriger, lancer l'analyse (décalage constant, dérive ou sauts), vérifier le résultat par un aperçu visuel (formes d'onde, style diff) et sonore avant d'exporter, éditer manuellement les segments détectés si besoin — y compris ignorer en un clic ceux dont le score de confiance est trop faible pour être fiable.
 
-Ne contient aucune logique de détection/correction elle-même : elle pilote le moteur Python (`../engine/`), lancé au démarrage comme process séparé (« sidecar ») exposant une API HTTP + WebSocket locale (`127.0.0.1:8756`). Voir [`engine/README.md`](../engine/README.md) pour le détail du moteur et de son API.
+Ne contient aucune logique de détection/correction elle-même : elle pilote le moteur Python (`../engine/`), lancé au démarrage comme process séparé (« sidecar ») exposant une API HTTP + WebSocket locale (`127.0.0.1:8756`, ou un autre port libre si celui-ci est déjà pris : l'interface le demande à l'app). Voir [`engine/README.md`](../engine/README.md) pour le détail du moteur et de son API.
 
 ## Prérequis
 

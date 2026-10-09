@@ -1,8 +1,23 @@
 import { useSyncExternalStore } from "react";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { currentLanguage, t } from "./i18n";
 
-/** The engine sidecar's local HTTP address (see src-tauri/src/lib.rs). */
-export const ENGINE_URL = "http://127.0.0.1:8756";
+/** The engine's usual port, `syncaudio serve`'s default: where a plain
+ * browser on the dev server finds it. The app starts it there when it's
+ * free, on another free port otherwise. */
+const DEFAULT_PORT = 8756;
+
+let engineUrl: string | null = null;
+
+/** The engine sidecar's local HTTP address, asked once to the app (see
+ * src-tauri/src/lib.rs's free_port). */
+export async function getEngineUrl(): Promise<string> {
+  if (engineUrl === null) {
+    const port = isTauri() ? await invoke<number>("engine_port") : DEFAULT_PORT;
+    engineUrl = `http://127.0.0.1:${port}`;
+  }
+  return engineUrl;
+}
 
 // Asked often, so requests go through as soon as the engine answers (it's
 // up in about a second); a tiny local request, only while starting.
@@ -23,7 +38,7 @@ function setStatus(next: EngineStatus): void {
 
 async function healthy(): Promise<boolean> {
   try {
-    return (await fetch(`${ENGINE_URL}/health`)).ok;
+    return (await fetch(`${await getEngineUrl()}/health`)).ok;
   } catch {
     return false;
   }
@@ -38,7 +53,7 @@ function waitForEngine(): Promise<void> {
     let attempts = 0;
     const poll = async () => {
       if (await healthy()) {
-        await fetch(`${ENGINE_URL}/language`, {
+        await fetch(`${await getEngineUrl()}/language`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ language: currentLanguage() }),
