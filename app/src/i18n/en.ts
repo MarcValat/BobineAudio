@@ -99,6 +99,7 @@ export const en: Messages = {
     codec: "Codec",
     channels: "Channels",
     referenceShort: "Ref.",
+    titled: (title) => `“${title}”`,
   },
 
   languages: {

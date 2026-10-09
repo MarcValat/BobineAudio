@@ -102,6 +102,7 @@ export const fr = {
     codec: "Codec",
     channels: "Canaux",
     referenceShort: "Réf.",
+    titled: (title: string) => `« ${title} »`,
   },
 
   languages: {
