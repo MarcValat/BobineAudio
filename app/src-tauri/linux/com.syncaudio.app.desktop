@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Bobine Audio
+Comment=Resynchronize a video's multilingual audio tracks
+Comment[fr]=Resynchronise les pistes audio multilingues d'une vidéo
+Keywords=audio;sync;resync;mkv;dub;
+Keywords[fr]=audio;synchronisation;resynchroniser;mkv;doublage;
+Exec=syncaudio
+Icon=bobine-audio
+StartupWMClass=syncaudio
+Terminal=false
+Categories=AudioVideo;Audio;Video;

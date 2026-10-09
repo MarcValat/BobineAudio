@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.syncaudio.app</id>
+  <name>Bobine Audio</name>
+  <summary>Resynchronize a video's multilingual audio tracks</summary>
+  <summary xml:lang="fr">Resynchronise les pistes audio multilingues d'une vidéo</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer id="io.github.marcvalat">
+    <name>Marc Valat</name>
+  </developer>
+  <description>
+    <p>Bobine Audio lines up a video's dubbed audio tracks on its original one: it finds the offset, the drift and the jumps, then writes a corrected file.</p>
+    <p xml:lang="fr">Bobine Audio recale les pistes audio doublées d'une vidéo sur sa piste d'origine : il trouve le décalage, la dérive et les sauts, puis écrit un fichier corrigé.</p>
+  </description>
+  <launchable type="desktop-id">com.syncaudio.app.desktop</launchable>
+  <icon type="stock">bobine-audio</icon>
+  <url type="homepage">https://github.com/MarcValat/BobineAudio</url>
+  <url type="bugtracker">https://github.com/MarcValat/BobineAudio/issues</url>
+  <pkgname>bobine-audio</pkgname>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+    <category>Video</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+</component>
