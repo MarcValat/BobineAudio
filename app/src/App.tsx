@@ -22,6 +22,8 @@ import { TrackPreview } from "./TrackPreview";
 import { BatchView, type BatchMode } from "./BatchView";
 import { OptionsButton } from "./Options";
 import { PillSwitch } from "./PillSwitch";
+// The app's own icon, the same as the window's and the installer's.
+import logoUrl from "../src-tauri/icons/128x128.png";
 import { UpdateButton } from "./UpdateButton";
 import { pickMediaFiles, pickOutputFile, syncedFileName } from "./mediaDialog";
 import { basename } from "./paths";
@@ -356,6 +358,10 @@ function App() {
   return (
     <div className="container">
       <div className="top-bar">
+        <span className="app-brand">
+          <img src={logoUrl} alt="" />
+          Bobine Audio
+        </span>
         <div className="mode-switch">
           <button className={mode === "single" ? "primary-button" : ""} onClick={() => setMode("single")}>
             {t.modes.single}

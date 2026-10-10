@@ -6,25 +6,36 @@
   /* Also makes native widgets (select popups, their scrollbars,
      checkboxes...) follow the app's theme. */
   color-scheme: light dark;
-  --accent: light-dark(#396cd8, #6d9eff);
-  --accent-hover: light-dark(#2f5ab8, #85aeff);
-  --accent-fg: light-dark(#ffffff, #10141c);
-  --bg: light-dark(#f3f4f6, #1c1d21);
-  --surface: light-dark(#ffffff, #26272c);
-  --surface-alt: light-dark(#f0f1f4, #2f3036);
-  --border: light-dark(rgba(15, 15, 15, 0.12), rgba(255, 255, 255, 0.12));
-  --text: light-dark(#0f0f0f, #f2f2f2);
-  --text-muted: light-dark(rgba(15, 15, 15, 0.6), rgba(242, 242, 242, 0.6));
-  --danger: light-dark(#cc3333, #ff6b6b);
-  --success: light-dark(#2a8c4a, #57c785);
+  /* Blue to violet, the suite's logo colors: --accent for text, links,
+     focus and the reference waveform; --accent-strong and --accent-2 for
+     the fills, the main action's gradient (--gradient). */
+  --accent: light-dark(#3d5fe0, #7aa2ff);
+  --accent-hover: light-dark(#2f4fc8, #9cbaff);
+  --accent-strong: light-dark(#4f6ff0, #4f7cff);
+  --accent-2: light-dark(#7c4dff, #8b5cf6);
+  --gradient: linear-gradient(90deg, var(--accent-strong), var(--accent-2));
+  --accent-fg: #ffffff;
+  --bg: light-dark(#f3f4fa, #0b0d17);
+  /* The soft light at the top of the window. */
+  --bg-glow: light-dark(#e3e7fb, #151b36);
+  --surface: light-dark(#ffffff, #131829);
+  --surface-alt: light-dark(#eef0f7, #1a2034);
+  /* Below the panels: the chart's and the waveforms' backgrounds. */
+  --surface-sunken: light-dark(#f6f7fc, #0e1220);
+  --border: light-dark(rgba(20, 24, 60, 0.11), rgba(255, 255, 255, 0.08));
+  --text: light-dark(#141729, #e8ebf5);
+  --text-muted: light-dark(rgba(20, 23, 41, 0.62), #9aa1b8);
+  --danger: light-dark(#d23a4b, #f47a87);
+  --success: light-dark(#1f8f4a, #4ade80);
   /* The two kinds of segment, in the charts, their legends and the waveforms. */
-  --constant: #396cd8;
-  --drift: #d38a39;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.05);
+  --constant: light-dark(#3d5fe0, #5b8cff);
+  --drift: light-dark(#d97a0b, #f59e0b);
+  --radius: 14px;
+  --radius-sm: 10px;
+  --shadow-color: light-dark(rgba(20, 24, 60, 0.08), rgba(0, 0, 0, 0.3));
+  --shadow: 0 1px 3px var(--shadow-color), 0 1px 2px var(--shadow-color);
   /* What floats over the rest: menus, dropdown lists, dialogs. */
-  --shadow-popup: 0 6px 20px rgba(0, 0, 0, 0.25);
+  --shadow-popup: 0 12px 32px light-dark(rgba(20, 24, 60, 0.18), rgba(0, 0, 0, 0.5));
   /* Dims the app behind a dialog. */
   --backdrop: rgba(0, 0, 0, 0.55);
   --scrollbar-thumb: light-dark(rgba(15, 15, 15, 0.22), rgba(255, 255, 255, 0.2));
@@ -1195,4 +1206,83 @@ button:focus-visible {
 .confidence-flag {
   width: 1em;
   margin-left: -0.2em;
+}
+
+/* The redesign's look (2026-10, mockups on the design canvas): a soft light
+   at the top of a deep blue window, panels a shade above it, charts and
+   waveforms a shade below, and the main action in the logo's blue-to-violet
+   gradient. */
+body {
+  background: radial-gradient(1200px 700px at 70% -10%, var(--bg-glow), var(--bg) 60%) fixed;
+}
+
+.top-bar {
+  gap: 16px;
+  padding: 10px 16px 10px 20px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 45%, transparent);
+}
+
+.app-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.app-brand img {
+  width: 28px;
+  height: 28px;
+}
+
+.panel {
+  background: linear-gradient(180deg, var(--surface), color-mix(in srgb, var(--surface) 82%, var(--bg)));
+}
+
+button,
+select {
+  background-color: var(--surface-alt);
+}
+
+input {
+  background-color: var(--surface-sunken);
+}
+
+.primary-button {
+  background: var(--gradient);
+  border-color: transparent;
+  color: var(--accent-fg);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent-2) 30%, transparent);
+}
+
+.primary-button:hover:not(:disabled) {
+  background: var(--gradient);
+  border-color: transparent;
+  filter: brightness(1.08);
+}
+
+.primary-button:disabled {
+  background: var(--surface-alt);
+  border-color: var(--border);
+  color: var(--text-muted);
+  box-shadow: none;
+}
+
+.segment-chart,
+.waveform,
+.waveform-navigator-svg {
+  background: var(--surface-sunken);
+}
+
+/* The sliding pill: tinted with the gradient, its option in full text. */
+.pill-switch-pill {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent-strong) 32%, var(--surface)), color-mix(in srgb, var(--accent-2) 26%, var(--surface)));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.pill-switch button.active {
+  color: var(--text);
 }
