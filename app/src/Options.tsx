@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { isTauri } from "@tauri-apps/api/core";
+import { InfoTip } from "./InfoTip";
 import { PillSwitch } from "./PillSwitch";
 import { applyTheme, loadTheme, type ThemeChoice } from "./theme";
 import "./Options.css";
@@ -62,19 +63,36 @@ export function OptionsButton() {
 /** How long the drawer takes to slide out (Dialog.css's dialog-slide-out). */
 const CLOSE_MS = 180;
 
-/** One setting: its name, its control, what it does in plain words. */
-function Setting({ label, htmlFor, hint, children }: { label: ReactNode; htmlFor?: string; hint?: ReactNode; children: ReactNode }) {
+/** One setting: its name with what it does in a "?" tip (as everywhere in
+ * the suite), its control, and `note`, a fact worth seeing at once. */
+function Setting({
+  label,
+  htmlFor,
+  hint,
+  note,
+  children,
+}: {
+  label: ReactNode;
+  htmlFor?: string;
+  hint?: ReactNode;
+  note?: ReactNode;
+  children?: ReactNode;
+}) {
+  const name = htmlFor ? (
+    <label className="setting-name" htmlFor={htmlFor}>
+      {label}
+    </label>
+  ) : (
+    <span className="setting-name">{label}</span>
+  );
   return (
     <div className="setting">
-      {htmlFor ? (
-        <label className="setting-name" htmlFor={htmlFor}>
-          {label}
-        </label>
-      ) : (
-        <span className="setting-name">{label}</span>
-      )}
+      <span className="setting-title">
+        {name}
+        {hint && <InfoTip>{hint}</InfoTip>}
+      </span>
       {children}
-      {hint && <p className="setting-hint">{hint}</p>}
+      {note && <p className="setting-hint">{note}</p>}
     </div>
   );
 }
@@ -130,28 +148,17 @@ function OptionsDrawer({ closing, onClose }: { closing: boolean; onClose: () => 
         </select>
       </Setting>
 
-      <Setting
-        label={
-          <span className="setting-switch-row">
-            <span>{t.options.checkUpdates}</span>
-            <input
-              type="checkbox"
-              role="switch"
-              className="switch"
-              aria-label={t.options.checkUpdates}
-              checked={checkUpdates}
-              onChange={(e) => saveCheckUpdates(e.target.checked)}
-            />
-          </span>
-        }
-        hint={
-          <>
-            {t.options.updatesHint}
-            {version && <> {t.options.version(version)}</>}
-          </>
-        }
-      >
-        {null}
+      <Setting label={t.options.updates} hint={t.options.updatesHint} note={version && t.options.version(version)}>
+        <label className="setting-switch-row">
+          <span>{t.options.checkUpdates}</span>
+          <input
+            type="checkbox"
+            role="switch"
+            className="switch"
+            checked={checkUpdates}
+            onChange={(e) => saveCheckUpdates(e.target.checked)}
+          />
+        </label>
       </Setting>
 
       <Setting label={t.options.cache} hint={t.options.cacheHint}>

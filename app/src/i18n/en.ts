@@ -57,7 +57,7 @@ export const en: Messages = {
     subtitlesHint:
       "The subtitles retimed with a corrected audio track unless picked otherwise: ticked by default in single-file mode, the batch modes' starting setting.",
     updates: "Updates",
-    checkUpdates: "Check for updates at startup",
+    checkUpdates: "Check at startup",
     updatesHint: "At launch, the app asks GitHub whether a new version exists; nothing is installed without your consent.",
     cache: "Analysis cache",
     cacheSize: (megabytes) => (megabytes < 1 ? "less than 1 MB" : `${megabytes} MB`),

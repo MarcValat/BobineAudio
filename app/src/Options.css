@@ -25,6 +25,12 @@
   border-bottom: none;
 }
 
+.setting-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .setting-name {
   font-size: 0.9em;
   font-weight: 600;
@@ -42,6 +48,7 @@
 }
 
 .setting-switch-row {
+  font-size: 0.9em;
   display: flex;
   align-items: center;
   justify-content: space-between;
