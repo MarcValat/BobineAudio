@@ -1300,3 +1300,17 @@ input {
 .pill-switch-wide button {
   flex: 1 1 0;
 }
+
+/* A theme change cross-fades the whole window (theme.ts's crossFade):
+   the old picture out, the new one in, everything at the same pace. The
+   controls' hover transitions are paused meanwhile (.theme-switching). */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 220ms;
+  animation-timing-function: ease;
+}
+
+.theme-switching,
+.theme-switching * {
+  transition: none !important;
+}
