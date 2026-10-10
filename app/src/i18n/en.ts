@@ -49,10 +49,10 @@ export const en: Messages = {
     version: (version) => `Current version: ${version}.`,
     theme: "Theme",
     themes: { system: "System", light: "Light", dark: "Dark" },
-    themeHint: "“System” follows Windows' light or dark theme.",
+    themeHint: "“System” follows your system's light or dark theme.",
     language: "Language",
     systemLanguage: "System",
-    languageHint: "“System” follows Windows' language: French if it's in French, English otherwise.",
+    languageHint: "“System” follows your system's language: French if it's in French, English otherwise.",
     subtitles: "Default subtitles",
     subtitlesHint:
       "The subtitles retimed with a corrected audio track unless picked otherwise: ticked by default in single-file mode, the batch modes' starting setting.",

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { isTauri } from "@tauri-apps/api/core";
 import { PillSwitch } from "./PillSwitch";
@@ -22,21 +22,45 @@ const CACHE_LIMIT_MB = 512;
 export function OptionsButton() {
   const t = useT();
   const [open, setOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const closeTimer = useRef<number | null>(null);
+
+  /** The drawer slides out (CLOSE_MS, see Dialog.css), then goes. */
+  function close() {
+    if (closing) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      setOpen(false);
+      return;
+    }
+    setClosing(true);
+    closeTimer.current = window.setTimeout(() => {
+      setOpen(false);
+      setClosing(false);
+    }, CLOSE_MS);
+  }
+  useEffect(() => () => {
+    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+  }, []);
+
   return (
     <>
       <button
-        className={`icon-button${open ? " icon-button-on" : ""}`}
+        className={`icon-button${open && !closing ? " icon-button-on" : ""}`}
         title={t.options.title}
         aria-label={t.options.title}
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open && !closing}
+        onClick={() => (open ? close() : setOpen(true))}
       >
         <GearIcon />
       </button>
-      {open && <OptionsDrawer onClose={() => setOpen(false)} />}
+      {open && <OptionsDrawer closing={closing} onClose={close} />}
     </>
   );
 }
+
+/** How long the drawer takes to slide out (Dialog.css's dialog-slide-out). */
+const CLOSE_MS = 180;
 
 /** One setting: its name, its control, what it does in plain words. */
 function Setting({ label, htmlFor, hint, children }: { label: ReactNode; htmlFor?: string; hint?: ReactNode; children: ReactNode }) {
@@ -55,7 +79,7 @@ function Setting({ label, htmlFor, hint, children }: { label: ReactNode; htmlFor
   );
 }
 
-function OptionsDrawer({ onClose }: { onClose: () => void }) {
+function OptionsDrawer({ closing, onClose }: { closing: boolean; onClose: () => void }) {
   const t = useT();
   const [theme, setTheme] = useState<ThemeChoice>(loadTheme);
   const [language, setLanguage] = useLanguageChoice();
@@ -69,7 +93,7 @@ function OptionsDrawer({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Dialog onClose={onClose} closeOnBackdrop side className="options-drawer" labelledBy="options-title">
+    <Dialog onClose={onClose} closeOnBackdrop side closing={closing} className="options-drawer" labelledBy="options-title">
       <div className="options-head">
         <h2 id="options-title">{t.options.title}</h2>
         <button className="icon-button" aria-label={t.common.close} title={t.common.close} onClick={onClose}>

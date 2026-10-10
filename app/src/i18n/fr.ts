@@ -50,10 +50,10 @@ export const fr = {
     version: (version: string) => `Version actuelle : ${version}.`,
     theme: "Thème",
     themes: { system: "Système", light: "Clair", dark: "Sombre" },
-    themeHint: "« Système » suit le thème clair ou sombre de Windows.",
+    themeHint: "« Système » suit le thème clair ou sombre de ton système.",
     language: "Langue",
     systemLanguage: "Système",
-    languageHint: "« Système » suit la langue de Windows : français s'il est en français, anglais sinon.",
+    languageHint: "« Système » suit la langue de ton système : français s'il est en français, anglais sinon.",
     subtitles: "Sous-titres par défaut",
     subtitlesHint:
       "Les sous-titres recalés avec une piste audio corrigée, sauf choix contraire : cochés d'office en fichier unique, réglage de départ des modes batch.",
