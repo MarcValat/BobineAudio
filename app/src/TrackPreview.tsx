@@ -658,7 +658,27 @@ export function TrackPreview({
 
       {waveformError && <p className="error">{waveformError}</p>}
 
-      {waveformLoading && !viewData && <p className="placeholder">{t.preview.loadingWaveforms}</p>}
+      {/* Until they're in, their room is kept (empty frames, a spinner):
+          the controls below don't jump when they arrive. */}
+      {!viewData && !waveformError && (
+        <div className="waveforms waveforms-loading" aria-busy="true">
+          {[
+            [t.preview.reference, "waveform-reference"],
+            [t.preview.candidate, "waveform-candidate"],
+            [t.preview.result, "waveform-final"],
+          ].map(([label, className]) => (
+            <div key={className} className={`waveform ${className}`}>
+              <div className="waveform-label">{label}</div>
+            </div>
+          ))}
+          {waveformLoading && (
+            <span className="waveforms-spinner">
+              <span className="spinner spinner-small" />
+              {t.preview.loadingWaveforms}
+            </span>
+          )}
+        </div>
+      )}
 
       {viewDuration !== null && viewData && (
         <div className="waveforms">
@@ -706,6 +726,9 @@ export function TrackPreview({
         </div>
       )}
 
+      {!(refDuration !== null && refFullPeaks && viewDuration !== null) && !waveformError && (
+        <div className="waveform-navigator waveform-navigator-placeholder" />
+      )}
       {refDuration !== null && refFullPeaks && viewDuration !== null && (
         <WaveformNavigator
           duration={refDuration}
