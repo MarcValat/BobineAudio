@@ -26,6 +26,11 @@ export function subtitleLabel(s: SubtitleInfo): string {
   return `@${s.index} ${s.language ?? "?"}${s.forced ? m.forcedTag : ""}${s.title ? ` ${m.quoted(s.title)}` : ""}`;
 }
 
+/** "@4 fre forcés": short, where a line holds several (the full label on hover). */
+export function subtitleShortLabel(s: SubtitleInfo): string {
+  return `@${s.index} ${s.language ?? "?"}${s.forced ? t().subtitles.forcedTag : ""}`;
+}
+
 /** What a subtitle track is, for a tooltip: "Format ass · sous-titres forcés · titre « ... »". */
 export function subtitleDetails(s: SubtitleInfo): string {
   const m = t().subtitles;

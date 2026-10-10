@@ -14,6 +14,7 @@ export function TrackTable({
   onToggleTarget,
   showChannels = false,
   radioName = "reference",
+  disabled = false,
 }: {
   tracks: TrackInfo[];
   className?: string;
@@ -24,6 +25,8 @@ export function TrackTable({
   showChannels?: boolean;
   /** Radio group name: unique per table on screen. */
   radioName?: string;
+  /** The picks can't be changed (something's running). */
+  disabled?: boolean;
 }) {
   const t = useT();
   const picking = onReference !== undefined;
@@ -49,14 +52,14 @@ export function TrackTable({
             {showChannels && <td>{tr.channels ?? "?"}</td>}
             {picking && (
               <td className="track-pick">
-                <input type="radio" name={radioName} checked={reference === tr.index} onChange={() => onReference(tr.index)} />
+                <input type="radio" name={radioName} checked={reference === tr.index} disabled={disabled} onChange={() => onReference(tr.index)} />
               </td>
             )}
             {picking && (
               <td className="track-pick">
                 <input
                   type="checkbox"
-                  disabled={reference === tr.index}
+                  disabled={disabled || reference === tr.index}
                   checked={targets.includes(tr.index)}
                   onChange={() => onToggleTarget?.(tr.index)}
                 />

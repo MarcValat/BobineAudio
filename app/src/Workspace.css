@@ -270,26 +270,143 @@
   padding-inline: 0;
 }
 
-/* The tracks used, with "Choisir" (and "Par langue") on the same line. */
-.detail-tracks {
-  flex: 0 0 auto;
+/* Under the header: the tabs, then the tracks beside the chart, then the
+   waveforms and the playback taking what's left. */
+.detail-body {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.3em 0.6em;
+  flex-direction: column;
+  gap: 0.7em;
+}
+
+.detail-top {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(250px, 330px) minmax(0, 1fr);
+  gap: 1em;
+  align-items: start;
+}
+
+/* The Segments tab of a short window: the tracks and the chart, as tall
+   as the panel. */
+.detail-top-fill {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.detail-tracks {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
   font-size: 13px;
 }
 
-.detail-tracks-summary {
-  min-width: 0;
+.detail-tracks-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  min-height: 24px;
 }
 
-.detail-tracks .list-row-issues {
-  flex: 1 0 100%;
+.detail-tracks-heading h3 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
-.detail-tracks button {
+.detail-tracks-heading button {
+  margin-left: auto;
   padding: 0.1em 0.6em;
+}
+
+/* About four tracks, then it scrolls (headers stay). */
+.detail-tracks-table {
+  max-height: 158px;
+}
+
+.detail-top-fill .detail-tracks-table {
+  max-height: none;
+}
+
+.detail-tracks-table table {
+  width: 100%;
+}
+
+.detail-tracks-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.detail-subs {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5em;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.detail-subs-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-subs button {
+  flex: 0 0 auto;
+  padding: 0.05em 0.6em;
+}
+
+.detail-chart {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-chart .segment-chart {
+  max-width: none;
+  margin: 0;
+}
+
+.detail-top-fill .detail-chart {
+  min-height: 0;
+}
+
+/* The chart's room before there's one to draw: what's going on instead. */
+.detail-chart-empty {
+  min-height: 150px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6em;
+  padding: 1em;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+
+.detail-chart-empty p {
+  margin: 0;
+}
+
+.detail-chart-empty .log-button {
+  align-self: center;
+}
+
+.detail-running {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  opacity: 1;
 }
 
 /* One tab per corrected track, what it was analyzed against beside. */

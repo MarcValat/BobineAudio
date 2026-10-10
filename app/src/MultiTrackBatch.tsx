@@ -27,7 +27,7 @@ import { pickMediaFiles } from "./mediaDialog";
 import { DropOverlay, useFileDrop } from "./FileDrop";
 import { basename } from "./paths";
 import { SegmentEditor } from "./SegmentEditor";
-import { assignSubtitles, SUBTITLE_MODES, type SubtitleMode, subtitlesFor, takenByOthers } from "./subtitles";
+import { assignSubtitles, SUBTITLE_MODES, type SubtitleMode, subtitleLabel, subtitleShortLabel, subtitlesFor, takenByOthers } from "./subtitles";
 import { devParam, errorMessage, toggled } from "./util";
 import { Dialog, DialogHeader } from "./Dialog";
 import { TrackTable } from "./TrackTable";
@@ -35,9 +35,9 @@ import { SubtitleChecks } from "./SubtitleChecks";
 import { t, useT } from "./i18n";
 import { useSubtitleDefault } from "./settings";
 
-// Height of the detail's analysis area below which the chart and the
-// waveforms are shown one at a time (as in the single-file view).
-const COMPACT_ANALYSIS_HEIGHT = 520;
+// Height of the detail's body below which the tracks and chart, and the
+// waveforms, are shown one at a time (the Segments / Écoute tabs).
+const COMPACT_ANALYSIS_HEIGHT = 560;
 
 /** "@1 fre": a track as the list and the detail name it. */
 const trackName = (track: TrackInfo) => `@${track.index} ${track.language ?? "?"}`;
@@ -100,82 +100,44 @@ function resolve(tracks: TrackInfo[], referenceLanguage: string, targetLanguages
   return { reference, targets, issues, manual: false };
 }
 
-/** "Choisir": a file's tracks, to pick its reference and the tracks to
- * correct by hand -- the same table as the single-file view's. */
-function TrackChoiceModal({
+/** "Changer" by a file's retimed subtitles: which subtitle tracks go with
+ * each of its corrected tracks, ticked by hand (it applies at once). */
+function SubtitleChoiceModal({
   path,
-  tracks,
+  targets,
   subtitles,
-  initial,
-  defaultSubtitles,
-  onSave,
+  assigned,
+  onToggle,
   onClose,
 }: {
   path: string;
-  tracks: TrackInfo[];
+  targets: TrackInfo[];
   subtitles: SubtitleInfo[];
-  initial: TrackChoice;
-  /** The subtitle setting's pick for a corrected track, for one newly ticked. */
-  defaultSubtitles: (track: TrackInfo) => number[];
-  onSave: (choice: TrackChoice) => void;
+  /** The subtitle tracks going with each corrected track now. */
+  assigned: Record<number, number[]>;
+  onToggle: (track: number, sub: number) => void;
   onClose: () => void;
 }) {
   const m = useT();
-  const [choice, setChoice] = useState(initial);
-  const targetTracks = tracks.filter((t) => choice.targets.includes(t.index));
-  const assigned = assignSubtitles(targetTracks, (t) => choice.subtitles?.[t.index] ?? defaultSubtitles(t));
-  function toggleSubtitle(track: number, sub: number) {
-    setChoice((c) => ({ ...c, subtitles: { ...c.subtitles, [track]: toggled(assigned[track] ?? [], sub) } }));
-  }
   return (
-    <Dialog onClose={onClose} className="batch-choice-panel" labelledBy="choice-title">
-      <DialogHeader id="choice-title" title={m.multi.tracksOf(basename(path))} titleTooltip={path} onClose={onClose} closeLabel={m.common.cancel} />
-        <div className="tracks-table-wrap">
-          <TrackTable
-            className="batch-tracks-table"
-            tracks={tracks}
-            radioName="choice-reference"
-            reference={choice.reference}
-            targets={choice.targets}
-            onReference={(index) => setChoice((c) => ({ ...c, reference: index, targets: c.targets.filter((i) => i !== index) }))}
-            onToggleTarget={(index) =>
-              setChoice((c) => ({
-                ...c,
-                targets: toggled(c.targets, index),
-              }))
-            }
-          />
-        </div>
-        {subtitles.length > 0 && choice.targets.length > 0 && (
-          <div className="batch-choice-subs">
-            <h3>
-              {m.multi.subsToRetime} <InfoTip>{m.multi.subsToRetimeHint}</InfoTip>
-            </h3>
-            {targetTracks.map((t) => (
-              <div key={t.index} className="batch-choice-subs-row">
-                <span className="batch-target-name">{m.multi.withTrack(`@${t.index} ${t.language ?? "?"}`)}</span>
-                <SubtitleChecks
-                  subtitles={subtitles}
-                  chosen={assigned[t.index] ?? []}
-                  taken={takenByOthers(assigned, t.index)}
-                  onToggle={(sub) => toggleSubtitle(t.index, sub)}
-                />
-              </div>
-            ))}
+    <Dialog onClose={onClose} closeOnBackdrop className="batch-choice-panel" labelledBy="subs-title">
+      <DialogHeader id="subs-title" title={m.multi.subsOf(basename(path))} titleTooltip={path} onClose={onClose} closeIcon />
+      <div className="batch-choice-subs">
+        <h3>
+          {m.multi.subsToRetime} <InfoTip>{m.multi.subsToRetimeHint}</InfoTip>
+        </h3>
+        {targets.map((t) => (
+          <div key={t.index} className="batch-choice-subs-row">
+            <span className="batch-target-name">{m.multi.withTrack(trackName(t))}</span>
+            <SubtitleChecks
+              subtitles={subtitles}
+              chosen={assigned[t.index] ?? []}
+              taken={takenByOthers(assigned, t.index)}
+              onToggle={(sub) => onToggle(t.index, sub)}
+            />
           </div>
-        )}
-        <div className="batch-choice-actions">
-          <button
-            className="primary-button"
-            disabled={choice.targets.length === 0}
-            onClick={() => {
-              onSave(choice);
-              onClose();
-            }}
-          >
-            {m.multi.confirm}
-          </button>
-        </div>
+        ))}
+      </div>
     </Dialog>
   );
 }
@@ -185,7 +147,7 @@ function TrackChoiceModal({
  * view, for many files at once. Tracks are picked by language (reference
  * language, languages to correct), which survives a track order that
  * changes from one episode to the next; a file where that's ambiguous or
- * missing is flagged, and its tracks can be picked by hand ("Choisir").
+ * missing is flagged, and its tracks can be ticked by hand in its detail.
  * Each file's export holds all its corrected tracks. */
 export function MultiTrackBatch({
   hidden,
@@ -214,7 +176,8 @@ export function MultiTrackBatch({
   const [runs, setRuns] = useState<Record<string, FileRun>>({});
   const [analyzing, setAnalyzing] = useState(false);
   const queue = useExportQueue(outputDir);
-  const [choosing, setChoosing] = useState<string | null>(null);
+  // The file whose retimed subtitles are being changed ("Changer").
+  const [subsEditing, setSubsEditing] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ path: string; track: number } | null>(null);
   // The file shown in the detail, and which of each file's corrected tracks
   // its tabs show (absent: its first).
@@ -233,7 +196,7 @@ export function MultiTrackBatch({
   }
 
   const dropBlocked = dropBlockedReason(busy, blocked);
-  const fileDrag = useFileDrop(!hidden && choosing === null && editing === null, dropBlocked, addPaths);
+  const fileDrag = useFileDrop(!hidden && subsEditing === null && editing === null, dropBlocked, addPaths);
 
   // Each file's tracks are read once, as soon as it's listed.
   const requested = useRef(new Set<string>());
@@ -336,10 +299,12 @@ export function MultiTrackBatch({
 
   /** Analyzes the tracks to correct that aren't yet (new files, new
    * languages, failed ones), keeping the rest and any edit made to them; or
-   * all of them again (`all`). */
-  async function handleAnalyze(all: boolean) {
+   * all of them again (`all`); of every file, or of `only` (the detail's
+   * "Analyser"). */
+  async function handleAnalyze(all: boolean, only?: string) {
     await runPlan(
       files.flatMap((path) => {
+        if (only !== undefined && path !== only) return [];
         const res = resolutions[path];
         if (!res?.reference || res.targets.length === 0) return [];
         const run = runOf(path);
@@ -393,11 +358,12 @@ export function MultiTrackBatch({
   }
 
   /** One export per file, holding every corrected track whose analysis
-   * succeeded, with its segments as edited ("Modifier"). */
-  function handleExportAll() {
+   * succeeded, with its segments as edited ("Modifier"); of every file, or
+   * of `only` ("Exporter ce fichier"). */
+  function handleExport(only?: string) {
     queue.run(
       files
-        .filter((path) => doneTargets(path).length > 0)
+        .filter((path) => (only === undefined || path === only) && doneTargets(path).length > 0)
         .map((path) => ({
           input: path,
           start: (outputPath: string) => {
@@ -428,8 +394,6 @@ export function MultiTrackBatch({
   const analyzable = files.some((f) => resolutions[f]?.reference && resolutions[f]!.targets.length > 0);
 
   const editingRun = editing ? runOf(editing.path)?.targets[editing.track] : null;
-  const choosingTracks = choosing ? probes[choosing]?.tracks : null;
-  const choosingRes = choosing ? resolutions[choosing] : null;
 
   /** "@0 jpn → @1 fre + ST @3, @2 eng": a file's tracks as used now. */
   function tracksSummary(path: string, res: Resolution): string {
@@ -475,6 +439,27 @@ export function MultiTrackBatch({
   // one at a time, as tabs (as the single-file view does).
   const compactAnalysis = analysisViewSize.height > 0 && analysisViewSize.height < COMPACT_ANALYSIS_HEIGHT;
   const detailWritten = writtenFile(detailRun);
+  const detailDone = detailPath ? doneTargets(detailPath).length : 0;
+  // Tracks its "Analyser" would do: not analyzed yet, or failed.
+  const detailMissing = detailRes?.reference ? detailRes.targets.length - detailDone : 0;
+  const detailAnalyzing = !!detailRes?.targets.some((t) => {
+    const status = detailRun?.targets[t.index]?.status;
+    return status === "pending" || status === "running";
+  });
+  const detailAssigned = detailPath && detailRes ? subsOf(detailPath, detailRes.targets) : {};
+  const detailSubs = (detailProbe?.subtitles ?? []).filter((s) => Object.values(detailAssigned).some((subs) => subs.includes(s.index)));
+
+  /** A change to a file's tracks in its detail: from then on they're its
+   * own ("(manuel)"), starting from what the languages picked. */
+  function editChoice(path: string, update: (choice: TrackChoice) => TrackChoice) {
+    const res = resolutions[path];
+    const tracks = probes[path]?.tracks;
+    if (!res || !tracks || tracks.length === 0) return;
+    setChoices((c) => ({
+      ...c,
+      [path]: update(c[path] ?? { reference: res.reference?.index ?? tracks[0].index, targets: res.targets.map((t) => t.index) }),
+    }));
+  }
 
   return (
     <main className="batch-main" style={hidden ? { display: "none" } : undefined}>
@@ -626,7 +611,7 @@ export function MultiTrackBatch({
                 <Tooltip text={m.batch.reanalyzeOneHint}>
                   <button
                     className="icon-small-button detail-icon-button"
-                    disabled={busy}
+                    disabled={busy || blocked}
                     onClick={() => reanalyzeTrack(detailPath, shownTrack)}
                     aria-label={m.batch.reanalyzeOne}
                   >
@@ -639,113 +624,162 @@ export function MultiTrackBatch({
                   {m.single.editSegments}
                 </button>
               )}
+              {/* One gradient button: the file's next step. */}
+              {(detailMissing > 0 || detailAnalyzing) && (
+                <button
+                  className="primary-button"
+                  disabled={detailAnalyzing || busy || blocked || !detailRes?.reference}
+                  title={blocked ? m.batch.otherModeBusy : m.multi.analyzeFileHint}
+                  onClick={() => handleAnalyze(false, detailPath)}
+                >
+                  {detailAnalyzing ? m.common.analysisRunning : m.multi.analyzeFile}
+                </button>
+              )}
+              {detailDone > 0 && (
+                <button
+                  className={detailMissing === 0 && !detailAnalyzing ? "primary-button" : ""}
+                  disabled={busy || blocked}
+                  title={blocked ? m.batch.otherModeBusy : undefined}
+                  onClick={() => handleExport(detailPath)}
+                >
+                  {m.multi.exportFile}
+                </button>
+              )}
             </div>
 
             {detailProbe?.error && <p className="error">{detailProbe.error}</p>}
-            {detailRes && (
-              <div className="detail-tracks">
-                <span className="detail-tracks-summary">
-                  {tracksSummary(detailPath, detailRes)}
-                  {detailRes.manual && <span className="list-row-manual">{m.multi.manual}</span>}
-                </span>
-                <button className="small-button" disabled={busy} onClick={() => setChoosing(detailPath)}>
-                  {m.multi.choose}
-                </button>
-                {detailRes.manual && (
-                  <button
-                    className="small-button"
-                    disabled={busy}
-                    title={m.multi.byLanguageHint}
-                    onClick={() =>
-                      setChoices((c) => {
-                        const next = { ...c };
-                        delete next[detailPath];
-                        return next;
-                      })
-                    }
-                  >
-                    {m.multi.byLanguage}
-                  </button>
-                )}
-                {detailRes.issues.length > 0 && <span className="list-row-issues">⚠ {detailRes.issues.join(", ")}</span>}
-              </div>
-            )}
-
-            {detailRes && detailRes.targets.length === 0 && <p className="placeholder">{m.multi.noTarget}</p>}
-            {shownTrack && detailRes && (
-              <>
-                <div className="detail-tabs">
-                  <PillSwitch
-                    className="detail-track-tabs"
-                    label={m.multi.shownTrack}
-                    options={detailRes.targets.map((t) => [String(t.index), trackName(t)] as const)}
-                    value={String(shownTrack.index)}
-                    onChange={(index) => setShownTracks((c) => ({ ...c, [detailPath]: Number(index) }))}
-                  />
-                  <span className="detail-tab-summary">
-                    {detailReference && m.multi.againstReference(trackName(detailReference))}
-                    {shownResult && ` · ${describeSegments(shownResult.segments)}`}
-                  </span>
-                  {/* Too little height for the chart and readable waveforms
-                      at once: one at a time, as tabs. */}
-                  {compactAnalysis && shownResult && (
+            {detailRes && detailProbe?.tracks && (
+              <div className="detail-body" ref={analysisViewRef}>
+                {shownTrack && (
+                  <div className="detail-tabs">
                     <PillSwitch
-                      className="view-switch"
-                      label={m.common.view}
-                      options={[
-                        ["segments", m.common.segments],
-                        ["listen", m.common.listen],
-                      ]}
-                      value={analysisView}
-                      onChange={setAnalysisView}
+                      className="detail-track-tabs"
+                      label={m.multi.shownTrack}
+                      options={detailRes.targets.map((t) => [String(t.index), trackName(t)] as const)}
+                      value={String(shownTrack.index)}
+                      onChange={(index) => setShownTracks((c) => ({ ...c, [detailPath]: Number(index) }))}
                     />
-                  )}
+                    <span className="detail-tab-summary">
+                      {detailReference && m.multi.againstReference(trackName(detailReference))}
+                      {shownResult && ` · ${describeSegments(shownResult.segments)}`}
+                    </span>
+                    {/* Too little height for all at once: the tracks and
+                        the chart, or the waveforms, as tabs. */}
+                    {compactAnalysis && shownResult && (
+                      <PillSwitch
+                        className="view-switch"
+                        label={m.common.view}
+                        options={[
+                          ["segments", m.common.segments],
+                          ["listen", m.common.listen],
+                        ]}
+                        value={analysisView}
+                        onChange={setAnalysisView}
+                      />
+                    )}
+                  </div>
+                )}
+
+                <div
+                  className={
+                    compactAnalysis && shownResult && analysisView === "listen"
+                      ? "view-hidden"
+                      : `detail-top${compactAnalysis && shownResult ? " detail-top-fill" : ""}`
+                  }
+                >
+                  <div className="detail-tracks">
+                    <div className="detail-tracks-heading">
+                      <h3>
+                        {m.multi.tracks} <InfoTip>{m.multi.tracksHint}</InfoTip>
+                      </h3>
+                      {detailRes.manual && <span className="list-row-manual">{m.multi.manual}</span>}
+                      {detailRes.manual && (
+                        <button
+                          className="small-button"
+                          disabled={busy}
+                          title={m.multi.byLanguageHint}
+                          onClick={() =>
+                            setChoices((c) => {
+                              const next = { ...c };
+                              delete next[detailPath];
+                              return next;
+                            })
+                          }
+                        >
+                          {m.multi.byLanguage}
+                        </button>
+                      )}
+                    </div>
+                    <div className="tracks-table-wrap list-scroll detail-tracks-table">
+                      <TrackTable
+                        className="batch-tracks-table"
+                        tracks={detailProbe.tracks}
+                        radioName={`reference-${detailPath}`}
+                        reference={detailRes.reference?.index ?? null}
+                        targets={detailRes.targets.map((t) => t.index)}
+                        disabled={busy}
+                        onReference={(index) =>
+                          editChoice(detailPath, (c) => ({ ...c, reference: index, targets: c.targets.filter((i) => i !== index) }))
+                        }
+                        onToggleTarget={(index) => editChoice(detailPath, (c) => ({ ...c, targets: toggled(c.targets, index) }))}
+                      />
+                    </div>
+                    {detailRes.issues.length > 0 && <span className="list-row-issues">⚠ {detailRes.issues.join(", ")}</span>}
+                    {detailProbe.subtitles.length > 0 && detailRes.targets.length > 0 && (
+                      <div className="detail-subs">
+                        <span className="detail-subs-text" title={detailSubs.map((s) => subtitleLabel(s)).join("\n") || undefined}>
+                          {m.multi.retimedSubs}{" "}
+                          {detailSubs.length > 0 ? detailSubs.map((s) => subtitleShortLabel(s)).join(", ") : m.multi.noSubs}
+                        </span>
+                        <button className="small-button" disabled={busy} onClick={() => setSubsEditing(detailPath)}>
+                          {m.multi.changeSubs}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="detail-chart">
+                    {shownResult ? (
+                      <SegmentChart segments={shownResult.segments} fill={compactAnalysis} />
+                    ) : (
+                      // Its room kept while there's nothing to draw yet.
+                      <div className="detail-chart-empty">
+                        {detailRes.targets.length === 0 && <p className="placeholder">{m.multi.noTarget}</p>}
+                        {shownTrack && !shownRun && <p className="placeholder">{m.multi.notAnalyzed}</p>}
+                        {shownRun?.status === "pending" && <p className="placeholder">{m.batch.pending}</p>}
+                        {shownRun?.status === "running" && (
+                          <p className="placeholder detail-running">
+                            <span className="spinner spinner-small" />
+                            {m.common.analysisRunning}
+                          </p>
+                        )}
+                        {shownRun?.status === "error" && <p className="error">{shownRun.error ?? m.common.error}</p>}
+                        <LogPanel lines={shownRun?.log ?? []} />
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="analysis-view" ref={analysisViewRef}>
-                  {!shownRun && <p className="placeholder">{m.multi.notAnalyzed}</p>}
-                  {(shownRun?.status === "pending" || shownRun?.status === "running") && (
-                    <p className="placeholder">{shownRun.status === "pending" ? m.batch.pending : m.common.analysisRunning}</p>
-                  )}
-                  {shownRun?.status === "error" && <p className="error">{shownRun.error ?? m.common.error}</p>}
-                  {shownResult && detailReference && (
-                    <>
-                      <div
-                        className={
-                          !compactAnalysis
-                            ? "analysis-chart"
-                            : analysisView === "segments"
-                              ? "analysis-chart analysis-chart-fill"
-                              : "view-hidden"
-                        }
-                      >
-                        <SegmentChart segments={shownResult.segments} fill={compactAnalysis} />
-                      </div>
-                      {/* Hidden rather than unmounted on the other tab, so
-                          playback and zoom survive switching. Not while this
-                          track is being edited: the editor has its own
-                          preview, and two playing at once would overlap. */}
-                      {!(editing?.path === detailPath && editing.track === shownTrack.index) && (
-                        <div className={compactAnalysis && analysisView !== "listen" ? "view-hidden" : "segments-result"}>
-                          <TrackPreview
-                            key={`${detailPath}|${shownTrack.index}`}
-                            referenceFilePath={detailPath}
-                            candidateFilePath={detailPath}
-                            referenceIndex={detailRun!.referenceIndex}
-                            trackIndex={shownTrack.index}
-                            segments={shownResult.segments}
-                            referenceStartTime={detailReference.start_time ?? 0}
-                            trackStartTime={shownTrack.start_time}
-                            extraControls={<LogPanel lines={shownRun?.log ?? []} />}
-                          />
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-                {/* Analyzed, it's at the end of the playback row instead. */}
-                {!shownResult && <LogPanel lines={shownRun?.log ?? []} />}
-              </>
+                {/* Hidden rather than unmounted on the other tab, so playback
+                    and zoom survive switching. Not while this track is being
+                    edited: the editor has its own preview, and two playing at
+                    once would overlap. */}
+                {shownTrack && shownResult && detailReference && !(editing?.path === detailPath && editing.track === shownTrack.index) && (
+                  <div className={compactAnalysis && analysisView !== "listen" ? "view-hidden" : "segments-result"}>
+                    <TrackPreview
+                      key={`${detailPath}|${shownTrack.index}`}
+                      referenceFilePath={detailPath}
+                      candidateFilePath={detailPath}
+                      referenceIndex={detailRun!.referenceIndex}
+                      trackIndex={shownTrack.index}
+                      segments={shownResult.segments}
+                      referenceStartTime={detailReference.start_time ?? 0}
+                      trackStartTime={shownTrack.start_time}
+                      extraControls={<LogPanel lines={shownRun?.log ?? []} />}
+                    />
+                  </div>
+                )}
+              </div>
             )}
 
             {detailRun && detailRun.exportStatus !== "idle" && (
@@ -787,27 +821,27 @@ export function MultiTrackBatch({
             unit="track"
             disabled={!analyzable || busy || blocked}
             blocked={blocked}
-            onAnalyze={handleAnalyze}
+            onAnalyze={(all) => handleAnalyze(all)}
           />
         }
         queue={queue}
         canExport={analyzedCount > 0}
-        onExport={handleExportAll}
+        onExport={() => handleExport()}
       />
 
-      {choosing && choosingTracks && choosingRes && (
-        <TrackChoiceModal
-          path={choosing}
-          tracks={choosingTracks}
-          subtitles={probes[choosing]?.subtitles ?? []}
-          initial={{
-            reference: choosingRes.reference?.index ?? choosingTracks[0].index,
-            targets: choosingRes.targets.map((t) => t.index),
-            subtitles: subsOf(choosing, choosingRes.targets),
-          }}
-          defaultSubtitles={(track) => subtitlesFor(probes[choosing]?.subtitles ?? [], track.language, subsMode)}
-          onSave={(choice) => setChoices((c) => ({ ...c, [choosing]: choice }))}
-          onClose={() => setChoosing(null)}
+      {subsEditing && resolutions[subsEditing] && (
+        <SubtitleChoiceModal
+          path={subsEditing}
+          targets={resolutions[subsEditing]!.targets}
+          subtitles={probes[subsEditing]?.subtitles ?? []}
+          assigned={subsOf(subsEditing, resolutions[subsEditing]!.targets)}
+          onToggle={(track, sub) =>
+            editChoice(subsEditing, (c) => ({
+              ...c,
+              subtitles: { ...c.subtitles, [track]: toggled(subsOf(subsEditing, resolutions[subsEditing]!.targets)[track] ?? [], sub) },
+            }))
+          }
+          onClose={() => setSubsEditing(null)}
         />
       )}
 
