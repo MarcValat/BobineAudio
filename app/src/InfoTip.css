@@ -3,16 +3,18 @@
 .info-tip {
   position: relative;
   display: inline-flex;
-  width: 1.05em;
-  height: 1.05em;
+  /* Its text's size, but never under 14px (by a small uppercase title). */
+  width: max(1.05em, 14px);
+  height: max(1.05em, 14px);
   flex: 0 0 auto;
   border-radius: 50%;
   color: color-mix(in srgb, var(--accent) 75%, var(--text-muted));
   cursor: help;
   user-select: none;
-  /* Centered on the text's capitals and tall letters, where it sits inline;
-     a flex row centers it by itself. */
-  vertical-align: -0.16em;
+  /* Centered on the text's capitals and tall letters (their middle sits
+     about 0.36em above the baseline), whatever the icon's own size, where
+     it sits inline; a flex row centers it by itself. */
+  vertical-align: calc(0.36em - max(1.05em, 14px) / 2);
 }
 
 .info-tip svg {

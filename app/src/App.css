@@ -50,8 +50,8 @@
   --font-mono: ui-monospace, "Cascadia Code", "Segoe UI Mono", Consolas, "SF Mono", Menlo, monospace;
 
   font-family: var(--font-sans);
-  font-size: 16px;
-  line-height: 24px;
+  font-size: 14px;
+  line-height: 20px;
   font-weight: 400;
 
   color: var(--text);
@@ -1313,4 +1313,39 @@ input {
 .theme-switching,
 .theme-switching * {
   transition: none !important;
+}
+
+/* With the 14px base, what was sized as a share of the text came out too
+   small (table headers under 9px): fixed floors, as in the mockups. Later in
+   the cascade than BatchView.css and SegmentEditor.css, same selectors. */
+.field-tracks th,
+.batch-table-wrap th,
+.batch-tracks-table th,
+.editor-table th {
+  font-size: 11px;
+}
+
+.small-button,
+.batch-table-wrap .small-button,
+.batch-tracks-actions button,
+.batch-row-buttons button {
+  font-size: 12px;
+}
+
+.log-panel,
+.log-panel summary,
+.log {
+  font-size: 12px;
+}
+
+.waveform-label {
+  font-size: 11px;
+}
+
+.waveform-ticks {
+  font-size: 10.5px;
+}
+
+.batch-table-wrap .batch-status {
+  font-size: 12px;
 }
