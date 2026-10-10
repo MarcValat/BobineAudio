@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode, type Ref } from "react";
 import "./Dialog.css";
 import { useT } from "./i18n";
+import { CloseIcon } from "./icons";
 
 /** Escape runs `onEscape` (the latest one, however often it changes). */
 export function useEscape(onEscape: () => void): void {
@@ -71,13 +72,15 @@ export function Dialog({
 
 /** A dialog's title row: the title, then `children` (tabs...), then its
  * close button when `onClose` is given (a dialog with its own way out
- * passes that as a child instead). */
+ * passes that as a child instead) -- a cross at the far right with
+ * `closeIcon`, as in Paramètres. */
 export function DialogHeader({
   id,
   title,
   titleTooltip,
   onClose,
   closeLabel,
+  closeIcon = false,
   children,
 }: {
   id?: string;
@@ -85,6 +88,7 @@ export function DialogHeader({
   titleTooltip?: string;
   onClose?: () => void;
   closeLabel?: string;
+  closeIcon?: boolean;
   children?: ReactNode;
 }) {
   const t = useT();
@@ -94,7 +98,17 @@ export function DialogHeader({
         {title}
       </h2>
       {children}
-      {onClose && (
+      {onClose && closeIcon && (
+        <button
+          className="icon-button dialog-close"
+          aria-label={closeLabel ?? t.common.close}
+          title={closeLabel ?? t.common.close}
+          onClick={onClose}
+        >
+          <CloseIcon />
+        </button>
+      )}
+      {onClose && !closeIcon && (
         <button className="small-button" onClick={onClose}>
           {closeLabel ?? t.common.close}
         </button>

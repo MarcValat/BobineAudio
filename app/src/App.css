@@ -132,6 +132,16 @@ body,
 
 body {
   background: var(--bg);
+  /* An app, not a page: no text gets selected by a click-drag or a double
+     click. What's there to be typed or copied opts back in. */
+  user-select: none;
+  cursor: default;
+}
+
+input,
+textarea,
+.selectable {
+  user-select: text;
 }
 
 .container {
@@ -1070,20 +1080,38 @@ button:focus-visible {
   background: var(--surface-alt);
 }
 
-.log-panel {
-  text-align: left;
-  font-size: 0.85em;
-}
-
-.log-panel summary {
-  cursor: pointer;
+/* "Journal (n)": a link-like button, opening the log in a dialog. */
+.log-link {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 400;
   color: var(--text-muted);
+  background: none;
+  border: none;
+  box-shadow: none;
 }
 
+.log-link::before {
+  content: "\25B8\FE0E\00A0";
+}
+
+.log-link:hover {
+  color: var(--accent);
+}
+
+.log-dialog {
+  max-width: 760px;
+}
+
+/* Selectable, unlike the rest of the app: it's there to be copied. */
 .log {
-  margin-top: 0.5em;
+  margin: 0;
   padding: 0.8em;
-  max-height: 7em;
+  height: min(60vh, 32em);
+  user-select: text;
+  cursor: text;
   overflow-y: auto;
   overflow-x: hidden;
   white-space: pre-wrap;
@@ -1332,8 +1360,6 @@ input {
   font-size: 12px;
 }
 
-.log-panel,
-.log-panel summary,
 .log {
   font-size: 12px;
 }

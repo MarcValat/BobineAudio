@@ -52,6 +52,10 @@
   font-size: 1.1em;
 }
 
+.dialog-header .dialog-close {
+  margin-left: auto;
+}
+
 /* A drawer from the right, under the top bar (which stays usable): the
    workspace stays in sight behind it, dimmed a little. */
 .dialog-overlay-side {
