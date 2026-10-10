@@ -41,7 +41,16 @@ export function ListRow({
           <span className="list-row-name">{name}</span>
           <span className="list-row-detail">{detail}</span>
         </span>
-        <span className={`list-badge list-badge-${badgeKind}`}>{badge}</span>
+        <span className="list-row-status">
+          <span className={`list-badge list-badge-${badgeKind}`}>{badge}</span>
+          {/* Something's running on it: a bar that moves (the engine
+              doesn't say how far along it is). */}
+          {badgeKind === "running" && (
+            <span className="list-row-progress" aria-hidden="true">
+              <span />
+            </span>
+          )}
+        </span>
       </button>
       {actions && <span className="list-row-actions">{actions}</span>}
     </li>

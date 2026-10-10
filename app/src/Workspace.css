@@ -143,13 +143,55 @@
 }
 
 /* The buttons take the badge's place meanwhile. */
-.list-row:hover .list-badge,
-.list-row:focus-within .list-badge {
+.list-row:hover .list-row-status,
+.list-row:focus-within .list-row-status {
   visibility: hidden;
 }
 
 .list-row-actions button {
   padding: 0.1em 0.45em;
+}
+
+.list-row-status {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.list-row-progress {
+  width: 90px;
+  height: 4px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
+}
+
+.list-row-progress span {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--gradient);
+  animation: list-row-progress 1.2s ease-in-out infinite;
+}
+
+@keyframes list-row-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .list-row-progress span {
+    width: 100%;
+    animation: none;
+    opacity: 0.6;
+  }
 }
 
 /* Where a file stands, as a pill. */
