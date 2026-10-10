@@ -47,7 +47,13 @@ export function InfoTip({ children }: { children: ReactNode }) {
       onFocus={() => setOpen(true)}
       onBlur={() => setOpen(false)}
     >
-      ?
+      {/* Drawn, not typed: a glyph sits wherever the font puts it, never
+          quite centered in its circle. */}
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        <circle className="info-tip-disc" cx="10" cy="10" r="9" />
+        <path className="info-tip-mark" d="M7.6 7.7a2.5 2.5 0 0 1 4.85.85c0 1.65-2.45 2.05-2.45 3.7" />
+        <circle className="info-tip-dot" cx="10" cy="14.6" r="1.05" />
+      </svg>
       {open &&
         createPortal(
           <span
