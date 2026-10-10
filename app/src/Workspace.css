@@ -254,13 +254,20 @@
   color: var(--text-muted);
 }
 
-.detail-icon-button {
+/* Its buttons, the icon-only one included, all one height. */
+.detail-header button {
+  flex: 0 0 auto;
+  height: 36px;
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  align-self: stretch;
-  max-height: 2.4em;
-  padding: 0 0.7em;
+  padding-block: 0;
+}
+
+.detail-header .detail-icon-button {
+  width: 36px;
+  padding-inline: 0;
 }
 
 /* The tracks used, with "Choisir" (and "Par langue") on the same line. */

@@ -55,6 +55,11 @@
   stroke: var(--accent-strong);
 }
 
+/* What a Tooltip wraps, laid out as if unwrapped. */
+.tooltip-anchor {
+  display: inline-flex;
+}
+
 /* Rendered at the end of the page (see InfoTip.tsx), over everything. */
 .info-tip-bubble {
   position: fixed;

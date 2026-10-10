@@ -14,7 +14,7 @@ import {
   type AnalysisRun,
   type ExportFields,
 } from "./batchShared";
-import { InfoTip } from "./InfoTip";
+import { InfoTip, Tooltip } from "./InfoTip";
 import { ListRow, MoveButtons, type BadgeKind } from "./Workspace";
 import { LogPanel } from "./LogPanel";
 import { PillSwitch } from "./PillSwitch";
@@ -36,9 +36,8 @@ import { t, useT } from "./i18n";
 import { useSubtitleDefault } from "./settings";
 
 // Height of the detail's analysis area below which the chart and the
-// waveforms are shown one at a time (as in the single-file view, whose
-// panel has a little more room around them).
-const COMPACT_ANALYSIS_HEIGHT = 420;
+// waveforms are shown one at a time (as in the single-file view).
+const COMPACT_ANALYSIS_HEIGHT = 520;
 
 /** "@1 fre": a track as the list and the detail name it. */
 const trackName = (track: TrackInfo) => `@${track.index} ${track.language ?? "?"}`;
@@ -624,15 +623,16 @@ export function MultiTrackBatch({
                 </span>
               </div>
               {shownTrack && (shownRun?.status === "done" || shownRun?.status === "error") && (
-                <button
-                  className="icon-small-button detail-icon-button"
-                  disabled={busy}
-                  onClick={() => reanalyzeTrack(detailPath, shownTrack)}
-                  aria-label={m.batch.reanalyzeOne}
-                  title={m.batch.reanalyzeOneHint}
-                >
-                  <RedoIcon />
-                </button>
+                <Tooltip text={m.batch.reanalyzeOneHint}>
+                  <button
+                    className="icon-small-button detail-icon-button"
+                    disabled={busy}
+                    onClick={() => reanalyzeTrack(detailPath, shownTrack)}
+                    aria-label={m.batch.reanalyzeOne}
+                  >
+                    <RedoIcon />
+                  </button>
+                </Tooltip>
               )}
               {shownTrack && shownResult && (
                 <button disabled={queue.exporting} onClick={() => setEditing({ path: detailPath, track: shownTrack.index })}>
