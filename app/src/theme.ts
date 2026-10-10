@@ -15,7 +15,6 @@ export function loadTheme(): ThemeChoice {
  * to the window's title bar, and remembers it for the next session. */
 export function applyTheme(choice: ThemeChoice): void {
   const root = document.documentElement;
-  withoutTransitions(root);
   if (choice === "system") root.removeAttribute("data-theme");
   else root.setAttribute("data-theme", choice);
   saveSetting(THEME_KEY, choice === "system" ? null : choice);
@@ -27,21 +26,4 @@ export function applyTheme(choice: ThemeChoice): void {
   } catch {
     // not running in Tauri
   }
-}
-
-/** Switches the whole page at once: the controls' color transitions (meant
- * for hover) would otherwise fade them into the new theme while everything
- * else flips. Restored two frames later, once the new colors are painted. */
-function withoutTransitions(root: HTMLElement): void {
-  root.classList.add("theme-switching");
-  requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("theme-switching")));
-}
-
-// "Système" follows the OS live: the same instant switch when it changes.
-try {
-  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-    if (!document.documentElement.hasAttribute("data-theme")) withoutTransitions(document.documentElement);
-  });
-} catch {
-  // no matchMedia: nothing to follow
 }
