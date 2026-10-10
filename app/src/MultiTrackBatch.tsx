@@ -736,13 +736,15 @@ export function MultiTrackBatch({
                             segments={shownResult.segments}
                             referenceStartTime={detailReference.start_time ?? 0}
                             trackStartTime={shownTrack.start_time}
+                            extraControls={<LogPanel lines={shownRun?.log ?? []} />}
                           />
                         </div>
                       )}
                     </>
                   )}
                 </div>
-                <LogPanel lines={shownRun?.log ?? []} />
+                {/* Analyzed, it's at the end of the playback row instead. */}
+                {!shownResult && <LogPanel lines={shownRun?.log ?? []} />}
               </>
             )}
 

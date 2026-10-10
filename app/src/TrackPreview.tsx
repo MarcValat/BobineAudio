@@ -179,6 +179,9 @@ interface TrackPreviewProps {
    * shared with its own chart, instead of this component's own. */
   view?: TimeView | null;
   onViewChange?: (view: TimeView) => void;
+  /** More buttons at the right end of the playback row (the detail's
+   * "Journal"). */
+  extraControls?: React.ReactNode;
 }
 
 export interface TrackPreviewHandle {
@@ -221,6 +224,7 @@ export function TrackPreview({
   onCursorChange,
   view: sharedView,
   onViewChange,
+  extraControls,
 }: TrackPreviewProps) {
   const t = useT();
   const [previewStart, setPreviewStart] = useState(() => (segments.length ? segments[0].start_s : 0));
@@ -785,7 +789,7 @@ export function TrackPreview({
               })
             }
           />
-          {t.preview.candidate}
+          {t.preview.hearCandidate}
         </label>
         <label>
           <input
@@ -799,7 +803,7 @@ export function TrackPreview({
               })
             }
           />
-          {t.preview.result}
+          {t.preview.hearResult}
         </label>
         <span className="preview-offset">
           {t.preview.offsetHere(formatOffsetMs(appliedOffset))}
@@ -810,6 +814,7 @@ export function TrackPreview({
             </>
           )}
         </span>
+        {extraControls && <span className="preview-extra">{extraControls}</span>}
       </div>
       {error && <p className="error">{error}</p>}
     </div>

@@ -1080,25 +1080,21 @@ button:focus-visible {
   background: var(--surface-alt);
 }
 
-/* "Journal (n)": a link-like button, opening the log in a dialog. */
-.log-link {
+/* "Journal (n)", opening the log in a dialog. */
+.log-button {
   flex: 0 0 auto;
   align-self: flex-start;
-  padding: 0;
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--text-muted);
-  background: none;
-  border: none;
-  box-shadow: none;
 }
 
-.log-link::before {
-  content: "\25B8\FE0E\00A0";
+/* At the right end of the playback row. */
+.preview-extra {
+  margin-left: auto;
+  display: flex;
+  gap: 0.4em;
 }
 
-.log-link:hover {
-  color: var(--accent);
+.preview-extra .log-button {
+  align-self: center;
 }
 
 .log-dialog {

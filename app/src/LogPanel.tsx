@@ -12,7 +12,7 @@ export function LogPanel({ lines }: { lines: string[] }) {
   if (lines.length === 0) return null;
   return (
     <>
-      <button className="log-link" onClick={() => setOpen(true)}>
+      <button className="small-button log-button" onClick={() => setOpen(true)}>
         {t.common.log(lines.length)}
       </button>
       {open && <LogDialog lines={lines} onClose={() => setOpen(false)} />}

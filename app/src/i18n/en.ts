@@ -368,7 +368,9 @@ export const en: Messages = {
     play: "Play",
     stop: "Stop",
     hear: "Hear:",
-    offsetHere: (offset) => `Offset at this position: ${offset}`,
+    hearCandidate: "As is",
+    hearResult: "Result",
+    offsetHere: (offset) => `Offset here: ${offset}`,
     containerDelay: (applied, remaining) =>
       `Of which ${applied} is already applied to this track by the file (container delay): in a player, the remaining offset is about ${remaining}. The offset shown, used for listening and export, is measured on the raw track; this detail is only informative.`,
   },

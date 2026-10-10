@@ -374,7 +374,10 @@ export const fr = {
     play: "Écouter",
     stop: "Arrêter",
     hear: "Entendre :",
-    offsetHere: (offset: string) => `Décalage à cette position : ${offset}`,
+    // The "Entendre" checkboxes: short, the row also holds the playback.
+    hearCandidate: "Telle quelle",
+    hearResult: "Résultat",
+    offsetHere: (offset: string) => `Décalage ici : ${offset}`,
     containerDelay: (applied: string, remaining: string) =>
       `Dont ${applied} déjà appliqués par le fichier à cette piste (délai de conteneur) : dans un lecteur, le décalage restant est d'environ ${remaining}. Le décalage affiché, utilisé pour l'écoute et l'export, est mesuré sur la piste brute ; ce détail est seulement informatif.`,
   },
