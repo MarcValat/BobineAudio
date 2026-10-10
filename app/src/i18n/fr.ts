@@ -46,7 +46,8 @@ export const fr = {
   },
 
   options: {
-    title: "Options",
+    title: "Paramètres",
+    version: (version: string) => `Version actuelle : ${version}.`,
     theme: "Thème",
     themes: { system: "Système", light: "Clair", dark: "Sombre" },
     themeHint: "« Système » suit le thème clair ou sombre de Windows.",
@@ -57,7 +58,7 @@ export const fr = {
     subtitlesHint:
       "Les sous-titres recalés avec une piste audio corrigée, sauf choix contraire : cochés d'office en fichier unique, réglage de départ des modes batch.",
     updates: "Mises à jour",
-    checkUpdates: "Vérifier au démarrage",
+    checkUpdates: "Vérifier les mises à jour au démarrage",
     updatesHint: "Au lancement, l'application demande à GitHub si une nouvelle version existe ; rien n'est installé sans ton accord.",
     cache: "Cache d'analyse",
     cacheSize: (megabytes: number) => (megabytes < 1 ? "moins de 1 Mo" : `${megabytes} Mo`),

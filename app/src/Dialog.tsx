@@ -23,12 +23,14 @@ export function useEscape(onEscape: () => void): void {
  * Escape runs `onEscape` (default: `onClose`); a click on the backdrop
  * closes it only with `closeOnBackdrop` -- not where a stray click would
  * lose a choice in progress. `fill` takes the whole window (the editor);
+ * `side` slides in from the right under the top bar (Paramètres);
  * otherwise it's as big as its content, scrolling past the window's height. */
 export function Dialog({
   onClose,
   onEscape,
   closeOnBackdrop = false,
   fill = false,
+  side = false,
   className = "",
   labelledBy,
   panelRef,
@@ -38,6 +40,7 @@ export function Dialog({
   onEscape?: () => void;
   closeOnBackdrop?: boolean;
   fill?: boolean;
+  side?: boolean;
   className?: string;
   labelledBy?: string;
   panelRef?: Ref<HTMLDivElement>;
@@ -46,7 +49,7 @@ export function Dialog({
   useEscape(onEscape ?? onClose);
   return (
     <div
-      className={`dialog-overlay${fill ? " dialog-overlay-fill" : ""}`}
+      className={`dialog-overlay${fill ? " dialog-overlay-fill" : ""}${side ? " dialog-overlay-side" : ""}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby={labelledBy}
@@ -54,7 +57,7 @@ export function Dialog({
     >
       <div
         ref={panelRef}
-        className={`dialog-panel${fill ? " dialog-panel-fill" : ""} ${className}`}
+        className={`dialog-panel${fill ? " dialog-panel-fill" : ""}${side ? " dialog-panel-side" : ""} ${className}`}
         onClick={(e) => e.stopPropagation()}
       >
         {children}

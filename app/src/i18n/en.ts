@@ -45,7 +45,8 @@ export const en: Messages = {
   },
 
   options: {
-    title: "Options",
+    title: "Settings",
+    version: (version) => `Current version: ${version}.`,
     theme: "Theme",
     themes: { system: "System", light: "Light", dark: "Dark" },
     themeHint: "“System” follows Windows' light or dark theme.",
@@ -56,7 +57,7 @@ export const en: Messages = {
     subtitlesHint:
       "The subtitles retimed with a corrected audio track unless picked otherwise: ticked by default in single-file mode, the batch modes' starting setting.",
     updates: "Updates",
-    checkUpdates: "Check at startup",
+    checkUpdates: "Check for updates at startup",
     updatesHint: "At launch, the app asks GitHub whether a new version exists; nothing is installed without your consent.",
     cache: "Analysis cache",
     cacheSize: (megabytes) => (megabytes < 1 ? "less than 1 MB" : `${megabytes} MB`),
