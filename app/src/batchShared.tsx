@@ -50,8 +50,10 @@ export function AnalyzeButton({
     );
   }
   if (missing === 0 && analyzed > 0) {
+    // Nothing left to analyze: redoing it all isn't the next step (exporting
+    // is), so it's a plain button.
     return (
-      <button className="primary-button" disabled={disabled} title={blockedTitle ?? redoTitle} onClick={() => onAnalyze(true)}>
+      <button disabled={disabled} title={blockedTitle ?? redoTitle} onClick={() => onAnalyze(true)}>
         {t.batch.reanalyzeAll}
       </button>
     );
