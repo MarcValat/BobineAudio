@@ -1,8 +1,11 @@
-/* Every dialog (see Dialog.tsx): a dimmed backdrop over the whole app, the
-   window centered on it. */
+/* Every dialog (see Dialog.tsx): a dimmed backdrop over the app under the
+   top bar, the window centered on it. The top bar is the window's title
+   bar: it stays above, so the window can still be moved, minimized or
+   closed; its own controls wait (below). */
 .dialog-overlay {
   position: fixed;
   inset: 0;
+  top: var(--top-bar-height);
   z-index: 50;
   display: flex;
   align-items: center;
@@ -56,10 +59,17 @@
   margin-left: auto;
 }
 
+/* While a dialog other than the settings drawer is open, the top bar's own
+   controls are dimmed and wait, like the rest of the app; the bar still
+   drags the window, its window buttons still work. */
+body:has(.dialog-overlay:not(.dialog-overlay-side)) .top-bar > :not(.window-controls) {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
 /* A drawer from the right, under the top bar (which stays usable): the
    workspace stays in sight behind it, dimmed a little. */
 .dialog-overlay-side {
-  top: var(--top-bar-height);
   padding: 0;
   justify-content: flex-end;
   align-items: stretch;
