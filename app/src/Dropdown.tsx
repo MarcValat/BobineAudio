@@ -225,7 +225,9 @@ export function Select<T extends string>({
 }: {
   label: string;
   value: T;
-  options: readonly { value: T; label: string; detail?: string }[];
+  /** `short`: shown on the closed button instead of `label`, where room
+   * is short (the settings bar). */
+  options: readonly { value: T; label: string; detail?: string; short?: string }[];
   onChange: (value: T) => void;
   disabled?: boolean;
   /** Shown when the value is none of the options. */
@@ -234,7 +236,7 @@ export function Select<T extends string>({
 }) {
   const picked = options.find((o) => o.value === value);
   return (
-    <Dropdown label={label} shown={picked?.label ?? placeholder} disabled={disabled || options.length === 0} className={className}>
+    <Dropdown label={label} shown={picked?.short ?? picked?.label ?? placeholder} disabled={disabled || options.length === 0} className={className}>
       {(close) =>
         options.map((o) => (
           <DropdownOption

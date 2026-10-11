@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Tooltip } from "./InfoTip";
 import { useT } from "./i18n";
 import { devParam } from "./util";
 
@@ -53,13 +52,12 @@ export function WindowControls() {
   return (
     <div className="window-controls">
       {buttons.map((b) => (
-        <Tooltip key={b.kind} text={b.label}>
-          <button className={`window-button window-${b.kind}`} aria-label={b.label} onClick={b.onClick}>
-            <svg viewBox="0 0 12 12" aria-hidden="true">
-              {b.icon}
-            </svg>
-          </button>
-        </Tooltip>
+        // No tooltip: these three are the same in every app.
+        <button key={b.kind} className={`window-button window-${b.kind}`} aria-label={b.label} onClick={b.onClick}>
+          <svg viewBox="0 0 12 12" aria-hidden="true">
+            {b.icon}
+          </svg>
+        </button>
       ))}
     </div>
   );

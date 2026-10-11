@@ -309,9 +309,14 @@
   white-space: nowrap;
 }
 
+/* One line whatever the width (all of it on hover): the detail's height
+   mustn't depend on how long a name is. */
 .detail-meta {
   font-size: 12.5px;
   color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Its buttons, the icon-only one included, all one height. */

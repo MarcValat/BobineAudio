@@ -149,6 +149,8 @@ export const fr = {
 
   subtitles: {
     modes: { forced: "Forcés de même langue", all: "Tous de même langue", none: "Aucun" },
+    /** The same, shorter: what the settings bar shows closed. */
+    shortModes: { forced: "Forcés", all: "Tous", none: "Aucun" },
     forcedTag: " forcés",
     quoted: (title: string) => `« ${title} »`,
     format: (codec: string) => `Format ${codec}`,
@@ -286,12 +288,13 @@ export const fr = {
     tracksUnavailable: "Pistes indisponibles",
     noFiles: "Aucun fichier.",
     checkAllTracks: "Vérifier toutes les pistes",
+    allTracks: "Toutes les pistes",
     referenceFiles: "Fichiers de référence",
     candidateFiles: "Fichiers à corriger",
     language: "Langue ajoutée :",
-    fileLanguage: (language: string | null) => `Celle du fichier (${language ?? "aucune"})`,
+    fileLanguage: (language: string | null) => `Du fichier (${language ?? "aucune"})`,
     languageHint:
-      "Langue attribuée à la piste corrigée dans le fichier exporté, quand une paire n'en corrige qu'une. « Celle du fichier » garde la sienne ; utile pour une piste qui n'en a pas (un .wav, par exemple). Plusieurs pistes corrigées gardent chacune la leur.",
+      "Langue attribuée à la piste corrigée dans le fichier exporté, quand une paire n'en corrige qu'une. « Du fichier » garde la sienne ; utile pour une piste qui n'en a pas (un .wav, par exemple). Plusieurs pistes corrigées gardent chacune la leur.",
     hint:
       "Pistes proposées d'après le 1er fichier de chaque colonne, puis appliquées à toutes les paires. « Vérifier toutes les pistes » montre celles de chaque fichier. Les sous-titres choisis du fichier à corriger (texte seulement : SRT, ASS) sont importés et recalés avec sa piste audio.",
     pairs: "Paires",

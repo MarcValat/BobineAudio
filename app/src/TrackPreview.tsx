@@ -200,17 +200,14 @@ interface TrackPreviewProps {
    * shared with its own chart, instead of this component's own. */
   view?: TimeView | null;
   onViewChange?: (view: TimeView) => void;
-  /** More buttons at the right end of the playback row (the detail's
-   * "Journal"). */
+  /** More buttons at the right end of the zoom row (the detail's
+   * "Journal"): the playback row has no room left in a small window. */
   extraControls?: React.ReactNode;
 }
 
 export interface TrackPreviewHandle {
   seekTo(t: number): void;
 }
-
-// Above this many segments, "Aller à" is a dropdown instead of a row of buttons.
-const MAX_SEGMENT_BUTTONS = 4;
 
 function segmentPickLabel(seg: SegmentOut): string {
   return `${formatTime(seg.start_s)}–${formatTime(seg.end_s)} (${segmentOffsetLabel(seg)})`;
@@ -485,6 +482,8 @@ export function TrackPreview({
           return;
         }
       }
+      // Played to the end of the clip: nothing plays any more.
+      playbackStartRef.current = null;
       stopCursorLoop();
     }
     rafRef.current = requestAnimationFrame(tick);
@@ -617,6 +616,19 @@ export function TrackPreview({
     stopCursorLoop();
   }
 
+  // "Décalage ici", at the result's label (where the position plays).
+  const offsetHere = (
+    <span className="preview-offset">
+      {t.preview.offsetHere(formatOffsetMs(appliedOffset))}
+      {hasContainerDelay && (
+        <>
+          {" "}
+          <InfoTip>{t.preview.containerDelay(formatOffsetMs(trackStartTime), formatOffsetMs(presentationOffset))}</InfoTip>
+        </>
+      )}
+    </span>
+  );
+
   const removedHighlight: HighlightRegion[] = (viewData?.removed ?? []).map((r) => ({ ...r, kind: "removed" }));
   const addedHighlight: HighlightRegion[] = (viewData?.added ?? []).map((r) => ({ ...r, kind: "added" }));
 
@@ -641,8 +653,8 @@ export function TrackPreview({
 
   return (
     <div className="preview" ref={root}>
-      {/* One wrapping row (zoom, segment shortcuts, legend): height is what a
-          small screen lacks. */}
+      {/* One row (zoom, the segments to go to, the journal): height is what
+          a small window lacks. */}
       <div className="preview-toolbar">
         <div className="waveform-zoom-controls">
           <span>{t.preview.zoom}</span>
@@ -657,19 +669,9 @@ export function TrackPreview({
           </button>
           <InfoTip>{t.preview.zoomHint}</InfoTip>
         </div>
-        {/* A few segments: one button each. More: a list, so the row
-            doesn't wrap and eat the waveforms' height. */}
-        {segments.length > 1 && segments.length <= MAX_SEGMENT_BUTTONS && (
-          <div className="preview-segment-picks">
-            {t.preview.goTo}
-            {segments.map((seg, i) => (
-              <button key={i} className="small-button" onClick={() => goToSegment(seg)}>
-                {segmentPickLabel(seg)}
-              </button>
-            ))}
-          </div>
-        )}
-        {segments.length > MAX_SEGMENT_BUTTONS && (
+        {/* A list, not a button per segment: the row stays one line, the
+            height is the waveforms'. */}
+        {segments.length > 1 && (
           <span className="preview-segment-picks">
             {t.preview.goTo}
             <Select
@@ -684,16 +686,7 @@ export function TrackPreview({
             />
           </span>
         )}
-        {(removedHighlight.length > 0 || addedHighlight.length > 0) && (
-          <span className="waveform-legend">
-            <span>
-              <span className="waveform-legend-swatch removed" /> {t.preview.willBeRemoved}
-            </span>
-            <span>
-              <span className="waveform-legend-swatch added" /> {t.preview.willBeAdded}
-            </span>
-          </span>
-        )}
+        {extraControls && <span className="preview-extra">{extraControls}</span>}
       </div>
 
       {waveformError && <p className="error">{waveformError}</p>}
@@ -747,6 +740,13 @@ export function TrackPreview({
             onZoom={zoomAt}
             highlights={removedHighlight}
             label={t.preview.candidate}
+            labelExtra={
+              removedHighlight.length > 0 && (
+                <span>
+                  <span className="waveform-legend-swatch removed" /> {t.preview.willBeRemoved}
+                </span>
+              )
+            }
             className="waveform-candidate"
           />
           <Waveform
@@ -761,6 +761,16 @@ export function TrackPreview({
             onZoom={zoomAt}
             highlights={addedHighlight}
             label={t.preview.result}
+            labelExtra={
+              <>
+                {addedHighlight.length > 0 && (
+                  <span>
+                    <span className="waveform-legend-swatch added" /> {t.preview.willBeAdded}
+                  </span>
+                )}
+                {offsetHere}
+              </>
+            }
             className="waveform-final"
           />
         </div>
@@ -791,11 +801,9 @@ export function TrackPreview({
             onChange={(e) => setPreviewStart(Number(e.target.value))}
           />
         </label>
-        <button className="small-button" onClick={() => loadAndPlay()} disabled={loading} title={t.preview.spaceHint}>
-          {loading ? t.preview.loading : t.preview.play}
-        </button>
-        <button className="small-button" onClick={stop} disabled={loadedClipStart === null && liveCursor === null}>
-          {t.preview.stop}
+        {/* One button, as Space: play, or stop what plays. */}
+        <button className="small-button preview-play" onClick={() => toggle.current()} disabled={loading} title={t.preview.spaceHint}>
+          {loading ? t.preview.loading : liveCursor !== null ? t.preview.stop : t.preview.play}
         </button>
         {/* What plays during "Écouter": any mix of the three. */}
         <span className="preview-listen-label">{t.preview.hear}</span>
@@ -841,16 +849,6 @@ export function TrackPreview({
           />
           {t.preview.hearResult}
         </label>
-        <span className="preview-offset">
-          {t.preview.offsetHere(formatOffsetMs(appliedOffset))}
-          {hasContainerDelay && (
-            <>
-              {" "}
-              <InfoTip>{t.preview.containerDelay(formatOffsetMs(trackStartTime), formatOffsetMs(presentationOffset))}</InfoTip>
-            </>
-          )}
-        </span>
-        {extraControls && <span className="preview-extra">{extraControls}</span>}
       </div>
       {error && <p className="error">{error}</p>}
     </div>

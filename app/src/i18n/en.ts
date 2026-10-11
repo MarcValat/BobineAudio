@@ -146,6 +146,7 @@ export const en: Messages = {
 
   subtitles: {
     modes: { forced: "Forced, same language", all: "All, same language", none: "None" },
+    shortModes: { forced: "Forced", all: "All", none: "None" },
     forcedTag: " forced",
     quoted: (title) => `“${title}”`,
     format: (codec) => `${codec} format`,
@@ -281,12 +282,13 @@ export const en: Messages = {
     tracksUnavailable: "Tracks unavailable",
     noFiles: "No files.",
     checkAllTracks: "Check all tracks",
+    allTracks: "All tracks",
     referenceFiles: "Reference files",
     candidateFiles: "Files to correct",
     language: "Added language:",
-    fileLanguage: (language) => `The file's (${language ?? "none"})`,
+    fileLanguage: (language) => `From the file (${language ?? "none"})`,
     languageHint:
-      "Language given to the corrected track in the exported file, when a pair corrects only one. “The file's” keeps its own; handy for a track that has none (a .wav, for instance). Several corrected tracks each keep their own.",
+      "Language given to the corrected track in the exported file, when a pair corrects only one. “From the file” keeps its own; handy for a track that has none (a .wav, for instance). Several corrected tracks each keep their own.",
     hint:
       "Tracks offered from the first file of each column, then applied to every pair. “Check all tracks” shows each file's. The chosen subtitles of the file to correct (text only: SRT, ASS) are imported and retimed with its audio track.",
     pairs: "Pairs",

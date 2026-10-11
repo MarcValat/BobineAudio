@@ -641,7 +641,7 @@ export function PairsBatch({
             <Select
               label={m.batch.subtitles}
               value={subsMode}
-              options={SUBTITLE_MODES.map((mode) => ({ value: mode, label: m.subtitles.modes[mode] }))}
+              options={SUBTITLE_MODES.map((mode) => ({ value: mode, label: m.subtitles.modes[mode], short: m.subtitles.shortModes[mode] }))}
               onChange={setSubsMode}
               disabled={busy}
             />
@@ -655,8 +655,8 @@ export function PairsBatch({
                 <h2>
                   {m.pairs.pairsCount(pairCount)} <InfoTip>{m.pairs.pairsHint}</InfoTip>
                 </h2>
-                <button className="small-button" onClick={() => setShowTracksModal(true)}>
-                  {m.pairs.checkAllTracks}
+                <button className="small-button" title={m.pairs.checkAllTracks} onClick={() => setShowTracksModal(true)}>
+                  {m.pairs.allTracks}
                 </button>
                 <RemoveAllButton
                   results={Object.values(analyses).some((a) => a.status === "done")}

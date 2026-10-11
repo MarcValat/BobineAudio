@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import { formatTime } from "./SegmentChart";
 import { WHEEL_ZOOM_IN_FACTOR, WHEEL_ZOOM_OUT_FACTOR, useWheel } from "./timeView";
 import "./Waveform.css";
@@ -31,6 +31,8 @@ interface WaveformProps {
   onZoom: (factor: number, centerTime: number) => void;
   highlights?: HighlightRegion[];
   label: string;
+  /** Beside the label, on the right: what its colors mean, a value. */
+  labelExtra?: ReactNode;
   className?: string;
 }
 
@@ -72,6 +74,7 @@ export function Waveform({
   onZoom,
   highlights,
   label,
+  labelExtra,
   className,
 }: WaveformProps) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -125,7 +128,10 @@ export function Waveform({
 
   return (
     <div className={`waveform ${className ?? ""}`}>
-      <div className="waveform-label">{label}</div>
+      <div className="waveform-label">
+        <span className="waveform-label-name">{label}</span>
+        {labelExtra && <span className="waveform-label-extra">{labelExtra}</span>}
+      </div>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}

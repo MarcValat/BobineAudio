@@ -439,7 +439,7 @@ export function MultiTrackBatch({
             <Select
               label={m.batch.subtitles}
               value={subsMode}
-              options={SUBTITLE_MODES.map((mode) => ({ value: mode, label: m.subtitles.modes[mode] }))}
+              options={SUBTITLE_MODES.map((mode) => ({ value: mode, label: m.subtitles.modes[mode], short: m.subtitles.shortModes[mode] }))}
               onChange={setSubsMode}
               disabled={busy}
             />

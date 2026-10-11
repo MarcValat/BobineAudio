@@ -124,7 +124,11 @@ export function DetailHeader({
         <span className="detail-name" title={titleTooltip}>
           {title}
         </span>
-        {meta && <span className="detail-meta">{meta}</span>}
+        {meta && (
+          <span className="detail-meta" title={typeof meta === "string" ? meta : undefined}>
+            {meta}
+          </span>
+        )}
       </div>
       {onReanalyze && (
         <Tooltip text={t.batch.reanalyzeOneHint}>
