@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   probe,
   startSegmentsJob,
@@ -342,9 +342,11 @@ export function PairsBatch({
   const [editingPairIndex, setEditingPairIndex] = useState<number | null>(null);
   // The row shown in the detail.
   const [selected, setSelected] = useState(0);
-  // The detail's files, read once each (their tracks' languages and start
-  // times, for its title and the waveforms' container-delay note).
+  // Every listed file, read once as soon as it's listed: its tracks (the
+  // detail's table and title, the waveforms' container-delay note), or why
+  // it can't be read (its pair is flagged, as a multitrack file is).
   const [probes, setProbes] = useState<Record<string, ProbeResponse>>({});
+  const [probeErrors, setProbeErrors] = useState<Record<string, string>>({});
   const [analysisViewRef, analysisViewSize] = useElementSize<HTMLDivElement>();
   const [analysisView, setAnalysisView] = useState<"segments" | "listen">("listen");
 
@@ -411,22 +413,27 @@ export function PairsBatch({
 
   const detailReference: string | undefined = referenceFiles[selected];
   const detailCandidate: string | undefined = candidateFiles[selected];
+  const requested = useRef(new Set<string>());
   useEffect(() => {
-    for (const path of [detailReference, detailCandidate]) {
-      if (!path || probes[path]) continue;
+    for (const path of [...referenceFiles, ...candidateFiles]) {
+      if (requested.current.has(path)) continue;
+      requested.current.add(path);
       probe(path)
         .then((res) => setProbes((c) => ({ ...c, [path]: res })))
-        .catch(() => {
-          // informational only: the title goes without the languages
-        });
+        .catch((err) => setProbeErrors((c) => ({ ...c, [path]: errorMessage(err) })));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- probes is a cache, not an input
-  }, [detailReference, detailCandidate]);
+  }, [referenceFiles, candidateFiles]);
+
+  /** Why row `i`'s files can't be read, if one can't. */
+  const unreadable = (i: number): string[] =>
+    [...new Set([referenceFiles[i], candidateFiles[i]])].flatMap((path) => (path && probeErrors[path] ? [probeErrors[path]] : []));
 
   /** Analyzes the pairs that aren't yet (new ones, failed ones), keeping the
    * rest and any edit made to them; or all of them again (`all`). */
   async function handleAnalyze(all: boolean) {
-    await runPlan(Array.from({ length: pairCount }, (_, i) => i).filter((i) => all || !isDone(analyses[pairKey(i)])));
+    await runPlan(
+      Array.from({ length: pairCount }, (_, i) => i).filter((i) => unreadable(i).length === 0 && (all || !isDone(analyses[pairKey(i)]))),
+    );
   }
 
   /** Analyzes these pairs (by row), each one's result and edits replaced. */
@@ -542,6 +549,7 @@ export function PairsBatch({
   function pairBadge(i: number): [string, BadgeKind] {
     const st = m.pairs.status;
     if (i >= pairCount) return [st.unpaired, "error"];
+    if (unreadable(i).length > 0) return [m.multi.status.unreadable, "error"];
     const a = analysisOf(i);
     if (a?.exportStatus === "running") return [st.exporting, "running"];
     if (a?.status === "running") return [st.running, "running"];
@@ -679,7 +687,7 @@ export function PairsBatch({
                     candidateActions={
                       <MoveButtons count={candidateFiles.length} index={i} disabled={busy} onChange={(update) => setCandidateFiles(update)} />
                     }
-                    state={rowState(i < pairCount ? [a] : [], a?.exportStatus, i >= pairCount)}
+                    state={rowState(i < pairCount ? [a] : [], a?.exportStatus, i >= pairCount || unreadable(i).length > 0)}
                     badge={badge}
                     badgeKind={badgeKind}
                     selected={i === selected}
@@ -738,7 +746,7 @@ export function PairsBatch({
               {detailPaired && !detailResult && (
                 <button
                   className="primary-button"
-                  disabled={detailAnalyzing || busy || blocked}
+                  disabled={detailAnalyzing || busy || blocked || unreadable(selected).length > 0}
                   title={blocked ? m.batch.otherModeBusy : m.pairs.analyzePairHint}
                   onClick={() => runPlan([selected])}
                 >
@@ -758,7 +766,12 @@ export function PairsBatch({
             </div>
 
             {!detailPaired && <p className="placeholder">{m.pairs.unpairedDetail}</p>}
-            {detailPaired && (
+            {unreadable(selected).map((error) => (
+              <p key={error} className="error">
+                {error}
+              </p>
+            ))}
+            {detailPaired && unreadable(selected).length === 0 && (
               <div className="detail-body" ref={analysisViewRef}>
                 {/* Too little height for all at once: the tracks and the
                     chart, or the waveforms, as tabs. */}
