@@ -778,14 +778,15 @@
   transition: grid-template-columns 220ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-/* (Its column's width, less the panel's padding and border.) The add
-   buttons under it follow the panel instead: their label doesn't wrap, and
-   their hint unrolls (below). */
-.list-folding .workspace:not(.list-collapsed) > .file-list > :not(.file-list-add, .pair-add) {
+/* (Its column's width, less the panel's padding and border.) The header
+   and the add buttons follow the panel instead: the header's buttons open
+   from nothing beside the fold button, which keeps to the right edge; the
+   add buttons' label doesn't wrap, and their hint unrolls (below). */
+.list-folding .workspace:not(.list-collapsed) > .file-list > :not(.file-list-header, .file-list-add, .pair-add) {
   min-width: calc(clamp(300px, 30vw, 470px) - 32px);
 }
 
-.list-folding .workspace-pairs:not(.list-collapsed) > .file-list > :not(.file-list-add, .pair-add) {
+.list-folding .workspace-pairs:not(.list-collapsed) > .file-list > :not(.file-list-header, .file-list-add, .pair-add) {
   min-width: calc(clamp(340px, 38vw, 560px) - 32px);
 }
 
@@ -831,6 +832,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .list-folding .workspace,
+  .list-folding .file-list-header > button,
   .list-folding .file-list-add span + span,
   .list-folding .pair-add button span + span {
     transition: none;
@@ -841,7 +843,7 @@
   transform: rotate(180deg);
 }
 
-.list-collapsed .file-list-header > :not(h2, .tooltip-anchor:has(.fold-button)),
+.list-collapsed .file-list-header > .remove-all-confirm,
 .list-collapsed .list-row:not(.pair-row) .list-row-detail,
 .list-collapsed .list-badge,
 .list-collapsed .list-row-actions,
@@ -849,6 +851,41 @@
   display: none;
 }
 
+.file-list-header > button {
+  max-width: 14em;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.list-collapsed .file-list-header > button {
+  max-width: 0;
+  opacity: 0;
+  padding-left: 0;
+  padding-right: 0;
+  border-left-width: 0;
+  border-right-width: 0;
+  /* Its gap too. */
+  margin-left: -0.5em;
+  /* Out of the Tab order too. */
+  visibility: hidden;
+}
+
+.list-folding .file-list-header {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.list-folding .file-list-header > button {
+  transition:
+    max-width 220ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 220ms,
+    padding 220ms,
+    border-width 220ms,
+    margin 220ms,
+    visibility 220ms;
+}
+
+.list-folding .file-list-header h2,
 .list-collapsed .file-list-header h2 {
   min-width: 0;
   overflow: hidden;
