@@ -172,19 +172,52 @@ textarea {
   }
 }
 
-/* The engine's startup, top right (EngineStatus.tsx). */
+/* The engine's state, top right (EngineStatus.tsx): a pill, tinted by
+   what it says. */
 .engine-status {
   display: inline-flex;
   align-items: center;
-  gap: 0.5em;
-  margin-right: 0.4em;
-  font-size: 0.9em;
+  gap: 8px;
+  /* As high as the Paramètres button beside it. */
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  margin-right: 4px;
+  border-radius: 999px;
+  font-size: 12px;
   color: var(--text-muted);
+  background: color-mix(in srgb, var(--text-muted) 10%, transparent);
   white-space: nowrap;
 }
 
+/* Its words centered by their capitals and baseline, not by the line's
+   room for accents and descenders (which sat them half a pixel low). */
+.engine-status-text {
+  text-box: trim-both cap alphabetic;
+}
+
+.engine-status-ready {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+}
+
+.engine-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
 .engine-status-error {
+  padding-right: 3px;
   color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.engine-status-error .small-button {
+  height: 24px;
+  padding-block: 0;
+  border-radius: 999px;
 }
 
 .spinner-small {
