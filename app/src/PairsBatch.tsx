@@ -34,7 +34,7 @@ import {
 } from "./Detail";
 import { LogPanel } from "./LogPanel";
 import { describeSegments } from "./SegmentChart";
-import { TrackPreview } from "./TrackPreview";
+import { preloadWaveforms, TrackPreview } from "./TrackPreview";
 import { SegmentEditor } from "./SegmentEditor";
 import { DropZone } from "./DropZone";
 import { pickMediaFiles } from "./mediaDialog";
@@ -446,6 +446,7 @@ export function PairsBatch({
           (message) => updateRun(key, (a) => ({ log: [...a.log, message] })),
         );
         updateRun(key, { status: "done", result });
+        preloadWaveforms(reference, referenceTrack, candidate, track);
       } catch (err) {
         updateRun(key, { status: "error", error: errorMessage(err) });
       }

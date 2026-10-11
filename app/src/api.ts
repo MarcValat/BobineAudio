@@ -206,7 +206,7 @@ export interface WaveformResponse {
  * once (`duration` omitted), unlike `fetchClip`. Used to draw the
  * always-visible, zoomable comparison waveforms (see TrackPreview.tsx).
  */
-export async function fetchWaveform(
+export function fetchWaveform(
   path: string,
   index: number,
   start: number,
@@ -215,7 +215,27 @@ export async function fetchWaveform(
 ): Promise<WaveformResponse> {
   const params = new URLSearchParams({ path, index: String(index), start: String(start), buckets: String(buckets) });
   if (duration !== null) params.set("duration", String(duration));
-  const resp = await engineFetch(`/waveform?${params.toString()}`);
+  const query = params.toString();
+  // A whole track's is kept (and shared while it's on its way): the
+  // preview asks for it again each time a file or a pair is shown, and
+  // the batch modes load it ahead (preloadWaveforms).
+  if (duration !== null) return requestWaveform(query);
+  let pending = wholeTrackWaveforms.get(query);
+  if (!pending) {
+    pending = requestWaveform(query);
+    pending.catch(() => wholeTrackWaveforms.delete(query));
+    wholeTrackWaveforms.set(query, pending);
+    // The oldest ones go past a session's worth (each is a few hundred KB).
+    if (wholeTrackWaveforms.size > MAX_KEPT_WAVEFORMS) wholeTrackWaveforms.delete(wholeTrackWaveforms.keys().next().value!);
+  }
+  return pending;
+}
+
+const MAX_KEPT_WAVEFORMS = 96;
+const wholeTrackWaveforms = new Map<string, Promise<WaveformResponse>>();
+
+async function requestWaveform(query: string): Promise<WaveformResponse> {
+  const resp = await engineFetch(`/waveform?${query}`);
   if (!resp.ok) throw new Error(await readErrorDetail(resp));
   return resp.json();
 }

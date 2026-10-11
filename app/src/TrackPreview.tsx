@@ -20,6 +20,26 @@ const WAVEFORM_BUCKETS = 800;
 // MIN_VIEW_DURATION_S zoom floor, an accepted trade-off.
 const FULL_TRACK_BUCKETS = 20000;
 
+// Waveforms loaded ahead, one at a time: they share the engine with the
+// analyses still running.
+let preloading: Promise<unknown> = Promise.resolve();
+
+/** Loads a corrected track's waveforms (its reference's and its own) in
+ * the background, as soon as it's analyzed: they're ready, kept by
+ * fetchWaveform, when its file or pair is shown. */
+export function preloadWaveforms(referencePath: string, referenceIndex: number, candidatePath: string, trackIndex: number): void {
+  preloading = preloading
+    .then(() =>
+      Promise.all([
+        fetchWaveform(referencePath, referenceIndex, 0, null, FULL_TRACK_BUCKETS),
+        fetchWaveform(candidatePath, trackIndex, 0, null, FULL_TRACK_BUCKETS),
+      ]),
+    )
+    .catch(() => {
+      // the preview asks again when shown, and shows the error then
+    });
+}
+
 /**
  * The reference-time offset applying at `t`, per the current segments
  * (linearly interpolated across a drift segment, clamped to the first/last

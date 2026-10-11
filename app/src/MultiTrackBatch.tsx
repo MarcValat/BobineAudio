@@ -27,7 +27,7 @@ import {
 } from "./Detail";
 import { LogPanel } from "./LogPanel";
 import { describeSegments } from "./SegmentChart";
-import { TrackPreview } from "./TrackPreview";
+import { preloadWaveforms, TrackPreview } from "./TrackPreview";
 import { DropZone } from "./DropZone";
 import { pickMediaFiles } from "./mediaDialog";
 import { DropOverlay, useFileDrop } from "./FileDrop";
@@ -282,6 +282,7 @@ export function MultiTrackBatch({
             (message) => updateTarget(path, target.index, (t) => ({ log: [...t.log, message] })),
           );
           updateTarget(path, target.index, { status: "done", result });
+          preloadWaveforms(path, reference.index, path, target.index);
         } catch (err) {
           updateTarget(path, target.index, { status: "error", error: errorMessage(err) });
         }
