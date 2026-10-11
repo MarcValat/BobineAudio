@@ -139,8 +139,7 @@ body {
 }
 
 input,
-textarea,
-.selectable {
+textarea {
   user-select: text;
 }
 
@@ -739,8 +738,7 @@ button:focus-visible {
   font-size: 0.9em;
 }
 
-.result-row .error,
-.result-row .log-panel {
+.result-row .error {
   margin: 0.3em 0 0;
   cursor: auto;
 }
@@ -1150,15 +1148,10 @@ button:focus-visible {
   padding: 0.45em 0.5em;
 }
 
-.batch-table-wrap table td {
-  padding: 0.6em 0.6em;
-}
-
 .field-tracks .tracks-table-wrap tbody tr:nth-child(even),
 .editor-table-wrap .editor-table tbody tr:nth-child(even),
 .batch-choice-panel .batch-tracks-table tbody tr:nth-child(even),
-.batch-tracks-side .batch-tracks-table tbody tr:nth-child(even),
-.batch-table-wrap table tbody tr:nth-child(even) {
+.batch-tracks-side .batch-tracks-table tbody tr:nth-child(even) {
   background: color-mix(in srgb, var(--surface-alt) 60%, transparent);
 }
 
@@ -1343,16 +1336,12 @@ input {
    small (table headers under 9px): fixed floors, as in the mockups. Later in
    the cascade than BatchView.css and SegmentEditor.css, same selectors. */
 .field-tracks th,
-.batch-table-wrap th,
 .batch-tracks-table th,
 .editor-table th {
   font-size: 11px;
 }
 
-.small-button,
-.batch-table-wrap .small-button,
-.batch-tracks-actions button,
-.batch-row-buttons button {
+.small-button {
   font-size: 12px;
 }
 
@@ -1366,8 +1355,4 @@ input {
 
 .waveform-ticks {
   font-size: 10.5px;
-}
-
-.batch-table-wrap .batch-status {
-  font-size: 12px;
 }

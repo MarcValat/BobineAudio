@@ -451,7 +451,6 @@
   gap: 0.4em 0.8em;
 }
 
-
 .detail-export {
   flex: 0 0 auto;
   display: flex;
@@ -459,10 +458,6 @@
   align-items: center;
   gap: 0.3em 0.6em;
   font-size: 13px;
-}
-
-.detail-export .log-panel {
-  flex: 1 0 100%;
 }
 
 /* A pair: a file row whose two lines are its two files, each led by
@@ -534,14 +529,11 @@
   gap: 0.5em;
 }
 
-
 .pair-add button + button {
   border-color: color-mix(in srgb, var(--drift) 45%, transparent);
   background: color-mix(in srgb, var(--drift) 5%, transparent);
   color: var(--drift);
 }
-
-
 
 /* No pair yet: what this mode takes, and a drop zone per side. */
 .pairs-empty {

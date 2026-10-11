@@ -2,11 +2,8 @@ import { useRef, useState, type ReactNode } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { cancelJob, type RenderResponse, type SegmentsResponse } from "./api";
 import { JobCancelled, runJob, type RunStatus } from "./jobs";
-import { LogPanel } from "./LogPanel";
 import { pickFolder, planOutputPaths } from "./mediaDialog";
-import { basename } from "./paths";
-import { describeSegments } from "./SegmentChart";
-import { FolderIcon, RedoIcon } from "./icons";
+import { FolderIcon } from "./icons";
 import { errorMessage, loadSetting, saveSetting } from "./util";
 import { t, useT } from "./i18n";
 
@@ -84,61 +81,6 @@ export function dropBlockedReason(busy: boolean, blocked: boolean): string | nul
   return blocked ? t().batch.otherModeBusy : null;
 }
 
-/** One file of a list, with the buttons that move it within its column (to
- * reorder, or pair it with another row) or drop it. A dash when its column
- * is shorter than the other one. The arrows carry U+FE0E, which asks for
- * the plain text glyph: Windows may otherwise draw them as colored emoji. */
-export function FileCell({
-  files,
-  index,
-  disabled,
-  onChange,
-}: {
-  files: string[];
-  index: number;
-  disabled: boolean;
-  onChange: (update: (files: string[]) => string[]) => void;
-}) {
-  const t = useT();
-  const file = files[index];
-  if (file === undefined) return <td className="batch-file batch-file-missing">—</td>;
-  return (
-    <td className="batch-file">
-      <div className="batch-file-inner">
-        <span className="batch-filename" title={file}>
-          {basename(file)}
-        </span>
-        <span className="batch-file-actions">
-          <button
-            className="small-button"
-            onClick={() => onChange((f) => moved(f, index, index - 1))}
-            disabled={disabled || index === 0}
-            title={t.batch.moveUp}
-          >
-            {"\u2191\uFE0E"}
-          </button>
-          <button
-            className="small-button"
-            onClick={() => onChange((f) => moved(f, index, index + 1))}
-            disabled={disabled || index === files.length - 1}
-            title={t.batch.moveDown}
-          >
-            {"\u2193\uFE0E"}
-          </button>
-          <button
-            className="small-button"
-            onClick={() => onChange((f) => f.filter((_, i) => i !== index))}
-            disabled={disabled}
-            title={t.common.remove}
-          >
-            ✕
-          </button>
-        </span>
-      </div>
-    </td>
-  );
-}
-
 const OUTPUT_DIR_KEY = "syncaudio.batchOutputDir";
 
 /** The folder batch exports go to (null: next to each original), kept for the next session. */
@@ -190,63 +132,6 @@ export interface AnalysisRun {
   log: string[];
 }
 
-/** An analysis's status for its table cell, as in Bobine Subs: on the left
- * what it's at, its result or why it failed (the log while it runs or once
- * it failed); on the right "Modifier" and a "Réanalyser" icon (this one
- * alone again). `name` heads it when a row holds several (a file's tracks).
- * "Modifier" stays usable while the others are analyzed (those lose their
- * result as they're queued, so no edit can be overwritten); not during an
- * export, which writes what's edited. */
-export function AnalysisStatus({
-  run,
-  name,
-  busy,
-  exporting,
-  onEdit,
-  onReanalyze,
-}: {
-  run: AnalysisRun | undefined;
-  name?: string;
-  busy: boolean;
-  exporting: boolean;
-  onEdit: () => void;
-  onReanalyze: () => void;
-}) {
-  const t = useT();
-  const status = run?.status;
-  return (
-    <div className="batch-analysis-cell">
-      <div className="batch-analysis-text">
-        {name && <span className="batch-target-name">{name} </span>}
-        {!run && t.batch.toAnalyze}
-        {status === "pending" && t.batch.pending}
-        {status === "running" && t.common.analysisRunning}
-        {status === "done" && run?.result && describeSegments(run.result.segments)}
-        {status === "error" && (run?.error ?? t.common.error)}
-        {run && (status === "running" || status === "error") && <LogPanel lines={run.log} />}
-      </div>
-      <div className="batch-row-buttons">
-        {status === "done" && run?.result && (
-          <button className="small-button" disabled={exporting} onClick={onEdit}>
-            {t.common.edit}
-          </button>
-        )}
-        {(status === "done" || status === "error") && (
-          <button
-            className="small-button icon-small-button"
-            disabled={busy}
-            onClick={onReanalyze}
-            aria-label={t.batch.reanalyzeOne}
-            title={t.batch.reanalyzeOneHint}
-          >
-            <RedoIcon />
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
 /** Where a row stands, for the colored bar at its left (as the single-file
  * view's analyzed tracks, and Bobine Subs' rows): something running, waiting,
  * failed or flagged, exported, every analysis done, or nothing done yet. A
@@ -277,23 +162,6 @@ export const IDLE_EXPORT: ExportFields = { exportStatus: "idle", exportResult: n
 
 /** The file an export wrote, once done. */
 export const writtenFile = (entry: ExportFields | undefined | null): string | undefined => entry?.exportResult?.written[0];
-
-/** The "Export" cell: dash, progress, the written file, the error or "Annulé". */
-export function ExportCell({ entry }: { entry: ExportFields | undefined | null }) {
-  const t = useT();
-  const status = entry?.exportStatus ?? "idle";
-  const written = writtenFile(entry);
-  return (
-    <td className={`batch-status batch-status-${status === "idle" ? "pending" : status}`}>
-      {status === "idle" && "—"}
-      {status === "running" && t.common.exportRunning}
-      {status === "done" && written && <span title={written}>{basename(written)}</span>}
-      {status === "error" && (entry?.exportError ?? t.common.error)}
-      {status === "cancelled" && t.common.cancelled}
-      {entry && (status === "running" || status === "error") && <LogPanel lines={entry.exportLog} />}
-    </td>
-  );
-}
 
 /** The row's folder icon, once its export is written (as in Bobine Subs). */
 export function RevealButton({ file }: { file: string | undefined }) {
