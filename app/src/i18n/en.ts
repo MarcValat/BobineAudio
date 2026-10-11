@@ -38,6 +38,13 @@ export const en: Messages = {
     websocketLost: "WebSocket connection lost.",
   },
 
+  window: {
+    minimize: "Minimize",
+    maximize: "Maximize",
+    restore: "Restore",
+    close: "Close",
+  },
+
   startup: {
     starting: "Starting the engine...",
     unreachable: "The analysis engine isn't responding. Try again, or restart the app.",

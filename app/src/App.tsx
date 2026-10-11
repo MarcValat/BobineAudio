@@ -11,6 +11,7 @@ import "./App.css";
 import { devParam, loadSetting, saveSetting } from "./util";
 import { useLanguage, useT } from "./i18n";
 import { EngineStatusBadge } from "./EngineStatus";
+import { WindowControls } from "./WindowControls";
 
 // The mode last used, picked again next time.
 const MODE_KEY = "syncaudio.batchMode";
@@ -41,8 +42,11 @@ function App() {
 
   return (
     <div className="container">
-      <div className="top-bar">
-        <span className="app-brand">
+      {/* The window's title bar (no system one: see WindowControls): dragged
+          by its free parts, where data-tauri-drag-region is -- the bar and
+          the name, not their children's buttons. */}
+      <div className="top-bar" data-tauri-drag-region>
+        <span className="app-brand" data-tauri-drag-region>
           <img src={logoUrl} alt="" />
           Bobine Audio
         </span>
@@ -63,6 +67,7 @@ function App() {
           <UpdateButton />
           <OptionsButton />
         </div>
+        <WindowControls />
       </div>
 
       <BatchView mode={mode} onModeChange={busy ? undefined : chooseMode} onBusyChange={setBusy} />

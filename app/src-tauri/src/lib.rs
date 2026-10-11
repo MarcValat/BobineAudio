@@ -247,6 +247,13 @@ fn spawn_sidecar(app: &tauri::AppHandle, port: u16) -> Option<Child> {
     }
 }
 
+/// What's remembered of the main window: everything but its decorations --
+/// it has none (its title bar is the app's own, tauri.conf.json), and a
+/// state saved by a version that had them would bring them back.
+fn window_state_flags() -> StateFlags {
+    StateFlags::all() - StateFlags::DECORATIONS
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -267,7 +274,7 @@ pub fn run() {
         // Restores the main window's size, position and maximized state as
         // it's created. It's created hidden (tauri.conf.json) and only shown
         // here, once restored, so it doesn't flash at the default size first.
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(tauri_plugin_window_state::Builder::default().with_state_flags(window_state_flags()).build())
         .setup(|app| {
             // Known before the window shows: the frontend asks for it at once.
             let port = free_port();
@@ -302,7 +309,7 @@ pub fn run() {
         .run(|app_handle, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event {
                 // Also covers exits that close no window first (the updater's restart).
-                let _ = app_handle.save_window_state(StateFlags::all());
+                let _ = app_handle.save_window_state(window_state_flags());
                 let state = app_handle.state::<SidecarState>();
                 let mut guard = state.0.lock().unwrap();
                 if let Some(child) = guard.take() {

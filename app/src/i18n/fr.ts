@@ -39,6 +39,13 @@ export const fr = {
     websocketLost: "Connexion WebSocket perdue.",
   },
 
+  window: {
+    minimize: "Réduire",
+    maximize: "Agrandir",
+    restore: "Restaurer",
+    close: "Fermer",
+  },
+
   startup: {
     starting: "Démarrage du moteur...",
     unreachable: "Le moteur d'analyse ne répond pas. Réessaie, ou redémarre l'application.",
