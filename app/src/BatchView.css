@@ -31,11 +31,6 @@
   font-size: 0.9em;
 }
 
-.batch-config input[type="number"] {
-  width: 4em;
-  padding: 0.35em 0.5em;
-}
-
 /* "Vérifier toutes les pistes" at the far right. */
 .batch-config > button:last-child {
   margin-left: auto;

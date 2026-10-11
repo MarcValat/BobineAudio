@@ -174,10 +174,10 @@ interface TrackPickerProps {
   disabled?: boolean;
 }
 
-/** A dropdown of the first file's actual tracks (index/language/codec),
- * not a blind number field -- falls back to a plain number input when
- * there's nothing to probe yet or probing failed, so picking is never
- * blocked on that. */
+/** A dropdown of the first file's actual tracks (index/language/codec): the
+ * pick every pair starts with. Just "—" while there's no file read yet, as
+ * the multitrack languages' (a pair's own table picks for it if the first
+ * file can't be read). */
 function TrackPicker({ label, tracks, loading, error, value, onChange, disabled }: TrackPickerProps) {
   const m = useT();
   return (
@@ -192,14 +192,9 @@ function TrackPicker({ label, tracks, loading, error, value, onChange, disabled 
           ))}
         </select>
       ) : (
-        <input
-          type="number"
-          min={0}
-          value={value}
-          disabled={disabled}
-          aria-label={label}
-          onChange={(e) => onChange(Math.max(0, Number(e.target.value)))}
-        />
+        <select value="" disabled={disabled} aria-label={label} onChange={() => {}}>
+          <option value="">—</option>
+        </select>
       )}
       {loading && <span className="batch-track-status">{m.pairs.probing}</span>}
       {error && (
