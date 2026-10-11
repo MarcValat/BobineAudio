@@ -4,7 +4,58 @@ import { moved } from "./batchShared";
 import type { RunStatus } from "./jobs";
 import { errorMessage } from "./util";
 import { useT } from "./i18n";
+import { LayersIcon, LinkIcon } from "./icons";
 import "./Workspace.css";
+
+/** The workspace's two ways (picked in the top bar): files that each hold
+ * the reference and the tracks to correct, or pairs of files. */
+export type BatchMode = "multi" | "pairs";
+
+/** A mode's workspace with no file yet: what it does, its drop zone(s),
+ * and anything under them (the mode cards). */
+export function EmptyWorkspace({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
+  return (
+    <section className="empty-workspace">
+      <div className="empty-workspace-intro">
+        <h1>{title}</h1>
+        <p>{hint}</p>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** Both modes side by side, what each takes; the current one marked, a
+ * click on the other switches to it (not without `onChange`: something's
+ * running). */
+export function ModeCards({ mode, onChange }: { mode: BatchMode; onChange?: (mode: BatchMode) => void }) {
+  const t = useT();
+  const cards: [BatchMode, ReactNode, string, string][] = [
+    ["multi", <LayersIcon />, t.batch.multiMode, t.modes.multiHint],
+    ["pairs", <LinkIcon />, t.batch.pairsMode, t.modes.pairsHint],
+  ];
+  return (
+    <div className="mode-cards">
+      {cards.map(([value, icon, name, hint]) => (
+        <button
+          key={value}
+          className={`mode-card mode-card-${value}${value === mode ? " on" : ""}`}
+          aria-pressed={value === mode}
+          disabled={!onChange && value !== mode}
+          title={!onChange && value !== mode ? t.modes.busy : undefined}
+          onClick={() => onChange?.(value)}
+        >
+          <span className="mode-card-title">
+            {icon}
+            <span>{name}</span>
+            {value === mode && <span className="mode-card-chosen">{t.modes.chosen}</span>}
+          </span>
+          <span className="mode-card-hint">{hint}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /** How a list row's badge is tinted: what it's at (see rowState), or a
  * warning for a file whose tracks need checking. */

@@ -18,6 +18,9 @@ export const fr = {
     edit: "Modifier",
     remove: "Retirer",
     removeAll: "Tout retirer",
+    written: (name: string) => `Fichier écrit : ${name}`,
+    exportCancelled: "Export annulé : aucun fichier n'a été écrit.",
+    editSegments: "Modifier les segments",
     add: "+ Ajouter",
     reference: "Référence",
     toCorrect: "À corriger",
@@ -39,10 +42,12 @@ export const fr = {
   },
 
   modes: {
-    single: "Fichier unique",
-    batch: "Batch",
-    batchModes: "Mode batch",
-    batchBusy: "Un traitement est en cours : attends sa fin.",
+    label: "Mode",
+    busy: "Un traitement est en cours : attends sa fin.",
+    chosen: "Choisi",
+    multiHint:
+      "Chaque vidéo contient déjà la piste d'origine et les doublages à recaler. Le cas le plus courant : un épisode, ou toute la saison d'un coup.",
+    pairsHint: "La référence et le doublage sont dans deux fichiers séparés : la piste corrigée est ajoutée à la vidéo de référence.",
   },
 
   options: {
@@ -56,7 +61,7 @@ export const fr = {
     languageHint: "« Système » suit la langue de ton système : français s'il est en français, anglais sinon.",
     subtitles: "Sous-titres par défaut",
     subtitlesHint:
-      "Les sous-titres recalés avec une piste audio corrigée, sauf choix contraire : cochés d'office en fichier unique, réglage de départ des modes batch.",
+      "Les sous-titres recalés avec une piste audio corrigée, sauf choix contraire : réglage de départ des deux modes.",
     updates: "Mises à jour",
     checkUpdates: "Vérifier au démarrage",
     updatesHint: "Au lancement, l'application demande à GitHub si une nouvelle version existe ; rien n'est installé sans ton accord.",
@@ -89,11 +94,8 @@ export const fr = {
   files: {
     mediaFilter: "Vidéo/Audio",
     allFilter: "Tous les fichiers",
-    dropToOpen: "Déposer pour ouvrir le fichier",
-    dropToAdd: "Déposer pour ajouter au lot",
+    dropToAdd: "Déposer pour ajouter à la liste",
     folderHint: "Un dossier ajoute ses fichiers vidéo et audio, par ordre de nom",
-    dropZoneOne: "Glisse une vidéo ici",
-    dropZoneOneHint: "ou clique pour ouvrir un fichier : sa piste de référence et celles à corriger y sont toutes.",
     dropZoneMany: "Glisse des fichiers ou des dossiers ici",
   },
 
@@ -160,43 +162,6 @@ export const fr = {
     unreliableCount: (n: number) => `${n} peu fiable${n > 1 ? "s" : ""}`,
   },
 
-  single: {
-    openFile: "Ouvrir un fichier",
-    exportRunningHint: "Un export est en cours : attends sa fin ou annule-le.",
-    tracks: "Pistes",
-    tracksHint:
-      "Réf. : la piste audio déjà bien calée, qui sert de modèle (souvent la VO). À corriger : les pistes à recaler sur elle (souvent les doublages) ; coches-en plusieurs pour les analyser ensemble.",
-    preparing: "Préparation des pistes...",
-    preparingHint: "Lecture des pistes audio en arrière-plan, pour que l'analyse démarre plus vite.",
-    openToSeeTracks: "Ouvre un fichier pour voir ses pistes.",
-    readingTracks: "Lecture des pistes...",
-    singleTrack: "Ce fichier n'a qu'une seule piste audio : rien à comparer.",
-    analyze: "Analyser",
-    analyzeHint:
-      "Détecte le décalage de chaque piste cochée par rapport à la référence (dérive et sauts nets inclus), avec la courbe correspondante.",
-    analyzedTracks: "Pistes analysées",
-    includeInExport: "Inclure cette piste corrigée dans l'export",
-    failed: "Échec",
-    retimeSubs: "Recaler aussi ces sous-titres",
-    retimeSubsHint:
-      "Coche les pistes de sous-titres calées sur cette piste audio (typiquement les sous-titres forcés de sa langue, pré-cochés) : elles subiront les mêmes sauts et la même dérive à l'export. Les pistes décochées sont copiées telles quelles, calées sur la vidéo. Les sous-titres image (PGS, VobSub) ne peuvent pas être recalés.",
-    tickOne: "Coche au moins une piste analysée pour l'inclure dans l'export.",
-    mixedReferences:
-      "Ces pistes ont été analysées avec des références différentes : relance l'analyse avec une seule référence pour les exporter ensemble.",
-    exportContent: "Contenu de l'export",
-    exportSummary: (reference: string, tracks: string[], subs: string[], othersLeftOut: boolean) =>
-      `Contiendra la vidéo, la référence ${reference}, ${tracks.length > 1 ? "les pistes corrigées" : "la piste corrigée"} ${tracks.join(", ")} et les sous-titres${
-        subs.length > 0 ? ` (${subs.join(", ")} ${subs.length > 1 ? "recalés" : "recalé"} avec l'audio)` : ""
-      }.${othersLeftOut ? " Les autres pistes audio ne sont pas incluses." : ""}`,
-    written: (name: string) => `Fichier écrit : ${name}`,
-    openFolder: "Ouvrir le dossier",
-    exportCancelled: "Export annulé : aucun fichier n'a été écrit.",
-    exportButton: "Exporter le fichier synchronisé",
-    sameAsInput: "Choisis un autre nom que le fichier d'origine : il ne peut pas être remplacé pendant sa lecture.",
-    heading: (track: string, reference: string) => `Piste ${track} · référence ${reference}`,
-    editSegments: "Modifier les segments",
-    pickAndAnalyze: "Coche une ou plusieurs pistes à corriger, puis clique sur « Analyser ».",
-  },
 
   batch: {
     multiMode: "Fichiers multipistes",
@@ -213,7 +178,7 @@ export const fr = {
       const word = unit === "track" ? "piste" : "paire";
       return n > 1 ? `Analyser les ${n} ${word}s restantes` : `Analyser la ${word} restante`;
     },
-    otherModeBusy: "Un traitement est en cours dans l'autre mode batch : attends sa fin.",
+    otherModeBusy: "Un traitement est en cours dans l'autre mode : attends sa fin.",
     dropBusy: "Import impossible pendant une analyse ou un export : attends sa fin.",
     moveUp: "Monter",
     moveDown: "Descendre",
@@ -259,6 +224,8 @@ export const fr = {
     addHint: "Ajouter des fichiers qui contiennent chacun la référence et les pistes à corriger",
     tracks: "Pistes",
     empty: "Des vidéos qui contiennent chacune la référence et la ou les pistes à corriger.",
+    emptyTitle: "Recale tes doublages sur la piste d'origine",
+    emptyHint: "Un fichier ou toute une saison : dépose-les, Bobine Audio trouve le décalage, la dérive et les sauts.",
     readingTracks: "Lecture des pistes...",
     nothing: "rien",
     manual: " (manuel)",

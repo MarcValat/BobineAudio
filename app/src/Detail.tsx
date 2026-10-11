@@ -127,7 +127,7 @@ export function DetailHeader({
       )}
       {onEdit && (
         <button disabled={editDisabled} onClick={onEdit}>
-          {t.single.editSegments}
+          {t.common.editSegments}
         </button>
       )}
       {(missing > 0 || analyzing) && (
@@ -267,11 +267,11 @@ export function DetailExport({ entry }: { entry: ExportFields | null | undefined
       {entry.exportStatus === "running" && t.common.exportRunning}
       {entry.exportStatus === "done" && written && (
         <span className="render-success" title={written}>
-          {t.single.written(basename(written))}
+          {t.common.written(basename(written))}
         </span>
       )}
       {entry.exportStatus === "error" && (entry.exportError ?? t.common.error)}
-      {entry.exportStatus === "cancelled" && t.single.exportCancelled}
+      {entry.exportStatus === "cancelled" && t.common.exportCancelled}
       <RevealButton file={written} />
       <LogPanel lines={entry.exportLog} />
     </div>

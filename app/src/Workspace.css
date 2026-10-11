@@ -10,11 +10,6 @@
   gap: 1em;
 }
 
-/* No file yet: the list alone, its drop zone across the window. */
-.workspace-empty {
-  grid-template-columns: minmax(0, 1fr);
-}
-
 .file-list {
   display: flex;
   flex-direction: column;
@@ -535,36 +530,136 @@
   color: var(--drift);
 }
 
-/* No pair yet: what this mode takes, and a drop zone per side. */
-.pairs-empty {
+/* No file yet: what the mode does, its drop zone(s), and the two modes'
+   cards under them, centered in the window. */
+.empty-workspace {
   flex: 1 1 auto;
   min-height: 0;
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 1em;
+  justify-content: center;
+  gap: 24px;
+  padding: 2vh 0 3vh;
+  box-sizing: border-box;
 }
 
-.pairs-empty-intro {
+.empty-workspace-intro {
   text-align: center;
 }
 
-.pairs-empty-intro h3 {
-  margin: 0.4em 0 0.3em;
-  font-size: 16px;
+.empty-workspace-intro h1 {
+  margin: 0 0 0.35em;
+  font-size: clamp(20px, 2.2vw, 28px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
-.pairs-empty-intro p {
+.empty-workspace-intro p {
   margin: 0;
+  font-size: 14px;
   color: var(--text-muted);
+}
+
+/* The zone takes what's left, within reason. */
+.empty-workspace > .drop-zone-empty,
+.pairs-empty-zones {
+  flex: 1 1 280px;
+  min-height: 160px;
+  max-height: 340px;
+}
+
+.empty-workspace .drop-zone-empty {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent-strong) 6%, transparent), color-mix(in srgb, var(--accent-2) 8%, transparent));
+}
+
+.empty-workspace .drop-zone-empty-title {
+  font-size: 17px;
+}
+
+.mode-cards {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.mode-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 18px 20px;
+  border-radius: var(--radius);
+  text-align: left;
+  font-weight: 400;
+  background: linear-gradient(180deg, var(--surface), color-mix(in srgb, var(--surface) 82%, var(--bg)));
+}
+
+.mode-card.on {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent), 0 10px 30px color-mix(in srgb, var(--accent-strong) 12%, transparent);
+}
+
+.mode-card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.mode-card-title svg {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mode-card-pairs .mode-card-title svg {
+  stroke: var(--accent-2);
+}
+
+.mode-card-chosen {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.mode-card-hint {
   font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
 }
 
 .pairs-empty-zones {
-  flex: 1 1 auto;
-  min-height: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1em;
+}
+
+/* Pairs: the references' side in the accent, the side to correct in the
+   drift's amber (as the rows' Réf. / Corr.). */
+.empty-workspace .pairs-empty-zones .drop-zone-empty {
+  min-height: 0;
+  background: color-mix(in srgb, var(--accent-strong) 6%, transparent);
+}
+
+.empty-workspace .pairs-empty-zones .drop-zone-empty + .drop-zone-empty {
+  border-color: color-mix(in srgb, var(--drift) 45%, transparent);
+  background: color-mix(in srgb, var(--drift) 5%, transparent);
 }
 
 .pairs-empty-zones .drop-zone-empty + .drop-zone-empty:hover:not(:disabled) {

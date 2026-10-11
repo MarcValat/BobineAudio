@@ -17,6 +17,9 @@ export const en: Messages = {
     edit: "Edit",
     remove: "Remove",
     removeAll: "Remove all",
+    written: (name) => `File written: ${name}`,
+    exportCancelled: "Export cancelled: no file was written.",
+    editSegments: "Edit segments",
     add: "+ Add",
     reference: "Reference",
     toCorrect: "To correct",
@@ -38,10 +41,12 @@ export const en: Messages = {
   },
 
   modes: {
-    single: "Single file",
-    batch: "Batch",
-    batchModes: "Batch mode",
-    batchBusy: "Processing is under way: wait for it to finish.",
+    label: "Mode",
+    busy: "Processing is under way: wait for it to finish.",
+    chosen: "Chosen",
+    multiHint:
+      "Each video already holds the original track and the dubs to sync. The most common case: one episode, or a whole season at once.",
+    pairsHint: "The reference and the dub are in two separate files: the corrected track is added to the reference video.",
   },
 
   options: {
@@ -55,7 +60,7 @@ export const en: Messages = {
     languageHint: "“System” follows your system's language: French if it's in French, English otherwise.",
     subtitles: "Default subtitles",
     subtitlesHint:
-      "The subtitles retimed with a corrected audio track unless picked otherwise: ticked by default in single-file mode, the batch modes' starting setting.",
+      "The subtitles retimed with a corrected audio track unless picked otherwise: the starting setting of both modes.",
     updates: "Updates",
     checkUpdates: "Check at startup",
     updatesHint: "At launch, the app asks GitHub whether a new version exists; nothing is installed without your consent.",
@@ -86,11 +91,8 @@ export const en: Messages = {
   files: {
     mediaFilter: "Video/Audio",
     allFilter: "All files",
-    dropToOpen: "Drop to open the file",
-    dropToAdd: "Drop to add to the batch",
+    dropToAdd: "Drop to add to the list",
     folderHint: "A folder adds its video and audio files, in name order",
-    dropZoneOne: "Drop a video here",
-    dropZoneOneHint: "or click to open a file: its reference track and the ones to correct are all in it.",
     dropZoneMany: "Drop files or folders here",
   },
 
@@ -157,43 +159,6 @@ export const en: Messages = {
     unreliableCount: (n) => `${n} unreliable`,
   },
 
-  single: {
-    openFile: "Open a file",
-    exportRunningHint: "An export is running: wait for it to finish or cancel it.",
-    tracks: "Tracks",
-    tracksHint:
-      "Ref.: the audio track already in sync, used as the model (often the original version). To correct: the tracks to bring in line with it (often dubs); tick several to analyze them together.",
-    preparing: "Preparing the tracks...",
-    preparingHint: "Reading the audio tracks in the background, so the analysis starts sooner.",
-    openToSeeTracks: "Open a file to see its tracks.",
-    readingTracks: "Reading tracks...",
-    singleTrack: "This file has only one audio track: nothing to compare.",
-    analyze: "Analyze",
-    analyzeHint:
-      "Detects each ticked track's offset from the reference (drift and sharp jumps included), with the matching curve.",
-    analyzedTracks: "Analyzed tracks",
-    includeInExport: "Include this corrected track in the export",
-    failed: "Failed",
-    retimeSubs: "Also retime these subtitles",
-    retimeSubsHint:
-      "Tick the subtitle tracks timed on this audio track (typically its language's forced subtitles, ticked by default): they get the same jumps and drift on export. Unticked tracks are copied as they are, timed on the video. Image subtitles (PGS, VobSub) can't be retimed.",
-    tickOne: "Tick at least one analyzed track to include it in the export.",
-    mixedReferences:
-      "These tracks were analyzed against different references: analyze them again with a single reference to export them together.",
-    exportContent: "Export content",
-    exportSummary: (reference, tracks, subs, othersLeftOut) =>
-      `Will hold the video, the reference ${reference}, the corrected track${tracks.length > 1 ? "s" : ""} ${tracks.join(", ")} and the subtitles${
-        subs.length > 0 ? ` (${subs.join(", ")} retimed with the audio)` : ""
-      }.${othersLeftOut ? " The other audio tracks are left out." : ""}`,
-    written: (name) => `File written: ${name}`,
-    openFolder: "Open folder",
-    exportCancelled: "Export cancelled: no file was written.",
-    exportButton: "Export the synchronized file",
-    sameAsInput: "Pick another name than the original file's: it can't be replaced while it's being read.",
-    heading: (track, reference) => `Track ${track} · reference ${reference}`,
-    editSegments: "Edit segments",
-    pickAndAnalyze: "Tick one or more tracks to correct, then click “Analyze”.",
-  },
 
   batch: {
     multiMode: "Multitrack files",
@@ -210,7 +175,7 @@ export const en: Messages = {
       const word = unit === "track" ? "track" : "pair";
       return n > 1 ? `Analyze the ${n} remaining ${word}s` : `Analyze the remaining ${word}`;
     },
-    otherModeBusy: "The other batch mode is working: wait for it to finish.",
+    otherModeBusy: "The other mode is working: wait for it to finish.",
     dropBusy: "Can't add files during an analysis or export: wait for it to finish.",
     moveUp: "Move up",
     moveDown: "Move down",
@@ -256,6 +221,8 @@ export const en: Messages = {
     addHint: "Add files that each hold the reference and the tracks to correct",
     tracks: "Tracks",
     empty: "Videos that each hold the reference and the track(s) to correct.",
+    emptyTitle: "Sync your dubs to the original track",
+    emptyHint: "One file or a whole season: drop them in, Bobine Audio finds the offset, the drift and the jumps.",
     readingTracks: "Reading tracks...",
     nothing: "nothing",
     manual: " (manual)",

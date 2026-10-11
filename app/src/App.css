@@ -192,11 +192,6 @@ textarea {
   border-width: 2px;
 }
 
-.file-open-button {
-  flex: 0 0 auto;
-  width: 100%;
-}
-
 /* The mode switch on the left; update and Options icons on the far right. */
 .top-bar {
   flex: 0 0 auto;
@@ -206,65 +201,17 @@ textarea {
   padding: 0.7em 1em 0;
 }
 
-.mode-switch {
-  display: flex;
-  gap: 0.5em;
+/* The two modes (PillSwitch, below), bigger than a switch inside a panel:
+   the window's navigation. */
+.pill-switch.mode-switch {
+  margin-left: 8px;
+  padding: 4px;
 }
 
-.mode-switch button {
-  padding: 0.4em 1em;
-}
-
-/* Batch and its sub-modes: a drawer, tinted with the accent, that unrolls
-   to the right from under Batch (tucked under its rounded corners) when
-   it's picked. Only the drawer's width moves (a grid column, 0fr -> 1fr),
-   clipped at its edges: nothing is drawn over Batch, and nothing left of
-   it moves. Smaller buttons than the modes: a level below them. Same as
-   Bobine Subs'. */
-.mode-switch {
-  align-items: center;
-}
-
-.batch-group {
-  display: flex;
-  align-items: stretch;
-}
-
-/* Above the drawer tucked under it. */
-.batch-main-button {
-  position: relative;
-  z-index: 1;
-}
-
-.batch-drawer {
-  display: grid;
-  grid-template-columns: 0fr;
-  margin-left: calc(-1 * var(--radius-sm));
-  transition: grid-template-columns 240ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-/* The column's width, whatever the sub-modes' own: what clips them. */
-.batch-drawer-clip {
-  min-width: 0;
-  display: flex;
-  overflow: hidden;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-}
-
-.batch-group.open .batch-drawer {
-  grid-template-columns: 1fr;
-}
-
-/* The drawer's look on the shared switch (PillSwitch, below): tinted with
-   the accent, the part under Batch's corners, its own inset. */
-.pill-switch.batch-submodes {
-  flex: 0 0 auto;
-  align-self: stretch;
-  padding: 3px 4px 3px calc(var(--radius-sm) + 4px);
-  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
-  border-left: none;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+.pill-switch.mode-switch button {
+  padding: 0.45em 1.1em;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 /* A choice between a few options, all visible, a selection pill sliding
@@ -321,7 +268,6 @@ textarea {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .batch-drawer,
   .pill-switch-pill.placed {
     transition: none;
   }
@@ -418,60 +364,12 @@ textarea {
   color: var(--text-muted);
 }
 
-/* Nothing in the app scrolls but lists: the window is split into regions
-   that shrink and grow with it, and a list that outgrows its region (tracks,
-   analyzed tracks) scrolls inside its own frame (.list-scroll). Left, the
-   file: tracks, analyzed tracks and the export. Right, what's looked at and
-   listened to: the chart and the waveforms. `min-height: 0` on every grid/
-   flex level is load-bearing: items default to `min-height: auto`, which
-   lets content push past its region instead of shrinking into it. */
-.app-main {
-  flex: 1 1 auto;
-  min-height: 0;
-  padding: 1em;
-  display: grid;
-  /* Follows the window's width instead of keeping a fixed one. */
-  grid-template-columns: clamp(290px, 24vw, 420px) minmax(0, 1fr);
-  gap: 1em;
-  overflow: hidden;
-}
-
-.left-column {
-  grid-column: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.8em;
-}
-
-/* Keeps its natural height (the analyzed tracks below give way first), up
-   to a point where a file with many tracks scrolls its table instead. */
-.left-column .field-tracks {
-  flex: 0 0 auto;
-  max-height: 55%;
-  display: flex;
-  flex-direction: column;
-}
-
-.left-column .field-results {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-}
-
 /* A list that may hold more than its region can show: it scrolls in its own
    frame, the only kind of scrolling in the app. */
 .list-scroll {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-}
-
-.field-analysis {
-  grid-column: 2;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
 }
 
 .panel {
@@ -568,25 +466,6 @@ button:focus-visible {
   color: var(--text-muted);
 }
 
-.prefetch-status {
-  color: var(--text-muted);
-  font-style: italic;
-  font-size: 0.85em;
-  margin: 0 0 0.6em;
-}
-
-.file-path {
-  font-family: var(--font-mono);
-  font-size: 0.85em;
-  color: var(--text-muted);
-  max-width: 100%;
-  margin: 0 0 0.6em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: default;
-}
-
 .small-button {
   padding: 0.3em 0.75em;
   font-size: 0.85em;
@@ -597,152 +476,10 @@ button:focus-visible {
   text-transform: none;
 }
 
-.tracks-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5em;
-  margin-top: 1em;
-}
-
-/* One row per analyzed track (App.tsx): select it to show it on the right,
-   tick it to export it. A left bar gives its state at a glance. */
-.result-list {
-  flex: 0 1 auto;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.result-row {
-  padding: 0.45em 0.6em;
-  margin-bottom: 0.35em;
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--border);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 0.9em;
-}
-
-.result-row:hover {
-  background: var(--surface-alt);
-}
-
-.result-row.active {
-  background: var(--surface-alt);
-  border-color: var(--accent);
-}
-
-.result-row.status-running {
-  border-left-color: var(--accent);
-}
-
-.result-row.status-done {
-  border-left-color: var(--success);
-}
-
-.result-row.status-error {
-  border-left-color: var(--danger);
-}
-
-.result-row-head {
-  display: flex;
-  align-items: center;
-  gap: 0.5em;
-  flex-wrap: wrap;
-}
-
-.result-name {
-  font-weight: 600;
-}
-
-.result-status {
-  color: var(--text-muted);
-  font-size: 0.9em;
-}
-
-.result-row .error {
-  margin: 0.3em 0 0;
-  cursor: auto;
-}
-
-/* The subtitle tracks retimed with this audio track, one checkbox each. */
-.result-subs {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.2em 0.8em;
-  margin-top: 0.35em;
-  font-size: 0.9em;
-  cursor: auto;
-}
-
-.result-subs-label {
-  color: var(--text-muted);
-}
-
-.result-subs label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3em;
-}
-
-/* The export of the whole file, at the bottom of the analyzed tracks. */
-.export-box {
-  flex: 0 0 auto;
-  margin-top: auto;
-  padding-top: 0.7em;
-  border-top: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  gap: 0.5em;
-}
-
-.export-button {
-  width: 100%;
-}
-
-/* While exporting: the progress, and the way out if it was started too early. */
-.export-running {
-  display: flex;
-  align-items: center;
-  gap: 0.6em;
-}
-
-.export-running-label {
-  flex: 1 1 auto;
-  color: var(--accent);
-  font-weight: 600;
-}
-
 .export-cancel {
   flex: 0 0 auto;
   border-color: var(--danger);
   color: var(--danger);
-}
-
-.export-cancelled {
-  margin: 0;
-  font-size: 0.85em;
-  color: var(--text-muted);
-}
-
-.analysis-header {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1em;
-  margin-bottom: 0.7em;
-}
-
-.analysis-header h2 {
-  flex: 1 1 auto;
-  margin: 0;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* An empty region's invitation (DropZone.tsx): a dashed zone with the
@@ -800,30 +537,6 @@ button:focus-visible {
 /* Segments / Écoute, when the panel is too low for both at once. */
 .view-switch {
   flex: 0 0 auto;
-}
-
-/* The chart on top, the waveforms taking every pixel left. */
-.analysis-view {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.7em;
-}
-
-.analysis-chart {
-  flex: 0 0 auto;
-}
-
-.analysis-chart .segment-chart {
-  max-width: none;
-  margin: 0;
-}
-
-/* The Segments tab: the chart alone, as tall as the panel. */
-.analysis-chart-fill {
-  flex: 1 1 auto;
-  min-height: 0;
 }
 
 .view-hidden {
@@ -921,26 +634,8 @@ button:focus-visible {
   color: var(--danger);
 }
 
-.export-summary {
-  margin: 0;
-  font-size: 0.85em;
-  color: var(--text-muted);
-}
-
-.export-written {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.6em;
-}
-
 .render-success {
   margin-top: 0;
-}
-
-/* Bottom right, closing the panel like a dialog's main action. */
-.export-button {
-  flex: 0 0 auto;
 }
 
 .render-success {
@@ -952,53 +647,6 @@ button:focus-visible {
 .tracks-table-wrap {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-}
-
-/* Headers stay in view when the table scrolls (.list-scroll). */
-.field-tracks th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-
-.field-tracks table {
-  border-collapse: collapse;
-  width: 100%;
-  font-size: 0.85em;
-}
-
-/* No cell breaks mid-word ("truehd") in the narrow column of a small
-   window; a header may wrap at a space ("TO CORRECT"), never inside a word. */
-.field-tracks td {
-  white-space: nowrap;
-}
-
-/* .panel's overflow-wrap: anywhere (for paths) would split a header that
-   doesn't fit at a letter ("PIST|E"), with Inter wider than Segoe UI. */
-.field-tracks th {
-  overflow-wrap: normal;
-}
-
-.field-tracks th {
-  padding: 0.4em 0.3em;
-  text-align: center;
-  font-size: 0.75em;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  background: var(--surface-alt);
-  border: 1px solid var(--border);
-}
-
-.field-tracks td {
-  padding: 0.5em 0.3em;
-  text-align: center;
-  border: 1px solid var(--border);
-}
-
-.field-tracks tbody tr:hover {
-  background: var(--surface-alt);
 }
 
 /* "Journal (n)", opening the log in a dialog. */
@@ -1059,7 +707,6 @@ button:focus-visible {
   border: 1px solid var(--border);
 }
 
-.field-tracks .tracks-table-wrap td,
 .batch-choice-panel .batch-tracks-table td,
 .batch-tracks-side .batch-tracks-table td {
   padding: 0.6em 0.5em;
@@ -1071,7 +718,6 @@ button:focus-visible {
   padding: 0.45em 0.5em;
 }
 
-.field-tracks .tracks-table-wrap tbody tr:nth-child(even),
 .editor-table-wrap .editor-table tbody tr:nth-child(even),
 .batch-choice-panel .batch-tracks-table tbody tr:nth-child(even),
 .batch-tracks-side .batch-tracks-table tbody tr:nth-child(even) {
@@ -1257,7 +903,6 @@ input {
 /* With the 14px base, what was sized as a share of the text came out too
    small (table headers under 9px): fixed floors, as in the mockups. Later in
    the cascade than BatchView.css and SegmentEditor.css, same selectors. */
-.field-tracks th,
 .batch-tracks-table th,
 .editor-table th {
   font-size: 11px;
