@@ -1,6 +1,6 @@
-import { useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { formatTime } from "./SegmentChart";
-import { WHEEL_ZOOM_IN_FACTOR, WHEEL_ZOOM_OUT_FACTOR, useWheel } from "./timeView";
+import { WHEEL_ZOOM_IN_FACTOR, WHEEL_ZOOM_OUT_FACTOR, useTimelinePointer, useWheel } from "./timeView";
 import "./Waveform.css";
 import { t } from "./i18n";
 
@@ -25,7 +25,16 @@ interface WaveformProps {
   dataStart: number;
   dataEnd: number;
   cursor: number | null;
+  /** The marker glides to a new position (a click) rather than jumping;
+   * off while playing, where it moves every frame. */
+  cursorGlide?: boolean;
+  /** A click: the position goes there (see useTimelinePointer). */
   onSeek: (time: number) => void;
+  /** A left drag: the position follows the pointer, then is let go. */
+  onScrub: (time: number) => void;
+  onScrubEnd: (time: number) => void;
+  /** A middle-button drag: the view moves by this share of its length. */
+  onPan: (share: number) => void;
   /** Zoom by `factor` (< 1 in, > 1 out) keeping `centerTime` anchored --
    * the caller (TrackPreview) applies it to all three waveforms at once. */
   onZoom: (factor: number, centerTime: number) => void;
@@ -34,6 +43,20 @@ interface WaveformProps {
   /** Beside the label, on the right: what its colors mean, a value. */
   labelExtra?: ReactNode;
   className?: string;
+}
+
+/** Whether a playback marker may glide to its new place this render: asked
+ * (`glide`), and what it's drawn against (`layout`: the view's start and
+ * length, a chart's width) hasn't changed since the last render -- a zoom,
+ * a pan or a resize moves the marker with everything else, at once, not
+ * trailing behind. (The waveforms and the segment editor's chart.) */
+export function useMarkerGlide(glide: boolean, ...layout: number[]): boolean {
+  const last = useRef(layout);
+  const steady = layout.length === last.current.length && layout.every((v, i) => v === last.current[i]);
+  useEffect(() => {
+    last.current = layout;
+  });
+  return glide && steady;
 }
 
 // In viewBox units, about as many pixels at the waveform's usual size.
@@ -70,7 +93,11 @@ export function Waveform({
   dataStart,
   dataEnd,
   cursor,
+  cursorGlide = false,
   onSeek,
+  onScrub,
+  onScrubEnd,
+  onPan,
   onZoom,
   highlights,
   label,
@@ -81,12 +108,17 @@ export function Waveform({
 
   const timeToX = (t: number) => (viewDuration > 0 ? ((t - viewStart) / viewDuration) * WIDTH : 0);
 
-  function handleClick(e: React.MouseEvent<SVGSVGElement>) {
-    if (!svgRef.current || viewDuration <= 0) return;
-    const rect = svgRef.current.getBoundingClientRect();
-    const frac = (e.clientX - rect.left) / rect.width;
-    onSeek(viewStart + Math.max(0, Math.min(1, frac)) * viewDuration);
-  }
+  const pointer = useTimelinePointer(svgRef, {
+    timeAt: (clientX) => {
+      const rect = svgRef.current?.getBoundingClientRect();
+      const frac = rect && rect.width > 0 ? (clientX - rect.left) / rect.width : 0;
+      return viewStart + Math.max(0, Math.min(1, frac)) * viewDuration;
+    },
+    onSeek,
+    onScrub,
+    onScrubEnd,
+    onPan,
+  });
 
   /** Scroll up zooms in, scroll down zooms out, anchored under the cursor
    * (the same convention as a map), without scrolling the surrounding panel. */
@@ -126,6 +158,7 @@ export function Waveform({
 
   const cursorX = cursor !== null ? timeToX(cursor) : null;
   const showCursor = cursorX !== null && cursorX >= 0 && cursorX <= WIDTH;
+  const glide = useMarkerGlide(cursorGlide, viewStart, viewDuration);
 
   const timeTicks = 5;
   const tickValues = Array.from({ length: timeTicks + 1 }, (_, i) => viewStart + (viewDuration * i) / timeTicks);
@@ -141,7 +174,8 @@ export function Waveform({
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         preserveAspectRatio="none"
         className="waveform-svg"
-        onClick={handleClick}
+        onPointerDown={pointer.onPointerDown}
+        onMouseDown={pointer.onMouseDown}
         role="img"
         aria-label={t().preview.waveform(label)}
       >
@@ -160,7 +194,16 @@ export function Waveform({
             className={`waveform-highlight waveform-highlight-marker ${h.kind}`}
           />
         ))}
-        {showCursor && <line x1={cursorX} y1={0} x2={cursorX} y2={HEIGHT} className="waveform-cursor" />}
+        {showCursor && (
+          <line
+            x1={0}
+            y1={0}
+            x2={0}
+            y2={HEIGHT}
+            className={`waveform-cursor${glide ? " glide" : ""}`}
+            style={{ transform: `translateX(${cursorX}px)` }}
+          />
+        )}
       </svg>
       <div className="waveform-ticks">
         {tickValues.map((t, i) => (

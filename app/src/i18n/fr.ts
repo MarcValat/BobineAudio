@@ -364,7 +364,7 @@ export const fr = {
       unreliable: "Un segment en pointillés (⚠) est peu fiable : à vérifier à l'écoute.",
       remove: "« Retirer » supprime un segment (une fausse détection, par exemple) : son voisin s'étend sur sa durée, avec son propre décalage.",
       undo: "Ctrl+Z / Ctrl+Y : défaire / refaire.",
-      seek: "Clique sur le graphe pour placer la lecture à cet endroit.",
+      seek: "Clique sur le graphe pour placer la lecture à cet endroit, ou glisse pour déplacer la position ; clic molette et glisser pour se déplacer dans la piste.",
       sign: "Décalage : + = la piste est en retard sur la référence, − = en avance.",
     },
     abandonQuestion: "Abandonner les modifications non enregistrées ?",
@@ -400,7 +400,8 @@ export const fr = {
     zoomIn: "Zoomer",
     zoomOut: "Dézoomer",
     wholeTrack: "Piste entière",
-    zoomHint: "Molette sur une forme d'onde : zoomer ou dézoomer sous le curseur. Clic : placer la lecture à cet endroit.",
+    zoomHint:
+      "Molette sur une forme d'onde : zoomer ou dézoomer sous le curseur. Clic : placer la lecture à cet endroit ; glisser : déplacer la position avec la souris. Clic molette et glisser : se déplacer dans la piste.",
     goTo: "Aller à :",
     aSegment: (n: number) => `un segment (${n})…`,
     willBeRemoved: "sera supprimé",

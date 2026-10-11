@@ -356,7 +356,7 @@ export const en: Messages = {
       unreliable: "A dotted segment (⚠) is unreliable: check it by ear.",
       remove: "“Remove” deletes a segment (a false detection, for instance): its neighbour extends over its duration, with its own offset.",
       undo: "Ctrl+Z / Ctrl+Y: undo / redo.",
-      seek: "Click the chart to move playback there.",
+      seek: "Click the chart to move playback there, or drag to move the position; middle-click and drag to move along the track.",
       sign: "Offset: + = the track is late on the reference, − = early.",
     },
     abandonQuestion: "Discard unsaved changes?",
@@ -391,7 +391,8 @@ export const en: Messages = {
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",
     wholeTrack: "Whole track",
-    zoomHint: "Mouse wheel on a waveform: zoom in or out under the pointer. Click: move playback there.",
+    zoomHint:
+      "Mouse wheel on a waveform: zoom in or out under the pointer. Click: move playback there; drag: move the position with the mouse. Middle-click and drag: move along the track.",
     goTo: "Go to:",
     aSegment: (n) => `a segment (${n})…`,
     willBeRemoved: "will be removed",
