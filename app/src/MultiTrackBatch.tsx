@@ -700,6 +700,10 @@ export function MultiTrackBatch({
       {editing && editingRun?.result && (
         <SegmentEditor
           segments={editingRun.result.segments}
+          subtitle={`${basename(editing.path)} · ${(() => {
+            const track = probes[editing.path]?.tracks?.find((t) => t.index === editing.track);
+            return track ? trackName(track) : `@${editing.track}`;
+          })()}`}
           onClose={() => setEditing(null)}
           onSave={(edited) =>
             updateTarget(editing.path, editing.track, (t) => ({

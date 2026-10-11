@@ -890,6 +890,9 @@ export function PairsBatch({
       {editing !== null && editingRun?.result && (
         <SegmentEditor
           segments={editingRun.result.segments}
+          subtitle={`${basename(candidateFiles[editing.row])} · @${editing.track} ${
+            probes[candidateFiles[editing.row]]?.tracks?.find((t) => t.index === editing.track)?.language ?? "?"
+          }`}
           onClose={() => setEditing(null)}
           onSave={(edited) =>
             updateRun(trackKey(editing.row, editing.track), (a) => ({ result: a.result ? { ...a.result, segments: edited } : a.result }))

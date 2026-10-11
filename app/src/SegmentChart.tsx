@@ -152,6 +152,27 @@ export function SegmentChartPlaceholder({ children }: { children: ReactNode }) {
   );
 }
 
+/** What a segment chart's lines mean: constant, drift, and unreliable
+ * when some are (the chart, the segment editor). */
+export function SegmentLegend({ unreliable }: { unreliable: boolean }) {
+  const tr = useT();
+  return (
+    <div className="segment-chart-legend">
+      <span className="legend-item">
+        <span className="legend-swatch constant" /> {tr.chart.constant}
+      </span>
+      <span className="legend-item">
+        <span className="legend-swatch drift" /> {tr.chart.drift}
+      </span>
+      {unreliable && (
+        <span className="legend-item">
+          <span className="legend-swatch low-confidence" /> {tr.chart.unreliable}
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** `fill`: take all the height its container gives it (a tab of its own)
  * instead of its usual fixed one.
  *
@@ -237,19 +258,7 @@ export function SegmentChart({ segments, fill = false }: { segments: SegmentOut[
       </svg>
       </div>
       <div className="segment-chart-footer">
-        <div className="segment-chart-legend">
-          <span className="legend-item">
-            <span className="legend-swatch constant" /> {tr.chart.constant}
-          </span>
-          <span className="legend-item">
-            <span className="legend-swatch drift" /> {tr.chart.drift}
-          </span>
-          {segments.some((seg) => seg.confidence < LOW_CONFIDENCE_THRESHOLD) && (
-            <span className="legend-item">
-              <span className="legend-swatch low-confidence" /> {tr.chart.unreliable}
-            </span>
-          )}
-        </div>
+        <SegmentLegend unreliable={segments.some((seg) => seg.confidence < LOW_CONFIDENCE_THRESHOLD)} />
       </div>
     </div>
   );

@@ -128,3 +128,23 @@ export function ArrowDownIcon() {
     </svg>
   );
 }
+
+/** A hooked arrow back: undo the last edit. */
+export function UndoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M9 14L4 9l5-5" />
+      <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+    </svg>
+  );
+}
+
+/** A hooked arrow forward: redo what was undone. */
+export function RedoEditIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M15 14l5-5-5-5" />
+      <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />
+    </svg>
+  );
+}

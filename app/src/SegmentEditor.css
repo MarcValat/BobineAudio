@@ -184,17 +184,29 @@
   font-size: 0.85em;
 }
 
+/* As the app's other tables: left-aligned, a line between rows. */
 .editor-table th,
 .editor-table td {
-  padding: 0.35em 0.5em;
-  text-align: center;
-  border: 1px solid var(--border);
+  padding: 0.35em 0.6em;
+  text-align: left;
+  border: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.editor-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* The segment's number, quieter than its values. */
+.editor-table td:first-child {
+  color: var(--text-muted);
 }
 
 /* Headers may wrap at a space ("DÉCAL. / DÉBUT (ms)"): kept on one line,
    with the confidence gauge they made the table wider than a 1280px
    editor and cut the number fields. */
 .editor-table th {
+  white-space: nowrap;
   position: sticky;
   top: 0;
   z-index: 1;
@@ -215,10 +227,11 @@
 .editor-table input {
   width: 100%;
   min-width: 4.8em;
-  max-width: 7em;
   box-sizing: border-box;
-  padding: 0.25em 0.4em;
+  padding: 0.3em 0.5em;
   font-size: 0.95em;
+  /* Digits of one width: values line up from row to row. */
+  font-variant-numeric: tabular-nums;
 }
 
 .editor-confidence-cell {
@@ -257,8 +270,43 @@
   flex: 0 0 auto;
   margin-top: 1em;
   display: flex;
-  justify-content: center;
-  gap: 0.8em;
+  align-items: center;
+  gap: 0.6em;
+}
+
+/* Side by side, one height (as everywhere). */
+.editor-actions button {
+  height: 36px;
+  padding-block: 0;
+}
+
+/* "file · track", beside the title. */
+.editor-subtitle {
+  margin-left: 0.6em;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.editor-panel .segment-chart-legend {
+  font-size: 12px;
+}
+
+/* A text button led by its icon (Défaire, Refaire). */
+.with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.with-icon svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* Undo/redo/reset, apart on the left: they act on the edits, not on the result. */

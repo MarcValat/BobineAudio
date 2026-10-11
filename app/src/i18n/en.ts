@@ -347,7 +347,7 @@ export const en: Messages = {
   },
 
   editor: {
-    title: "Correct the segments by hand",
+    title: "Correct the segments",
     help: {
       dragSegment: "Drag a segment up or down to change its offset.",
       dragHandle: "Drag a ● handle to move a boundary.",
@@ -377,8 +377,8 @@ export const en: Messages = {
     onlySegment: "The only segment can't be removed.",
     removeHint: (segment, neighbour) =>
       `Removes segment ${segment} (a false detection, for instance): segment ${neighbour} extends over its duration, with its own offset. Previewed as green dots on the chart.`,
-    undo: "↶ Undo",
-    redo: "↷ Redo",
+    undo: "Undo",
+    redo: "Redo",
     reset: "Reset",
     resetHint: "Goes back to the segments as they were when the editor opened.",
     removeUnreliable: "Remove unreliable segments",

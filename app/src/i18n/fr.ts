@@ -355,7 +355,7 @@ export const fr = {
   },
 
   editor: {
-    title: "Corriger manuellement les segments",
+    title: "Corriger les segments",
     help: {
       dragSegment: "Glisse un segment vers le haut ou le bas pour changer son décalage.",
       dragHandle: "Glisse une poignée ● pour déplacer une frontière.",
@@ -385,8 +385,8 @@ export const fr = {
     onlySegment: "Le seul segment ne peut pas être retiré.",
     removeHint: (segment: number, neighbour: number) =>
       `Retire le segment ${segment} (une fausse détection, par exemple) : le segment ${neighbour} s'étend sur sa durée, avec son propre décalage. Aperçu en pointillés verts sur le graphe.`,
-    undo: "↶ Défaire",
-    redo: "↷ Refaire",
+    undo: "Défaire",
+    redo: "Refaire",
     reset: "Réinitialiser",
     resetHint: "Revient aux segments tels qu'à l'ouverture de l'éditeur.",
     removeUnreliable: "Retirer les segments peu fiables",

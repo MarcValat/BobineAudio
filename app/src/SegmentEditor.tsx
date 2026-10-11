@@ -9,9 +9,11 @@ import {
   formatTime,
   offsetTicks,
   segmentOffsetLabel,
+  SegmentLegend,
 } from "./SegmentChart";
 import { ConfidenceGauge } from "./ConfidenceGauge";
 import { InfoTip } from "./InfoTip";
+import { RedoEditIcon, UndoIcon } from "./icons";
 import { PillSwitch } from "./PillSwitch";
 import { type TimeView, WHEEL_ZOOM_IN_FACTOR, WHEEL_ZOOM_OUT_FACTOR, useWheel, zoomView } from "./timeView";
 import { TrackPreview, type TrackPreviewHandle } from "./TrackPreview";
@@ -157,11 +159,14 @@ interface PreviewSource {
 
 export function SegmentEditor({
   segments,
+  subtitle,
   onSave,
   onClose,
   preview,
 }: {
   segments: SegmentOut[];
+  /** What's being corrected: "file · track", beside the title. */
+  subtitle?: string;
   onSave: (segments: SegmentOut[]) => void;
   onClose: () => void;
   /** When given, renders the same always-visible waveform comparison as the
@@ -478,6 +483,7 @@ export function SegmentEditor({
                 <li>{t.editor.help.sign}</li>
               </ul>
             </InfoTip>
+            {subtitle && <span className="editor-subtitle">{subtitle}</span>}
             </>
           }
         >
@@ -494,7 +500,10 @@ export function SegmentEditor({
               onChange={setEditorView}
             />
           )}
-          {confirmingClose ? (
+          {/* What the lines mean, then the question when closing would lose
+              edits (Annuler or Escape). */}
+          <SegmentLegend unreliable={state.confidences.some((c) => c < LOW_CONFIDENCE_THRESHOLD)} />
+          {confirmingClose && (
             <div className="editor-confirm-close" role="alertdialog">
               <span>{t.editor.abandonQuestion}</span>
               <button className="small-button export-cancel" onClick={onClose}>
@@ -504,10 +513,6 @@ export function SegmentEditor({
                 {t.editor.keepEditing}
               </button>
             </div>
-          ) : (
-            <button className="small-button" onClick={requestClose} title={t.editor.cancelHint}>
-              {t.common.cancel}
-            </button>
           )}
         </DialogHeader>
 
@@ -751,14 +756,15 @@ export function SegmentEditor({
 
         <div className="editor-actions">
           <div className="editor-history">
-            <button className="small-button" onClick={undo} disabled={past.length === 0} title="Ctrl+Z">
+            <button className="with-icon" onClick={undo} disabled={past.length === 0} title="Ctrl+Z">
+              <UndoIcon />
               {t.editor.undo}
             </button>
-            <button className="small-button" onClick={redo} disabled={future.length === 0} title="Ctrl+Y">
+            <button className="with-icon" onClick={redo} disabled={future.length === 0} title="Ctrl+Y">
+              <RedoEditIcon />
               {t.editor.redo}
             </button>
             <button
-              className="small-button"
               onClick={reset}
               disabled={!dirty}
               title={t.editor.resetHint}
@@ -767,12 +773,15 @@ export function SegmentEditor({
             </button>
           </div>
           <button
-            className="small-button"
             disabled={!state.confidences.some((c) => c < LOW_CONFIDENCE_THRESHOLD)}
             title={t.editor.removeUnreliableHint}
             onClick={() => applyEdit(ignoreLowConfidenceSegments)}
           >
             {t.editor.removeUnreliable}
+          </button>
+          {/* Asks first when edits would be lost (in the header). */}
+          <button onClick={requestClose} title={t.editor.cancelHint}>
+            {t.common.cancel}
           </button>
           <button
             className="primary-button"
