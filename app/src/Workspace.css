@@ -592,9 +592,46 @@
   max-height: 340px;
 }
 
+/* Tinted with a gradient, a shade more on hover and on a press. A
+   gradient can't fade into another, but its two colors can, registered as
+   colors (@property): the gradient follows them. */
+@property --zone-from {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: transparent;
+}
+
+@property --zone-to {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: transparent;
+}
+
 .empty-workspace .drop-zone-empty {
+  /* The zone's hue at each end (pairs' zones have their own, below). */
+  --zone-hue-from: var(--accent-strong);
+  --zone-hue-to: var(--accent-2);
+  --zone-from: color-mix(in srgb, var(--zone-hue-from) 6%, transparent);
+  --zone-to: color-mix(in srgb, var(--zone-hue-to) 8%, transparent);
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent-strong) 6%, transparent), color-mix(in srgb, var(--accent-2) 8%, transparent));
+  background: linear-gradient(90deg, var(--zone-from), var(--zone-to));
+  transition:
+    --zone-from 0.15s,
+    --zone-to 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.empty-workspace .drop-zone-empty:hover:not(:disabled) {
+  --zone-from: color-mix(in srgb, var(--zone-hue-from) 11%, transparent);
+  --zone-to: color-mix(in srgb, var(--zone-hue-to) 14%, transparent);
+  background: linear-gradient(90deg, var(--zone-from), var(--zone-to));
+}
+
+.empty-workspace .drop-zone-empty:active:not(:disabled) {
+  --zone-from: color-mix(in srgb, var(--zone-hue-from) 15%, transparent);
+  --zone-to: color-mix(in srgb, var(--zone-hue-to) 19%, transparent);
+  background: linear-gradient(90deg, var(--zone-from), var(--zone-to));
 }
 
 .empty-workspace .drop-zone-empty-title {
@@ -675,18 +712,19 @@
    drift's amber (as the rows' Réf. / Corr.). */
 .empty-workspace .pairs-empty-zones .drop-zone-empty {
   min-height: 0;
-  background: color-mix(in srgb, var(--accent-strong) 6%, transparent);
+  --zone-hue-from: var(--accent-strong);
+  --zone-hue-to: var(--accent);
 }
 
 .empty-workspace .pairs-empty-zones .drop-zone-empty + .drop-zone-empty {
+  --zone-hue-from: var(--drift);
+  --zone-hue-to: color-mix(in srgb, var(--drift) 70%, var(--danger));
   border-color: color-mix(in srgb, var(--drift) 45%, transparent);
-  background: color-mix(in srgb, var(--drift) 5%, transparent);
 }
 
 .pairs-empty-zones .drop-zone-empty + .drop-zone-empty:hover:not(:disabled) {
   color: var(--drift);
   border-color: color-mix(in srgb, var(--drift) 60%, transparent);
-  background: color-mix(in srgb, var(--drift) 5%, transparent);
 }
 
 /* Pairs: a wider list, two names a row. */
