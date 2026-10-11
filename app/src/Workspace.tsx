@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { probe, type SubtitleInfo, type TrackInfo } from "./api";
 import { moved } from "./batchShared";
 import type { RunStatus } from "./jobs";
@@ -223,6 +224,24 @@ export function ListRow({
   );
 }
 
+/** Folds or unfolds the list: the layout goes straight to its new state,
+ * then the list and the detail slide there as pictures (View Transitions,
+ * Workspace.css's .list-folding): animating the column's width laid the
+ * whole detail out again at every frame (jerky once the waveforms are in),
+ * and showed the unfolded list squeezed into the narrow column meanwhile.
+ * At once where the engine lacks the API, and with reduced motion. */
+function foldList(collapsed: boolean) {
+  const change = () => flushSync(() => saveListCollapsed(collapsed));
+  const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  if (reduced || typeof document.startViewTransition !== "function") {
+    change();
+    return;
+  }
+  const root = document.documentElement;
+  root.classList.add("list-folding");
+  document.startViewTransition(change).finished.finally(() => root.classList.remove("list-folding"));
+}
+
 /** The list header's button folding the list to a narrow column (names and
  * states only, for a small window) or unfolding it; remembered, the same
  * in both modes (useListCollapsed). */
@@ -235,7 +254,7 @@ export function FoldButton({ collapsed }: { collapsed: boolean }) {
         className={`small-button icon-small-button fold-button${collapsed ? " folded" : ""}`}
         aria-label={label}
         aria-expanded={!collapsed}
-        onClick={() => saveListCollapsed(!collapsed)}
+        onClick={() => foldList(!collapsed)}
       >
         <FoldIcon />
       </button>
