@@ -19,6 +19,7 @@ import {
   type ExportFields,
 } from "./batchShared";
 import { InfoTip } from "./InfoTip";
+import { ALL_TRACKS, defaultPick, keyName, matchesAny, matchesKey, trackOptions, TrackFilterPicker, type TrackKey } from "./TrackFilter";
 import { MoveButtons, PairRow, runBadge, useProbes, type BadgeKind } from "./Workspace";
 import {
   DetailChart,
@@ -122,87 +123,6 @@ function PairTrackTable({
         {rows("cand", candidateTracks)}
       </tbody>
     </table>
-  );
-}
-
-/** Probes one file's tracks, to fill the track-picker dropdown. Only ever
- * called on the *first* file of each list, not every file: one picked
- * index applies to every pair (see PairsBatch's docstring, "a series keeps
- * the same track layout episode to episode"), so probing every file in a
- * big batch just to fill a dropdown would be slow and redundant -- the
- * "Vérifier toutes les pistes" modal below is what covers checking every
- * file individually when that assumption needs auditing. */
-function useTracksOf(path: string | undefined): { tracks: TrackInfo[] | null; loading: boolean; error: string | null } {
-  const [tracks, setTracks] = useState<TrackInfo[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!path) {
-      setTracks(null);
-      setError(null);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    probe(path)
-      .then((res) => {
-        if (!cancelled) setTracks(res.tracks);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(errorMessage(err));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [path]);
-
-  return { tracks, loading, error };
-}
-
-interface TrackPickerProps {
-  label: string;
-  tracks: TrackInfo[] | null;
-  loading: boolean;
-  error: string | null;
-  value: number;
-  onChange: (index: number) => void;
-  disabled?: boolean;
-}
-
-/** A dropdown of the first file's actual tracks (index/language/codec): the
- * pick every pair starts with. Just "—" while there's no file read yet, as
- * the multitrack languages' (a pair's own table picks for it if the first
- * file can't be read). */
-function TrackPicker({ label, tracks, loading, error, value, onChange, disabled }: TrackPickerProps) {
-  const m = useT();
-  return (
-    <span className="config-field">
-      {m.common.labelled(label)}
-      {tracks && tracks.length > 0 ? (
-        <select value={value} onChange={(e) => onChange(Number(e.target.value))} disabled={disabled} aria-label={label}>
-          {tracks.map((t) => (
-            <option key={t.index} value={t.index}>
-              @{t.index} — {t.language ?? "?"} ({t.codec ?? "?"})
-            </option>
-          ))}
-        </select>
-      ) : (
-        <select value="" disabled={disabled} aria-label={label} onChange={() => {}}>
-          <option value="">—</option>
-        </select>
-      )}
-      {loading && <span className="batch-track-status">{m.pairs.probing}</span>}
-      {error && (
-        <span className="batch-track-status batch-track-status-error" title={error}>
-          {m.pairs.tracksUnavailable}
-        </span>
-      )}
-    </span>
   );
 }
 
@@ -318,8 +238,11 @@ export function PairsBatch({
   const m = useT();
   const [referenceFiles, setReferenceFiles] = useState<string[]>([]);
   const [candidateFiles, setCandidateFiles] = useState<string[]>([]);
-  const [referenceTrackIndex, setReferenceTrackIndex] = useState(0);
-  const [candidateTrackIndex, setCandidateTrackIndex] = useState(1);
+  // What the top bar picks for every pair (see TrackFilter): the reference
+  // in the reference file, the tracks to correct in the other one (any
+  // track one of these names).
+  const [referenceKey, setReferenceKey] = useState<TrackKey>("");
+  const [candidateKeys, setCandidateKeys] = useState<TrackKey[]>([]);
   // Pairs whose tracks were picked in their detail (by both files), instead
   // of the top bar's.
   const [pairTracks, setPairTracks] = useState<Record<string, PairTracks>>({});
@@ -353,21 +276,16 @@ export function PairsBatch({
   const probes = useProbes(useMemo(() => [...referenceFiles, ...candidateFiles], [referenceFiles, candidateFiles]));
   const view = useDetailView();
 
-  const referenceProbe = useTracksOf(referenceFiles[0]);
-  const candidateProbe = useTracksOf(candidateFiles[0]);
-
-  // Re-pick a sensible default the moment a *new* first file's tracks come
-  // in (e.g. the reference list was just (re)populated) -- doesn't fight a
-  // manual pick afterwards, since this only fires when the tracks array
-  // itself changes, not on every render.
+  // The picks start out from the first pair's files (see defaultPick). Only
+  // while none is set, so a pick of the user's is never overridden.
+  const firstReference = probes[referenceFiles[0]]?.tracks;
+  const firstCandidate = probes[candidateFiles[0]]?.tracks;
   useEffect(() => {
-    if (referenceProbe.tracks && referenceProbe.tracks.length > 0) setReferenceTrackIndex(referenceProbe.tracks[0].index);
-  }, [referenceProbe.tracks]);
-  useEffect(() => {
-    if (candidateProbe.tracks && candidateProbe.tracks.length > 0) {
-      setCandidateTrackIndex(candidateProbe.tracks.length > 1 ? candidateProbe.tracks[1].index : candidateProbe.tracks[0].index);
-    }
-  }, [candidateProbe.tracks]);
+    if (referenceKey || !firstReference?.length || !firstCandidate?.length) return;
+    const pick = defaultPick(firstReference, firstCandidate);
+    setReferenceKey(pick.reference);
+    setCandidateKeys(pick.targets);
+  }, [firstReference, firstCandidate, referenceKey]);
 
   // Dev only (see devParam): `?batchRef=a|b&batchCand=c|d` fills the lists.
   useEffect(() => {
@@ -389,10 +307,32 @@ export function PairsBatch({
 
   /** Row `i`'s files, which its own tracks (pairTracks) are kept by. */
   const filesKey = (i: number) => JSON.stringify([referenceFiles[i], candidateFiles[i]]);
+  /** Row `i`'s tracks as the top bar picks them in its two files: the
+   * reference (its file's first track when the pick names none or several
+   * of them: "(auto)"), the tracks to correct, and what a ticked entry
+   * should name but can't (⚠). Nothing until both files are read. */
+  function picked(i: number): PairTracks & { auto: boolean; issues: string[] } {
+    const referenceTracks = probes[referenceFiles[i]]?.tracks ?? [];
+    const candidateTracks = probes[candidateFiles[i]]?.tracks ?? [];
+    const matches = referenceKey ? referenceTracks.filter((t) => matchesKey(t, referenceKey)) : [];
+    return {
+      reference: (matches[0] ?? referenceTracks[0])?.index ?? 0,
+      candidates: candidateTracks.filter((t) => matchesAny(t, candidateKeys)).map((t) => t.index),
+      auto: referenceTracks.length > 0 && matches.length !== 1,
+      issues:
+        candidateTracks.length === 0
+          ? []
+          : candidateKeys
+              .filter((key) => key !== ALL_TRACKS && !candidateTracks.some((t) => matchesKey(t, key)))
+              .map((key) => m.multi.noTrack(keyName(key))),
+    };
+  }
   /** Row `i`'s tracks: its own if picked in its detail, else the top bar's. */
   function tracksOf(i: number): PairTracks {
-    return pairTracks[filesKey(i)] ?? { reference: referenceTrackIndex, candidates: [candidateTrackIndex] };
+    return pairTracks[filesKey(i)] ?? picked(i);
   }
+  /** Both of row `i`'s files are read. */
+  const probed = (i: number) => !!probes[referenceFiles[i]] && !!probes[candidateFiles[i]];
 
   /** One corrected track of row `i` as it stands: both files and both tracks. */
   function trackKey(i: number, track: number): string {
@@ -417,8 +357,8 @@ export function PairsBatch({
   /** A change to row `i`'s tracks or subtitles: from then on they're its own. */
   function editPairTracks(i: number, update: (tracks: PairTracks) => PairTracks) {
     const key = filesKey(i);
-    const current = tracksOf(i);
-    setPairTracks((c) => ({ ...c, [key]: update(c[key] ?? current) }));
+    const { reference, candidates, subtitles } = tracksOf(i);
+    setPairTracks((c) => ({ ...c, [key]: update(c[key] ?? { reference, candidates, subtitles }) }));
   }
 
   /** Row `i`'s pair as it stands, for its export: every track it corrects. */
@@ -602,17 +542,17 @@ export function PairsBatch({
     const st = m.pairs.status;
     if (i >= pairCount) return [st.unpaired, "error"];
     if (unreadable(i).length > 0) return [m.multi.status.unreadable, "error"];
+    if (!probed(i)) return [m.multi.status.reading, "idle"];
     const statuses = runsOf(i).map((a) => a?.status);
-    return (
-      runBadge(statuses, exportOf(i)?.exportStatus, st) ??
-      (statuses.length === 0 ? [m.multi.status.check, "warning"] : [st.toAnalyze, "idle"])
-    );
+    const flagged = statuses.length === 0 || (!pairTracks[filesKey(i)] && picked(i).issues.length > 0);
+    return runBadge(statuses, exportOf(i)?.exportStatus, st) ?? (flagged ? [m.multi.status.check, "warning"] : [st.toAnalyze, "idle"]);
   }
 
   // The detail: the selected row, and the corrected track its tabs show.
   const detailPaired = selected < pairCount;
   const detailTracks = tracksOf(selected);
   const detailOwnTracks = detailPaired && !!pairTracks[filesKey(selected)];
+  const detailPicked = detailPaired && !detailOwnTracks ? picked(selected) : null;
   const shownTrack: number | undefined =
     detailTracks.candidates.find((t) => t === shownTracks[filesKey(selected)]) ?? detailTracks.candidates[0];
   const detailRun = detailPaired && shownTrack !== undefined ? runOf(selected, shownTrack) : undefined;
@@ -627,36 +567,37 @@ export function PairsBatch({
   const shownTrackInfo = shownTrack !== undefined ? candidateInfo(shownTrack) : undefined;
 
 
+  // The top bar's choices: what the files of each column offer.
+  const referenceOptions = trackOptions(referenceFiles.flatMap((f) => (probes[f]?.tracks ? [probes[f].tracks!] : [])));
+  const candidateOptions = trackOptions(candidateFiles.flatMap((f) => (probes[f]?.tracks ? [probes[f].tracks!] : [])));
+
   return (
     <main className="batch-main" style={hidden ? { display: "none" } : undefined}>
       <div className="batch-config panel">
-        <TrackPicker
-          label={m.common.reference}
-          tracks={referenceProbe.tracks}
-          loading={referenceProbe.loading}
-          error={referenceProbe.error}
-          value={referenceTrackIndex}
-          onChange={setReferenceTrackIndex}
-          disabled={busy}
-        />
-        <TrackPicker
-          label={m.common.toCorrect}
-          tracks={candidateProbe.tracks}
-          loading={candidateProbe.loading}
-          error={candidateProbe.error}
-          value={candidateTrackIndex}
-          onChange={setCandidateTrackIndex}
-          disabled={busy}
-        />
+        <span className="config-field">
+          {m.multi.reference}
+          <TrackFilterPicker
+            label={m.common.reference}
+            options={referenceOptions}
+            value={referenceKey ? [referenceKey] : []}
+            onChange={([key]) => setReferenceKey(key)}
+            single
+            disabled={busy}
+          />
+        </span>
+        <span className="config-field">
+          {m.multi.toCorrect}
+          <TrackFilterPicker label={m.common.toCorrect} options={candidateOptions} value={candidateKeys} onChange={setCandidateKeys} disabled={busy} />
+        </span>
         <span className="config-field">
           {m.pairs.language}
           <LanguageSelect
             label={m.pairs.language}
             value={candidateLanguage}
             onChange={setCandidateLanguage}
-            extra={candidateProbe.tracks?.map((t) => t.language) ?? []}
+            extra={firstCandidate?.map((t) => t.language) ?? []}
             emptyLabel={m.pairs.fileLanguage(
-              candidateProbe.tracks?.find((t) => t.index === candidateTrackIndex)?.language ?? null,
+              pairCount > 0 ? (firstCandidate?.find((t) => t.index === tracksOf(0).candidates[0])?.language ?? null) : null,
             )}
             disabled={busy}
           />
@@ -713,6 +654,9 @@ export function PairsBatch({
                   setAnalyses({});
                   setExports({});
                   setPairTracks({});
+                  // Picked again from the next files added.
+                  setReferenceKey("");
+                  setCandidateKeys([]);
                   setShownTracks({});
                 }}
                 disabled={busy}
@@ -808,6 +752,7 @@ export function PairsBatch({
                   <div className="detail-tracks">
                     <TracksHeading
                       hint={m.pairs.tracksHint}
+                      auto={detailPicked?.auto ? m.multi.autoHint : undefined}
                       reset={
                         detailOwnTracks
                           ? {
@@ -835,6 +780,7 @@ export function PairsBatch({
                         onToggleCandidate={(index) => editPairTracks(selected, (t) => ({ ...t, candidates: toggled(t.candidates, index) }))}
                       />
                     </div>
+                    {detailPicked && detailPicked.issues.length > 0 && <span className="list-row-issues">⚠ {detailPicked.issues.join(", ")}</span>}
                     {(probes[detailCandidate!]?.subtitles.length ?? 0) > 0 && detailTracks.candidates.length > 0 && (
                       <RetimedSubs
                         subtitles={probes[detailCandidate!]!.subtitles}
