@@ -174,8 +174,8 @@ function playSource(ctx: AudioContext, buffer: AudioBuffer, gain: GainNode, when
 }
 
 interface TrackPreviewProps {
-  /** Usually the same file (single-file mode's reference and candidate
-   * tracks live side by side in one container) but not always: batch mode's
+  /** Usually the same file (multitrack mode's reference and candidate
+   * tracks live side by side in one container) but not always: the
    * cross-file pairs have the reference in one file and the track to
    * correct in another, and /clip and /waveform both take a `path` per
    * call, so there's no reason this component needs them to match. */

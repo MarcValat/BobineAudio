@@ -1,10 +1,6 @@
-/* Not just .app-main plus overrides: relying on cascade order between two
-   same-specificity classes from two different stylesheets is fragile (it
-   silently depends on CSS import/bundling order) -- .batch-main instead
-   defines everything it needs on its own. Fits the window like the
-   single-file view: settings on top, the workspace (list and detail,
-   Workspace.css) taking the height left, actions at the bottom. Only the
-   list scrolls. */
+/* A mode's workspace fits the window: settings on top, the list and the
+   detail (Workspace.css) taking the height left, actions at the bottom.
+   Only the list scrolls. */
 .batch-main {
   flex: 1 1 auto;
   min-height: 0;
@@ -152,8 +148,7 @@
   border-bottom: 1px solid var(--border);
 }
 
-/* Radio buttons and checkboxes centered under their header, as in the
-   single-file tracks table. */
+/* Radio buttons and checkboxes centered under their header. */
 .batch-tracks-table .track-pick {
   text-align: center;
 }

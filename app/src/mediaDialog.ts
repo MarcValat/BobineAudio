@@ -1,6 +1,6 @@
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { open } from "@tauri-apps/plugin-dialog";
 import { pathsExist } from "./api";
-import { devParam, loadSetting, saveSetting } from "./util";
+import { loadSetting, saveSetting } from "./util";
 import { t } from "./i18n";
 
 // Videos to take a reference from, and the audio-only files a corrected track
@@ -27,7 +27,7 @@ function rememberFolder(path: string): void {
 }
 
 /** The system's open dialog for media files, starting in the folder the
- * last pick came from (single file and batch mode alike); `title` says
+ * last pick came from (both modes alike); `title` says
  * what's being picked when it isn't obvious (a pair's side). */
 export async function pickMediaFiles(multiple: false, title?: string): Promise<string | null>;
 export async function pickMediaFiles(multiple: true, title?: string): Promise<string[] | null>;
@@ -97,19 +97,4 @@ export async function planOutputPaths(inputs: string[], outputDir: string | null
     planned.push(path);
   });
   return planned;
-}
-
-/** Where `inputPath`'s synchronized copy goes, by default right next to it:
- * "Film.mkv" -> "Film.synced.mkv". */
-export function syncedFileName(inputPath: string): string {
-  const { dir, stem } = splitPath(inputPath);
-  return dir + stem + ".synced.mkv";
-}
-
-/** The system's "save as" dialog for an exported MKV, starting at `suggestedPath`. */
-export async function pickOutputFile(suggestedPath: string): Promise<string | null> {
-  // Dev only (see devParam): `?saveAs=<path>` answers the dialog.
-  const devPath = devParam("saveAs");
-  if (devPath) return devPath;
-  return save({ defaultPath: suggestedPath, filters: [{ name: "Matroska", extensions: ["mkv"] }] });
 }

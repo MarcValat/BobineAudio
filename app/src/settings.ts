@@ -19,7 +19,7 @@ const SUBTITLE_DEFAULT_KEY = "syncaudio.subtitleDefault";
 const CHECK_UPDATES_KEY = "syncaudio.checkUpdates";
 
 /** Which subtitle tracks go with a corrected track unless picked otherwise:
- * ticked in single-file mode, the batch modes' starting setting. */
+ * the starting setting of both modes. */
 export function loadSubtitleDefault(): SubtitleMode {
   const saved = loadSetting(SUBTITLE_DEFAULT_KEY);
   return saved === "all" || saved === "none" ? saved : "forced";

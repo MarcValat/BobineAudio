@@ -3,7 +3,7 @@ import { useT } from "./i18n";
 
 /** A file's audio tracks, one row each: index, language, codec, then either
  * the reference / track-to-correct picks (with `onReference`) or, read-only,
- * the channel count (`showChannels`). The single-file view and the batch
+ * the channel count (`showChannels`). The detail's tables and the
  * dialogs all show tracks this way; each keeps its own look (`className`). */
 export function TrackTable({
   tracks,

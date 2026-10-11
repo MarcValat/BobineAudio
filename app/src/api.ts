@@ -131,30 +131,6 @@ export async function expandPaths(paths: string[], extensions: string[]): Promis
   return (await resp.json()).files;
 }
 
-export interface PrefetchResponse {
-  cached: number;
-}
-
-/**
- * Warms the engine's analysis cache for every track in the background --
- * fire right after `probe` succeeds so that by the time the user picks a
- * reference and clicks a detection button, the ~7s-per-track
- * extraction+envelope cost (the actual bottleneck, not ffmpeg decoding) is
- * already paid. Fire-and-forget: a failure here just means the next
- * detection redoes the work itself, so callers aren't required to await
- * the job's completion or handle its errors specially.
- */
-export async function startPrefetchJob(path: string, trackIndices: number[]): Promise<string> {
-  const resp = await engineFetch(`/jobs/prefetch`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tracks: trackIndices.map((index) => ({ path, index })) }),
-  });
-  if (!resp.ok) throw new Error(await readErrorDetail(resp));
-  const data = await resp.json();
-  return data.job_id as string;
-}
-
 /**
  * A short playable WAV clip of one track, for the "listen before you
  * render" preview -- not the 16kHz analysis PCM, a normal-rate clip meant

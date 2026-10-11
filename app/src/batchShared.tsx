@@ -132,8 +132,8 @@ export interface AnalysisRun {
   log: string[];
 }
 
-/** Where a row stands, for the colored bar at its left (as the single-file
- * view's analyzed tracks, and Bobine Subs' rows): something running, waiting,
+/** Where a row stands, for the colored bar at its left (as Bobine Subs'
+ * rows): something running, waiting,
  * failed or flagged, exported, every analysis done, or nothing done yet. A
  * row holds one analysis (a pair) or several (a file's corrected tracks). */
 export function rowState(
