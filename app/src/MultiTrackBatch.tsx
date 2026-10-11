@@ -627,6 +627,7 @@ export function MultiTrackBatch({
                   {shownTrack && shownResult && detailReference && !(editing?.path === detailPath && editing.track === shownTrack.index) && (
                     <div className={view.listenClass()}>
                       <TrackPreview
+                        active={!hidden}
                         key={`${detailPath}|${shownTrack.index}`}
                         referenceFilePath={detailPath}
                         candidateFilePath={detailPath}

@@ -817,6 +817,7 @@ export function PairsBatch({
                   {detailResult && shownTrack !== undefined && !(editing?.row === selected && editing.track === shownTrack) && (
                     <div className={view.listenClass()}>
                       <TrackPreview
+                        active={!hidden}
                         key={detailKey}
                         referenceFilePath={detailReference!}
                         candidateFilePath={detailCandidate!}

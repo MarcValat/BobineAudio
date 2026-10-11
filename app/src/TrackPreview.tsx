@@ -203,7 +203,18 @@ interface TrackPreviewProps {
   /** More buttons at the right end of the zoom row (the detail's
    * "Journal"): the playback row has no room left in a small window. */
   extraControls?: React.ReactNode;
+  /** False while it's out of sight (its mode hidden): playback stops. */
+  active?: boolean;
 }
+
+// The listening position of each track pair, kept while its preview comes
+// and goes: the detail's and the editor's are one, closing the editor
+// keeps where it was.
+const positions = new Map<string, number>();
+
+// A clip starts at least this long before the track's end: one starting
+// at the very end would be empty (it can't even be decoded).
+const MIN_CLIP_S = 1;
 
 export interface TrackPreviewHandle {
   seekTo(t: number): void;
@@ -248,9 +259,15 @@ export function TrackPreview({
   view: sharedView,
   onViewChange,
   extraControls,
+  active = true,
 }: TrackPreviewProps) {
   const t = useT();
-  const [previewStart, setPreviewStart] = useState(() => (segments.length ? segments[0].start_s : 0));
+  const positionKey = `${referenceFilePath}|${referenceIndex}|${candidateFilePath}|${trackIndex}`;
+  const [previewStart, setPreviewStartState] = useState(() => positions.get(positionKey) ?? (segments.length ? segments[0].start_s : 0));
+  function setPreviewStart(t: number) {
+    setPreviewStartState(t);
+    positions.set(positionKey, t);
+  }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Where the currently-loaded clips actually start, in reference time --
@@ -339,6 +356,23 @@ export function TrackPreview({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segmentsKey]);
 
+  /** `t` brought within the track, a clip's length before its end. */
+  function clampStart(t: number): number {
+    const end = refDuration !== null ? Math.max(0, refDuration - MIN_CLIP_S) : Infinity;
+    return Math.round(Math.max(0, Math.min(Number.isFinite(t) ? t : 0, end)) * 10) / 10;
+  }
+
+  // Out of sight (its mode hidden): it goes quiet.
+  useEffect(() => {
+    if (!active && playbackStartRef.current !== null) stop();
+    if (!active) {
+      // A clip on its way is dropped, and the button freed.
+      loadGenerationRef.current++;
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+
   /** A drag of the marker let go at `t`: the position goes there. */
   function endScrub(t: number) {
     setScrubTime(null);
@@ -358,7 +392,11 @@ export function TrackPreview({
   const hasContainerDelay = Math.abs(trackStartTime) > 0.001 || Math.abs(referenceStartTime) > 0.001;
   const presentationOffset = appliedOffset + trackStartTime - referenceStartTime;
 
+  // Gone: no audio context may be created any more.
+  const unmountedRef = useRef(false);
+
   function getAudioCtx(): AudioContext {
+    if (unmountedRef.current) throw new Error("preview closed");
     if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
     return audioCtxRef.current;
   }
@@ -373,12 +411,22 @@ export function TrackPreview({
   }
 
   useEffect(() => {
+    // (Mounted again: React's development mode unmounts and remounts once.)
+    unmountedRef.current = false;
     return () => {
+      // A clip still on its way is dropped (it would start playing after
+      // the preview is gone, with nothing left to stop it).
+      loadGenerationRef.current++;
+      unmountedRef.current = true;
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       stopSource(refSourceRef);
       stopSource(candSourceRef);
       stopSource(candOriginalSourceRef);
       audioCtxRef.current?.close().catch(() => {});
+      audioCtxRef.current = null;
+      refGainRef.current = null;
+      candGainRef.current = null;
+      candOriginalGainRef.current = null;
     };
   }, []);
 
@@ -517,8 +565,12 @@ export function TrackPreview({
    * `previewStart` so a click-to-seek during playback (see
    * handleWaveformSeek) can jump straight to the clicked time without
    * waiting for the state update to land first. */
-  async function loadAndPlay(startAt: number = previewStart) {
+  async function loadAndPlay(requested: number = previewStart) {
     const generation = ++loadGenerationRef.current;
+    // Within the track: a position typed past its end (or left from a
+    // longer one) would ask the engine for nothing -- an error 400.
+    const startAt = clampStart(requested);
+    if (startAt !== requested) setPreviewStart(startAt);
     setLoading(true);
     setError(null);
     try {
@@ -831,7 +883,8 @@ export function TrackPreview({
             type="number"
             step="0.5"
             min="0"
-            value={previewStart}
+            // While the marker is dragged, where it would land.
+            value={scrubTime !== null ? Math.round(scrubTime * 10) / 10 : previewStart}
             onChange={(e) => setPreviewStart(Number(e.target.value))}
           />
         </label>
