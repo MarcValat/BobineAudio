@@ -43,13 +43,9 @@ export function ListRow({
         </span>
         <span className="list-row-status">
           <span className={`list-badge list-badge-${badgeKind}`}>{badge}</span>
-          {/* Something's running on it: a bar that moves (the engine
+          {/* Something's running on it: the app's spinner (the engine
               doesn't say how far along it is). */}
-          {badgeKind === "running" && (
-            <span className="list-row-progress" aria-hidden="true">
-              <span />
-            </span>
-          )}
+          {badgeKind === "running" && <span className="spinner spinner-small" aria-hidden="true" />}
         </span>
       </button>
       {actions && <span className="list-row-actions">{actions}</span>}

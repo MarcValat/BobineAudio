@@ -152,46 +152,17 @@
   padding: 0.1em 0.45em;
 }
 
+/* The badge, and the spinner at its right while something runs. */
 .list-row-status {
   flex: 0 0 auto;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
 }
 
-.list-row-progress {
-  width: 90px;
-  height: 4px;
-  border-radius: 3px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
-}
-
-.list-row-progress span {
-  display: block;
-  width: 40%;
-  height: 100%;
-  border-radius: 3px;
-  background: var(--gradient);
-  animation: list-row-progress 1.2s ease-in-out infinite;
-}
-
-@keyframes list-row-progress {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(250%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .list-row-progress span {
-    width: 100%;
-    animation: none;
-    opacity: 0.6;
-  }
+.list-row-status .spinner {
+  flex: 0 0 auto;
+  box-sizing: border-box;
 }
 
 /* Where a file stands, as a pill. */
