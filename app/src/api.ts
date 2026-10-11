@@ -300,16 +300,16 @@ export async function startSegmentedRenderJob(
  * separate imports, never the same file@index pair `startSegmentedRenderJob`
  * assumes) -- `input_path` supplies the video/reference/subtitles as-is,
  * `only_imports` keeps it from also (redundantly) "correcting" any of its
- * own native tracks, and the corrected track is imported from `candidatePath`
- * as a donor, same mechanism as the CLI's `--import-audio`.
+ * own native tracks, and the corrected tracks (one or several) are imported
+ * from `candidatePath` as donors, same mechanism as the CLI's
+ * `--import-audio`.
  */
 export async function startCrossFileSegmentedRenderJob(
   referencePath: string,
   referenceIndex: number,
   candidatePath: string,
-  candidateIndex: number,
-  segments: SegmentOut[],
-  options: { outputPath?: string; language?: string | null; subtitles?: number[] } = {},
+  tracks: TrackSegments[],
+  outputPath?: string,
 ): Promise<string> {
   const resp = await engineFetch(`/jobs/render`, {
     method: "POST",
@@ -318,18 +318,23 @@ export async function startCrossFileSegmentedRenderJob(
       input_path: referencePath,
       reference_index: referenceIndex,
       only_imports: true,
-      import_audio: [{ path: candidatePath, index: candidateIndex }],
-      output_path: options.outputPath ?? null,
+      // Every corrected track of the candidate file, imported side by side.
+      import_audio: tracks.map((t) => ({ path: candidatePath, index: t.trackIndex })),
+      output_path: outputPath ?? null,
       segmented: true,
-      segment_overrides: [
-        { track: { path: candidatePath, index: candidateIndex }, segments, language: options.language ?? null },
-      ],
-      // The candidate file's own subtitles timed on its audio, imported and
-      // retimed along with it.
-      subs: (options.subtitles ?? []).map((index) => ({
-        subs: { path: candidatePath, index },
-        audio: { path: candidatePath, index: candidateIndex },
+      segment_overrides: tracks.map((t) => ({
+        track: { path: candidatePath, index: t.trackIndex },
+        segments: t.segments,
+        language: t.language ?? null,
       })),
+      // The candidate file's own subtitles timed on each audio, imported and
+      // retimed along with it.
+      subs: tracks.flatMap((t) =>
+        (t.subtitles ?? []).map((index) => ({
+          subs: { path: candidatePath, index },
+          audio: { path: candidatePath, index: t.trackIndex },
+        })),
+      ),
     }),
   });
   if (!resp.ok) throw new Error(await readErrorDetail(resp));

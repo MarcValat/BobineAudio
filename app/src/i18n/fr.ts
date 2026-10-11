@@ -301,7 +301,7 @@ export const fr = {
     language: "Langue ajoutée :",
     fileLanguage: (language: string | null) => `Celle du fichier (${language ?? "aucune"})`,
     languageHint:
-      "Langue attribuée à la piste corrigée dans le fichier exporté. « Celle du fichier » garde la sienne ; utile pour une piste qui n'en a pas (un .wav, par exemple).",
+      "Langue attribuée à la piste corrigée dans le fichier exporté, quand une paire n'en corrige qu'une. « Celle du fichier » garde la sienne ; utile pour une piste qui n'en a pas (un .wav, par exemple). Plusieurs pistes corrigées gardent chacune la leur.",
     hint:
       "Pistes proposées d'après le 1er fichier de chaque colonne, puis appliquées à toutes les paires. « Vérifier toutes les pistes » montre celles de chaque fichier. Les sous-titres choisis du fichier à corriger (texte seulement : SRT, ASS) sont importés et recalés avec sa piste audio.",
     pairs: "Paires",
@@ -341,9 +341,10 @@ export const fr = {
       "La piste à recaler (souvent la VF) : vidéos ou fichiers audio. Ou dépose sur la moitié droite de la fenêtre.",
     analyzePairHint: "Analyse cette paire.",
     exportPair: "Exporter cette paire",
+    noTarget: "Aucune piste à corriger pour cette paire : coche-en dans le tableau des pistes.",
     fileColumn: "Fichier",
     tracksHint:
-      "Les pistes des deux fichiers de la paire. Réf. : la piste du fichier de référence qui sert de modèle. À corriger : la piste du fichier à corriger, recalée puis ajoutée à la vidéo de référence. Changer une case fixe les pistes de cette paire seulement ; « Par défaut » revient au choix de la barre du haut.",
+      "Les pistes des deux fichiers de la paire. Réf. : la piste du fichier de référence qui sert de modèle. À corriger : les pistes du fichier à corriger, recalées puis ajoutées à la vidéo de référence ; coches-en plusieurs pour les ajouter toutes. Changer une case fixe les pistes de cette paire seulement ; « Par défaut » revient au choix de la barre du haut.",
     byDefault: "Par défaut",
     byDefaultHint: "Revenir aux pistes de la barre du haut",
     status: {

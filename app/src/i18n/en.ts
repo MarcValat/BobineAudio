@@ -296,7 +296,7 @@ export const en: Messages = {
     language: "Added language:",
     fileLanguage: (language) => `The file's (${language ?? "none"})`,
     languageHint:
-      "Language given to the corrected track in the exported file. “The file's” keeps its own; handy for a track that has none (a .wav, for instance).",
+      "Language given to the corrected track in the exported file, when a pair corrects only one. “The file's” keeps its own; handy for a track that has none (a .wav, for instance). Several corrected tracks each keep their own.",
     hint:
       "Tracks offered from the first file of each column, then applied to every pair. “Check all tracks” shows each file's. The chosen subtitles of the file to correct (text only: SRT, ASS) are imported and retimed with its audio track.",
     pairs: "Pairs",
@@ -334,9 +334,10 @@ export const en: Messages = {
     dropCandidatesHint: "The track to resync (often the dub): videos or audio files. Or drop on the window's right half.",
     analyzePairHint: "Analyzes this pair.",
     exportPair: "Export this pair",
+    noTarget: "No track to correct in this pair: tick some in the tracks table.",
     fileColumn: "File",
     tracksHint:
-      "Both files' tracks. Ref.: the reference file's track used as the model. To correct: the track of the file to correct, resynced then added to the reference video. Changing a box sets this pair's tracks only; “By default” goes back to the top bar's pick.",
+      "Both files' tracks. Ref.: the reference file's track used as the model. To correct: the tracks of the file to correct, resynced then added to the reference video; tick several to add them all. Changing a box sets this pair's tracks only; “By default” goes back to the top bar's pick.",
     byDefault: "By default",
     byDefaultHint: "Go back to the top bar's tracks",
     status: {
