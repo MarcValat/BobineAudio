@@ -334,6 +334,11 @@ export const en: Messages = {
     dropCandidatesHint: "The track to resync (often the dub): videos or audio files. Or drop on the window's right half.",
     analyzePairHint: "Analyzes this pair.",
     exportPair: "Export this pair",
+    fileColumn: "File",
+    tracksHint:
+      "Both files' tracks. Ref.: the reference file's track used as the model. To correct: the track of the file to correct, resynced then added to the reference video. Changing a box sets this pair's tracks only; “By default” goes back to the top bar's pick.",
+    byDefault: "By default",
+    byDefaultHint: "Go back to the top bar's tracks",
     status: {
       toAnalyze: "To analyze",
       pending: "Waiting",

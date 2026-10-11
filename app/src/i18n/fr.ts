@@ -341,6 +341,11 @@ export const fr = {
       "La piste à recaler (souvent la VF) : vidéos ou fichiers audio. Ou dépose sur la moitié droite de la fenêtre.",
     analyzePairHint: "Analyse cette paire.",
     exportPair: "Exporter cette paire",
+    fileColumn: "Fichier",
+    tracksHint:
+      "Les pistes des deux fichiers de la paire. Réf. : la piste du fichier de référence qui sert de modèle. À corriger : la piste du fichier à corriger, recalée puis ajoutée à la vidéo de référence. Changer une case fixe les pistes de cette paire seulement ; « Par défaut » revient au choix de la barre du haut.",
+    byDefault: "Par défaut",
+    byDefaultHint: "Revenir aux pistes de la barre du haut",
     status: {
       toAnalyze: "À analyser",
       pending: "En attente",

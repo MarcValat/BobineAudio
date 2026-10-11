@@ -377,6 +377,14 @@
   z-index: 1;
 }
 
+/* No cell breaks inside a word ("FICHIE|R", "aac|(LC)"): .panel's
+   overflow-wrap: anywhere is for paths, not these. */
+.detail-tracks-table th,
+.detail-tracks-table td {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
 .detail-subs {
   display: flex;
   align-items: baseline;
@@ -618,4 +626,9 @@
 /* Pairs: a wider list, two names a row. */
 .workspace-pairs {
   grid-template-columns: clamp(340px, 38vw, 560px) minmax(0, 1fr);
+}
+
+/* Its tracks table has a column more (which file each track is from). */
+.workspace-pairs .detail-top {
+  grid-template-columns: minmax(280px, 372px) minmax(0, 1fr);
 }

@@ -50,6 +50,75 @@ const stem = (name: string) => name.replace(/\.[^.]+$/, "");
 /** "@1 fre", or "@1" while its file's tracks aren't read. */
 const trackLabel = (index: number, track: TrackInfo | undefined) => (track?.language ? `@${index} ${track.language}` : `@${index}`);
 
+/** A pair's own tracks, picked in its detail instead of the top bar's. */
+interface PairTracks {
+  reference: number;
+  candidate: number;
+}
+
+/** A pair's tracks, both files' in one table: which file each comes from,
+ * then the reference picked among the reference file's and the track to
+ * correct among the other's (the same track can't be both: they're from
+ * two files, even when it's the same file twice). */
+function PairTrackTable({
+  referenceTracks,
+  candidateTracks,
+  reference,
+  candidate,
+  disabled,
+  onReference,
+  onCandidate,
+}: {
+  referenceTracks: TrackInfo[] | undefined;
+  candidateTracks: TrackInfo[] | undefined;
+  reference: number;
+  candidate: number;
+  disabled: boolean;
+  onReference: (index: number) => void;
+  onCandidate: (index: number) => void;
+}) {
+  const m = useT();
+  const rows = (side: "ref" | "cand", tracks: TrackInfo[] | undefined) =>
+    tracks?.map((tr) => (
+      <tr key={`${side}-${tr.index}`} title={tr.title ? m.tracks.titled(tr.title) : undefined}>
+        <td>
+          <span className={`pair-row-kind pair-row-kind-${side}`}>{side === "ref" ? m.pairs.refShort : m.pairs.candShort}</span>
+        </td>
+        <td>@{tr.index}</td>
+        <td>{tr.language ?? "?"}</td>
+        <td>{tr.codec ?? "?"}</td>
+        <td className="track-pick">
+          {side === "ref" && (
+            <input type="radio" name="pair-reference" checked={reference === tr.index} disabled={disabled} onChange={() => onReference(tr.index)} />
+          )}
+        </td>
+        <td className="track-pick">
+          {side === "cand" && (
+            <input type="radio" name="pair-candidate" checked={candidate === tr.index} disabled={disabled} onChange={() => onCandidate(tr.index)} />
+          )}
+        </td>
+      </tr>
+    ));
+  return (
+    <table className="batch-tracks-table">
+      <thead>
+        <tr>
+          <th>{m.pairs.fileColumn}</th>
+          <th>{m.tracks.track}</th>
+          <th>{m.tracks.language}</th>
+          <th>{m.tracks.codec}</th>
+          <th className="track-pick">{m.tracks.referenceShort}</th>
+          <th className="track-pick">{m.common.toCorrect}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows("ref", referenceTracks)}
+        {rows("cand", candidateTracks)}
+      </tbody>
+    </table>
+  );
+}
+
 /** One pair's analysis and export. */
 type PairAnalysis = AnalysisRun & ExportFields;
 
@@ -252,6 +321,9 @@ export function PairsBatch({
   const [candidateFiles, setCandidateFiles] = useState<string[]>([]);
   const [referenceTrackIndex, setReferenceTrackIndex] = useState(0);
   const [candidateTrackIndex, setCandidateTrackIndex] = useState(1);
+  // Pairs whose tracks were picked in their detail (by both files), instead
+  // of the top bar's.
+  const [pairTracks, setPairTracks] = useState<Record<string, PairTracks>>({});
   // "" keeps the corrected track's own language; a code tags it with that one
   // instead (a bare .wav has none).
   const [candidateLanguage, setCandidateLanguage] = useState("");
@@ -309,9 +381,18 @@ export function PairsBatch({
   const pairCount = Math.min(referenceFiles.length, candidateFiles.length);
   const rowCount = Math.max(referenceFiles.length, candidateFiles.length);
 
+  /** Row `i`'s files, which its own tracks (pairTracks) are kept by. */
+  const filesKey = (i: number) => JSON.stringify([referenceFiles[i], candidateFiles[i]]);
+  /** Row `i`'s tracks: its own if picked in its detail, else the top bar's. */
+  function tracksOf(i: number): [number, number] {
+    const own = pairTracks[filesKey(i)];
+    return own ? [own.reference, own.candidate] : [referenceTrackIndex, candidateTrackIndex];
+  }
+
   /** Row `i`'s pair as it stands: both files and both tracks. */
   function pairKey(i: number): string {
-    return JSON.stringify([referenceFiles[i], referenceTrackIndex, candidateFiles[i], candidateTrackIndex]);
+    const [referenceTrack, candidateTrack] = tracksOf(i);
+    return JSON.stringify([referenceFiles[i], referenceTrack, candidateFiles[i], candidateTrack]);
   }
   const analysisOf = (i: number): PairAnalysis | undefined => (i < pairCount ? analyses[pairKey(i)] : undefined);
   const isDone = (a: PairAnalysis | undefined) => a?.status === "done" && !!a.result;
@@ -350,14 +431,13 @@ export function PairsBatch({
   /** Analyzes these pairs (by row), each one's result and edits replaced. */
   async function runPlan(rows: number[]) {
     setAnalyzing(true);
-    const plan = rows.map((i) => ({ key: pairKey(i), reference: referenceFiles[i], candidate: candidateFiles[i] }));
-    const [referenceTrack, candidateTrack] = [referenceTrackIndex, candidateTrackIndex];
+    const plan = rows.map((i) => ({ key: pairKey(i), reference: referenceFiles[i], candidate: candidateFiles[i], tracks: tracksOf(i) }));
     setAnalyses((current) => {
       const next = { ...current };
       for (const { key } of plan) next[key] = { status: "pending", result: null, error: null, log: [], ...IDLE_EXPORT };
       return next;
     });
-    for (const { key, reference, candidate } of plan) {
+    for (const { key, reference, candidate, tracks: [referenceTrack, candidateTrack] } of plan) {
       updatePair(key, { status: "running" });
       try {
         const result = await runJob<SegmentsResponse>(
@@ -392,6 +472,7 @@ export function PairsBatch({
       pairAnalyses.flatMap((a, i) => {
         if (!isDone(a) || (only !== undefined && i !== only)) return [];
         const key = pairKey(i);
+        const [referenceTrack, candidateTrack] = tracksOf(i);
         return [
           {
             input: referenceFiles[i],
@@ -400,12 +481,12 @@ export function PairsBatch({
               // along, retimed with it (per the subtitle setting).
               const candidate = subsMode === "none" ? null : await probe(candidateFiles[i]);
               const audioLanguage =
-                candidate?.tracks.find((t) => t.index === candidateTrackIndex)?.language || candidateLanguage || null;
+                candidate?.tracks.find((t) => t.index === candidateTrack)?.language || candidateLanguage || null;
               return startCrossFileSegmentedRenderJob(
                 referenceFiles[i],
-                referenceTrackIndex,
+                referenceTrack,
                 candidateFiles[i],
-                candidateTrackIndex,
+                candidateTrack,
                 analyses[key].result!.segments,
                 {
                   outputPath,
@@ -437,12 +518,13 @@ export function PairsBatch({
     setEditStartTimes({});
     if (editingPairIndex === null) return;
     let cancelled = false;
+    const [referenceTrack, candidateTrack] = tracksOf(editingPairIndex);
     Promise.all([probe(referenceFiles[editingPairIndex]), probe(candidateFiles[editingPairIndex])])
       .then(([ref, cand]) => {
         if (cancelled) return;
         setEditStartTimes({
-          reference: ref.tracks.find((t) => t.index === referenceTrackIndex)?.start_time,
-          track: cand.tracks.find((t) => t.index === candidateTrackIndex)?.start_time,
+          reference: ref.tracks.find((t) => t.index === referenceTrack)?.start_time,
+          track: cand.tracks.find((t) => t.index === candidateTrack)?.start_time,
         });
       })
       .catch(() => {
@@ -476,8 +558,16 @@ export function PairsBatch({
   const detailResult = isDone(detailRun) ? detailRun!.result : null;
   const detailAnalyzing = detailRun?.status === "pending" || detailRun?.status === "running";
   const detailKey = detailPaired ? pairKey(selected) : "";
-  const detailReferenceTrack = detailReference ? probes[detailReference]?.tracks.find((t) => t.index === referenceTrackIndex) : undefined;
-  const detailCandidateTrack = detailCandidate ? probes[detailCandidate]?.tracks.find((t) => t.index === candidateTrackIndex) : undefined;
+  const [detailReferenceIndex, detailCandidateIndex] = tracksOf(selected);
+  const detailOwnTracks = detailPaired && !!pairTracks[filesKey(selected)];
+  const detailReferenceTrack = detailReference ? probes[detailReference]?.tracks.find((t) => t.index === detailReferenceIndex) : undefined;
+  const detailCandidateTrack = detailCandidate ? probes[detailCandidate]?.tracks.find((t) => t.index === detailCandidateIndex) : undefined;
+
+  /** A pick in the detail's table: from then on the pair has its own tracks. */
+  function pickTracks(update: (tracks: PairTracks) => PairTracks) {
+    const key = filesKey(selected);
+    setPairTracks((c) => ({ ...c, [key]: update(c[key] ?? { reference: detailReferenceIndex, candidate: detailCandidateIndex }) }));
+  }
   const compactAnalysis = analysisViewSize.height > 0 && analysisViewSize.height < COMPACT_ANALYSIS_HEIGHT;
 
   return (
@@ -558,6 +648,7 @@ export function PairsBatch({
                   setReferenceFiles([]);
                   setCandidateFiles([]);
                   setAnalyses({});
+                  setPairTracks({});
                 }}
                 disabled={busy}
               >
@@ -611,9 +702,9 @@ export function PairsBatch({
                 {detailPaired && (
                   <span className="detail-meta">
                     {m.pairs.pairMeta(
-                      trackLabel(referenceTrackIndex, detailReferenceTrack),
+                      trackLabel(detailReferenceIndex, detailReferenceTrack),
                       basename(detailReference!),
-                      trackLabel(candidateTrackIndex, detailCandidateTrack),
+                      trackLabel(detailCandidateIndex, detailCandidateTrack),
                       basename(detailCandidate!),
                     )}
                   </span>
@@ -683,26 +774,63 @@ export function PairsBatch({
                   className={
                     compactAnalysis && detailResult && analysisView === "listen"
                       ? "view-hidden"
-                      : `detail-chart${compactAnalysis && detailResult ? " detail-top-fill" : ""}`
+                      : `detail-top${compactAnalysis && detailResult ? " detail-top-fill" : ""}`
                   }
                 >
-                  {detailResult ? (
-                    <SegmentChart segments={detailResult.segments} fill={compactAnalysis} />
-                  ) : (
-                    // Its room kept while there's nothing to draw yet.
-                    <div className="detail-chart-empty">
-                      {!detailRun && <p className="placeholder">{m.multi.notAnalyzed}</p>}
-                      {detailRun?.status === "pending" && <p className="placeholder">{m.batch.pending}</p>}
-                      {detailRun?.status === "running" && (
-                        <p className="placeholder detail-running">
-                          <span className="spinner spinner-small" />
-                          {m.common.analysisRunning}
-                        </p>
+                  <div className="detail-tracks">
+                    <div className="detail-tracks-heading">
+                      <h3>
+                        {m.multi.tracks} <InfoTip>{m.pairs.tracksHint}</InfoTip>
+                      </h3>
+                      {detailOwnTracks && <span className="list-row-manual">{m.multi.manual}</span>}
+                      {detailOwnTracks && (
+                        <button
+                          className="small-button"
+                          disabled={busy}
+                          title={m.pairs.byDefaultHint}
+                          onClick={() =>
+                            setPairTracks((c) => {
+                              const next = { ...c };
+                              delete next[filesKey(selected)];
+                              return next;
+                            })
+                          }
+                        >
+                          {m.pairs.byDefault}
+                        </button>
                       )}
-                      {detailRun?.status === "error" && <p className="error">{detailRun.error ?? m.common.error}</p>}
-                      <LogPanel lines={detailRun?.log ?? []} />
                     </div>
-                  )}
+                    <div className="tracks-table-wrap list-scroll detail-tracks-table">
+                      <PairTrackTable
+                        referenceTracks={probes[detailReference!]?.tracks}
+                        candidateTracks={probes[detailCandidate!]?.tracks}
+                        reference={detailReferenceIndex}
+                        candidate={detailCandidateIndex}
+                        disabled={busy}
+                        onReference={(index) => pickTracks((t) => ({ ...t, reference: index }))}
+                        onCandidate={(index) => pickTracks((t) => ({ ...t, candidate: index }))}
+                      />
+                    </div>
+                  </div>
+                  <div className="detail-chart">
+                    {detailResult ? (
+                      <SegmentChart segments={detailResult.segments} fill={compactAnalysis} />
+                    ) : (
+                      // Its room kept while there's nothing to draw yet.
+                      <div className="detail-chart-empty">
+                        {!detailRun && <p className="placeholder">{m.multi.notAnalyzed}</p>}
+                        {detailRun?.status === "pending" && <p className="placeholder">{m.batch.pending}</p>}
+                        {detailRun?.status === "running" && (
+                          <p className="placeholder detail-running">
+                            <span className="spinner spinner-small" />
+                            {m.common.analysisRunning}
+                          </p>
+                        )}
+                        {detailRun?.status === "error" && <p className="error">{detailRun.error ?? m.common.error}</p>}
+                        <LogPanel lines={detailRun?.log ?? []} />
+                      </div>
+                    )}
+                  </div>
                 </div>
                 {/* Not while it's being edited: the editor has its own
                     preview, and two playing at once would overlap. */}
@@ -712,8 +840,8 @@ export function PairsBatch({
                       key={detailKey}
                       referenceFilePath={detailReference!}
                       candidateFilePath={detailCandidate!}
-                      referenceIndex={referenceTrackIndex}
-                      trackIndex={candidateTrackIndex}
+                      referenceIndex={detailReferenceIndex}
+                      trackIndex={detailCandidateIndex}
                       segments={detailResult.segments}
                       referenceStartTime={detailReferenceTrack?.start_time ?? 0}
                       trackStartTime={detailCandidateTrack?.start_time ?? 0}
@@ -772,8 +900,8 @@ export function PairsBatch({
           preview={{
             referenceFilePath: referenceFiles[editingPairIndex],
             candidateFilePath: candidateFiles[editingPairIndex],
-            referenceIndex: referenceTrackIndex,
-            trackIndex: candidateTrackIndex,
+            referenceIndex: tracksOf(editingPairIndex)[0],
+            trackIndex: tracksOf(editingPairIndex)[1],
             referenceStartTime: editStartTimes.reference,
             trackStartTime: editStartTimes.track,
           }}
