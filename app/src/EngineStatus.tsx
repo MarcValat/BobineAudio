@@ -12,7 +12,7 @@ export function EngineStatusBadge() {
     return (
       <span className="engine-status engine-status-ready" role="status">
         <span className="engine-status-dot" aria-hidden="true" />
-        <span className="engine-status-text">{t.startup.ready}</span>
+        {t.startup.ready}
       </span>
     );
   }
@@ -20,13 +20,13 @@ export function EngineStatusBadge() {
     return (
       <span className="engine-status" role="status">
         <span className="spinner spinner-small" aria-hidden="true" />
-        <span className="engine-status-text">{t.startup.starting}</span>
+        {t.startup.starting}
       </span>
     );
   }
   return (
     <span className="engine-status engine-status-error" role="alert" title={t.startup.unreachable}>
-      <span className="engine-status-text">{t.startup.unreachableShort}</span>
+      {t.startup.unreachableShort}
       <button className="small-button" onClick={retryEngine}>
         {t.common.retry}
       </button>
