@@ -14,7 +14,12 @@
   display: flex;
   flex-direction: column;
   gap: 0.6em;
-  padding: 0.9em 0.7em 0.7em;
+}
+
+/* Its padding in px (as .panel's at the 14px base): the unfolding list's
+   width is computed from it (.list-folding, below). */
+.panel.file-list {
+  padding: 14px 15px;
 }
 
 .file-list-header {
@@ -773,16 +778,61 @@
   transition: grid-template-columns 220ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-.list-folding .workspace:not(.list-collapsed) > .file-list > * {
-  min-width: calc(clamp(300px, 30vw, 470px) - 1.4em - 2px);
+/* (Its column's width, less the panel's padding and border.) The add
+   buttons under it follow the panel instead: their label doesn't wrap, and
+   their hint unrolls (below). */
+.list-folding .workspace:not(.list-collapsed) > .file-list > :not(.file-list-add, .pair-add) {
+  min-width: calc(clamp(300px, 30vw, 470px) - 32px);
 }
 
-.list-folding .workspace-pairs:not(.list-collapsed) > .file-list > * {
-  min-width: calc(clamp(340px, 38vw, 560px) - 1.4em - 2px);
+.list-folding .workspace-pairs:not(.list-collapsed) > .file-list > :not(.file-list-add, .pair-add) {
+  min-width: calc(clamp(340px, 38vw, 560px) - 32px);
+}
+
+.file-list-add span:first-child,
+.pair-add button span:first-child {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Folded, a pair's add buttons say "+ Réf." / "+ Corr.". */
+.list-collapsed .pair-add button span[data-short] {
+  font-size: 0;
+}
+
+.list-collapsed .pair-add button span[data-short]::after {
+  content: attr(data-short);
+  font-size: 12.5px;
+}
+
+/* The hint unrolls and fades in as the list unfolds, and back. */
+.file-list-add span + span,
+.pair-add button span + span {
+  max-height: 3em;
+  overflow: hidden;
+}
+
+.list-folding .file-list-add span + span,
+.list-folding .pair-add button span + span {
+  transition:
+    max-height 220ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 220ms,
+    margin-top 220ms;
+}
+
+.list-collapsed .file-list-add span + span,
+.list-collapsed .pair-add button span + span {
+  max-height: 0;
+  opacity: 0;
+  margin-top: -2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .list-folding .workspace {
+  .list-folding .workspace,
+  .list-folding .file-list-add span + span,
+  .list-folding .pair-add button span + span {
     transition: none;
   }
 }
@@ -795,9 +845,7 @@
 .list-collapsed .list-row:not(.pair-row) .list-row-detail,
 .list-collapsed .list-badge,
 .list-collapsed .list-row-actions,
-.list-collapsed .pair-row-kind,
-.list-collapsed .file-list-add span + span,
-.list-collapsed .pair-add button span + span {
+.list-collapsed .file-list .pair-row-kind {
   display: none;
 }
 
@@ -821,6 +869,3 @@
   visibility: visible;
 }
 
-.list-collapsed .pair-add {
-  grid-template-columns: minmax(0, 1fr);
-}

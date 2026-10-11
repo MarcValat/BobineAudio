@@ -701,11 +701,12 @@ export function PairsBatch({
               </ul>
               <div className="pair-add">
                 <button disabled={busy} title={m.pairs.addReferenceHint} onClick={addFiles(setReferenceFiles, m.pairs.pickReferences)}>
-                  <span>{m.pairs.addReferences}</span>
+                  {/* The short label in the folded list. */}
+                  <span data-short={`+ ${m.pairs.refShort}`}>{m.pairs.addReferences}</span>
                   <span>{m.pairs.dropLeft}</span>
                 </button>
                 <button disabled={busy} title={m.pairs.addCandidateHint} onClick={addFiles(setCandidateFiles, m.pairs.pickCandidates)}>
-                  <span>{m.pairs.addCandidates}</span>
+                  <span data-short={`+ ${m.pairs.candShort}`}>{m.pairs.addCandidates}</span>
                   <span>{m.pairs.dropRight}</span>
                 </button>
               </div>
