@@ -16,7 +16,7 @@ import { InfoTip, Tooltip } from "./InfoTip";
 import { DetailExport, ListRow, MoveButtons, type BadgeKind } from "./Workspace";
 import { LogPanel } from "./LogPanel";
 import { PillSwitch } from "./PillSwitch";
-import { SegmentChart, describeSegments } from "./SegmentChart";
+import { SegmentChart, SegmentChartPlaceholder, describeSegments } from "./SegmentChart";
 import { TrackPreview } from "./TrackPreview";
 import { RedoIcon } from "./icons";
 import { useElementSize } from "./useElementSize";
@@ -663,10 +663,6 @@ export function MultiTrackBatch({
                       value={String(shownTrack.index)}
                       onChange={(index) => setShownTracks((c) => ({ ...c, [detailPath]: Number(index) }))}
                     />
-                    <span className="detail-tab-summary">
-                      {detailReference && m.multi.againstReference(trackName(detailReference))}
-                      {shownResult && ` · ${describeSegments(shownResult.segments)}`}
-                    </span>
                     {/* Too little height for all at once: the tracks and
                         the chart, or the waveforms, as tabs. */}
                     {compactAnalysis && shownResult && (
@@ -692,7 +688,7 @@ export function MultiTrackBatch({
                   }
                 >
                   <div className="detail-tracks">
-                    <div className="detail-tracks-heading">
+                    <div className="detail-heading">
                       <h3>
                         {m.multi.tracks} <InfoTip>{m.multi.tracksHint}</InfoTip>
                       </h3>
@@ -714,6 +710,9 @@ export function MultiTrackBatch({
                         </button>
                       )}
                     </div>
+                    {/* The table, and what goes with it in its frame's foot:
+                        as tall as the chart's frame beside it. */}
+                    <div className="detail-tracks-box">
                     <div className="tracks-table-wrap list-scroll detail-tracks-table">
                       <TrackTable
                         className="batch-tracks-table"
@@ -728,6 +727,8 @@ export function MultiTrackBatch({
                         onToggleTarget={(index) => editChoice(detailPath, (c) => ({ ...c, targets: toggled(c.targets, index) }))}
                       />
                     </div>
+                    {(detailRes.issues.length > 0 || (detailProbe.subtitles.length > 0 && detailRes.targets.length > 0)) && (
+                    <div className="detail-tracks-footer">
                     {detailRes.issues.length > 0 && <span className="list-row-issues">⚠ {detailRes.issues.join(", ")}</span>}
                     {detailProbe.subtitles.length > 0 && detailRes.targets.length > 0 && (
                       <div className="detail-subs">
@@ -740,14 +741,24 @@ export function MultiTrackBatch({
                         </button>
                       </div>
                     )}
+                    </div>
+                    )}
+                    </div>
                   </div>
 
                   <div className="detail-chart">
+                    <div className="detail-heading">
+                      <h3>{m.common.segments}</h3>
+                      <span className="detail-heading-summary">
+                        {detailReference && shownTrack && m.multi.againstReference(trackName(detailReference))}
+                        {shownResult && ` · ${describeSegments(shownResult.segments)}`}
+                      </span>
+                    </div>
                     {shownResult ? (
                       <SegmentChart segments={shownResult.segments} fill={compactAnalysis} />
                     ) : (
                       // Its room kept while there's nothing to draw yet.
-                      <div className="detail-chart-empty">
+                      <SegmentChartPlaceholder>
                         {detailRes.targets.length === 0 && <p className="placeholder">{m.multi.noTarget}</p>}
                         {shownTrack && !shownRun && <p className="placeholder">{m.multi.notAnalyzed}</p>}
                         {shownRun?.status === "pending" && <p className="placeholder">{m.batch.pending}</p>}
@@ -759,7 +770,7 @@ export function MultiTrackBatch({
                         )}
                         {shownRun?.status === "error" && <p className="error">{shownRun.error ?? m.common.error}</p>}
                         <LogPanel lines={shownRun?.log ?? []} />
-                      </div>
+                      </SegmentChartPlaceholder>
                     )}
                   </div>
                 </div>

@@ -23,7 +23,7 @@ import { InfoTip, Tooltip } from "./InfoTip";
 import { DetailExport, MoveButtons, PairRow, type BadgeKind } from "./Workspace";
 import { LogPanel } from "./LogPanel";
 import { PillSwitch } from "./PillSwitch";
-import { SegmentChart, describeSegments } from "./SegmentChart";
+import { SegmentChart, SegmentChartPlaceholder, describeSegments } from "./SegmentChart";
 import { TrackPreview } from "./TrackPreview";
 import { RedoIcon } from "./icons";
 import { useElementSize } from "./useElementSize";
@@ -760,11 +760,10 @@ export function PairsBatch({
             {!detailPaired && <p className="placeholder">{m.pairs.unpairedDetail}</p>}
             {detailPaired && (
               <div className="detail-body" ref={analysisViewRef}>
-                <div className="detail-tabs">
-                  <span className="detail-tab-summary">
-                    {detailResult ? describeSegments(detailResult.segments) : m.pairs.status.toAnalyze}
-                  </span>
-                  {compactAnalysis && detailResult && (
+                {/* Too little height for all at once: the tracks and the
+                    chart, or the waveforms, as tabs. */}
+                {compactAnalysis && detailResult && (
+                  <div className="detail-tabs">
                     <PillSwitch
                       className="view-switch"
                       label={m.common.view}
@@ -775,8 +774,8 @@ export function PairsBatch({
                       value={analysisView}
                       onChange={setAnalysisView}
                     />
-                  )}
-                </div>
+                  </div>
+                )}
                 <div
                   className={
                     compactAnalysis && detailResult && analysisView === "listen"
@@ -785,7 +784,7 @@ export function PairsBatch({
                   }
                 >
                   <div className="detail-tracks">
-                    <div className="detail-tracks-heading">
+                    <div className="detail-heading">
                       <h3>
                         {m.multi.tracks} <InfoTip>{m.pairs.tracksHint}</InfoTip>
                       </h3>
@@ -807,6 +806,7 @@ export function PairsBatch({
                         </button>
                       )}
                     </div>
+                    <div className="detail-tracks-box">
                     <div className="tracks-table-wrap list-scroll detail-tracks-table">
                       <PairTrackTable
                         referenceTracks={probes[detailReference!]?.tracks}
@@ -818,13 +818,18 @@ export function PairsBatch({
                         onCandidate={(index) => pickTracks((t) => ({ ...t, candidate: index }))}
                       />
                     </div>
+                    </div>
                   </div>
                   <div className="detail-chart">
+                    <div className="detail-heading">
+                      <h3>{m.common.segments}</h3>
+                      <span className="detail-heading-summary">{detailResult && describeSegments(detailResult.segments)}</span>
+                    </div>
                     {detailResult ? (
                       <SegmentChart segments={detailResult.segments} fill={compactAnalysis} />
                     ) : (
                       // Its room kept while there's nothing to draw yet.
-                      <div className="detail-chart-empty">
+                      <SegmentChartPlaceholder>
                         {!detailRun && <p className="placeholder">{m.multi.notAnalyzed}</p>}
                         {detailRun?.status === "pending" && <p className="placeholder">{m.batch.pending}</p>}
                         {detailRun?.status === "running" && (
@@ -835,7 +840,7 @@ export function PairsBatch({
                         )}
                         {detailRun?.status === "error" && <p className="error">{detailRun.error ?? m.common.error}</p>}
                         <LogPanel lines={detailRun?.log ?? []} />
-                      </div>
+                      </SegmentChartPlaceholder>
                     )}
                   </div>
                 </div>

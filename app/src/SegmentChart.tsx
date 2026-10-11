@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { SegmentOut } from "./api";
 import { useElementSize } from "./useElementSize";
 import "./SegmentChart.css";
@@ -131,6 +131,28 @@ export function formatTime(seconds: number): string {
  * same geometry `render.segment_correction_filter` uses to compute the
  * correction, made visible.
  */
+/** The chart's frame before there's anything to draw: `children` (what's
+ * going on) where the plot will be, at its size and with its legend's room,
+ * so nothing moves when the chart comes. */
+export function SegmentChartPlaceholder({ children }: { children: ReactNode }) {
+  const tr = useT();
+  const compact = useShortWindow();
+  return (
+    <div className="segment-chart segment-chart-placeholder">
+      <div className="segment-chart-placeholder-body" style={{ height: compact ? COMPACT_HEIGHT : HEIGHT }}>
+        {children}
+      </div>
+      <div className="segment-chart-footer" aria-hidden="true" style={{ visibility: "hidden" }}>
+        <div className="segment-chart-legend">
+          <span className="legend-item">
+            <span className="legend-swatch constant" /> {tr.chart.constant}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** `fill`: take all the height its container gives it (a tab of its own)
  * instead of its usual fixed one. */
 export function SegmentChart({ segments, fill = false }: { segments: SegmentOut[]; fill?: boolean }) {

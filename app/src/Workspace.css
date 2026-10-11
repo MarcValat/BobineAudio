@@ -318,7 +318,9 @@
   display: grid;
   grid-template-columns: minmax(250px, 330px) minmax(0, 1fr);
   gap: 1em;
-  align-items: start;
+  /* The row is as tall as the chart (or its placeholder): the tracks
+     take that height, their table scrolling in it. */
+  align-items: stretch;
 }
 
 /* The Segments tab of a short window: the tracks and the chart, as tall
@@ -331,20 +333,36 @@
 
 .detail-tracks {
   min-width: 0;
+  /* Adds nothing to the row's height, takes all of it. */
+  height: 0;
+  min-height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 0.4em;
+  gap: 6px;
   font-size: 13px;
 }
 
-.detail-tracks-heading {
+/* A column's title ("PISTES", "SEGMENTS"), the same height on both sides
+   so the frames under them line up. */
+.detail-heading {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 0.5em;
-  min-height: 24px;
+  height: 24px;
 }
 
-.detail-tracks-heading h3 {
+.detail-heading-summary {
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-heading h3 {
+  flex: 0 0 auto;
   margin: 0;
   font-size: 11px;
   font-weight: 700;
@@ -353,14 +371,42 @@
   color: var(--text-muted);
 }
 
-.detail-tracks-heading button {
+.detail-tracks .detail-heading button {
   margin-left: auto;
   padding: 0.1em 0.6em;
 }
 
-/* About four tracks, then it scrolls (headers stay). */
+/* The tracks' frame, as tall as the chart's beside it: the table (it
+   scrolls past what fits, headers staying), then its foot. */
+.detail-tracks-box {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
 .detail-tracks-table {
-  max-height: 158px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The frame around it has the border. */
+.detail-tracks-box .tracks-table-wrap {
+  border: none;
+  border-radius: 0;
+}
+
+.detail-tracks-footer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+  padding: 0.4em 0.6em;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
 }
 
 .detail-top-fill .detail-tracks-table {
@@ -409,6 +455,13 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
+  /* As the tracks' beside it, so both frames start on one line. */
+  gap: 6px;
+}
+
+/* Alone on its row (short window), the Segments / Écoute switch at its right. */
+.detail-tabs .view-switch {
+  margin-left: auto;
 }
 
 .detail-chart .segment-chart {
@@ -418,29 +471,6 @@
 
 .detail-top-fill .detail-chart {
   min-height: 0;
-}
-
-/* The chart's room before there's one to draw: what's going on instead. */
-.detail-chart-empty {
-  min-height: 150px;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.6em;
-  padding: 1em;
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-sm);
-  text-align: center;
-}
-
-.detail-chart-empty p {
-  margin: 0;
-}
-
-.detail-chart-empty .log-button {
-  align-self: center;
 }
 
 .detail-running {
@@ -459,12 +489,6 @@
   gap: 0.4em 0.8em;
 }
 
-.detail-tab-summary {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 12.5px;
-  color: var(--text-muted);
-}
 
 .detail-export {
   flex: 0 0 auto;
