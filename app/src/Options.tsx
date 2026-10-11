@@ -7,10 +7,11 @@ import { applyTheme, loadTheme, type ThemeChoice } from "./theme";
 import "./Options.css";
 import { CloseIcon, GearIcon } from "./icons";
 import { Dialog } from "./Dialog";
+import { Select } from "./Dropdown";
 import { useLanguageChoice, useT, type LanguageChoice } from "./i18n";
 import { clearCache, getCacheSize } from "./api";
 import { saveCheckUpdates, saveSubtitleDefault, useCheckUpdates, useSubtitleDefault } from "./settings";
-import { SUBTITLE_MODES, type SubtitleMode } from "./subtitles";
+import { SUBTITLE_MODES } from "./subtitles";
 import { errorMessage } from "./util";
 
 const THEMES: ThemeChoice[] = ["system", "light", "dark"];
@@ -67,21 +68,17 @@ const CLOSE_MS = 180;
  * the suite), its control, and `note`, a fact worth seeing at once. */
 function Setting({
   label,
-  labelId,
   hint,
   note,
   children,
 }: {
   label: ReactNode;
-  /** The name's id, for the control's aria-labelledby: a plain name, not a
-   * <label>, which would light the control up whenever it's hovered. */
-  labelId?: string;
   hint?: ReactNode;
   note?: ReactNode;
   children?: ReactNode;
 }) {
   const name = (
-    <span className="setting-name" id={labelId}>
+    <span className="setting-name">
       {label}
     </span>
   );
@@ -129,23 +126,27 @@ function OptionsDrawer({ closing, onClose }: { closing: boolean; onClose: () => 
         />
       </Setting>
 
-      <Setting label={t.options.language} labelId="options-language" hint={t.options.languageHint}>
+      <Setting label={t.options.language} hint={t.options.languageHint}>
         {/* Each language by its own name, whatever the current one. */}
-        <select aria-labelledby="options-language" value={language} onChange={(e) => setLanguage(e.target.value as LanguageChoice)}>
-          <option value="system">{t.options.systemLanguage}</option>
-          <option value="fr">Français</option>
-          <option value="en">English</option>
-        </select>
+        <Select
+          label={t.options.language}
+          value={language}
+          options={[
+            { value: "system", label: t.options.systemLanguage },
+            { value: "fr", label: "Français" },
+            { value: "en", label: "English" },
+          ]}
+          onChange={(choice: LanguageChoice) => setLanguage(choice)}
+        />
       </Setting>
 
-      <Setting label={t.options.subtitles} labelId="options-subtitles" hint={t.options.subtitlesHint}>
-        <select aria-labelledby="options-subtitles" value={subtitleDefault} onChange={(e) => saveSubtitleDefault(e.target.value as SubtitleMode)}>
-          {SUBTITLE_MODES.map((mode) => (
-            <option key={mode} value={mode}>
-              {t.subtitles.modes[mode]}
-            </option>
-          ))}
-        </select>
+      <Setting label={t.options.subtitles} hint={t.options.subtitlesHint}>
+        <Select
+          label={t.options.subtitles}
+          value={subtitleDefault}
+          options={SUBTITLE_MODES.map((mode) => ({ value: mode, label: t.subtitles.modes[mode] }))}
+          onChange={saveSubtitleDefault}
+        />
       </Setting>
 
       <Setting label={t.options.updates} hint={t.options.updatesHint} note={version && t.options.version(version)}>

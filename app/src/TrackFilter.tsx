@@ -1,8 +1,7 @@
-import { useEffect, useId, useRef, useState } from "react";
 import type { TrackInfo } from "./api";
+import { Dropdown, DropdownHeading, DropdownOption } from "./Dropdown";
 import { t, useT } from "./i18n";
 import { languageLabel } from "./languages";
-import "./TrackFilter.css";
 
 /** Which tracks of each file a batch takes, as MKV Muxing Batch GUI picks
  * them: by number, language or name, or all of them. A key per choice:
@@ -84,12 +83,10 @@ export function trackOptions(files: TrackInfo[][]): { indices: TrackOption[]; la
   };
 }
 
-// How long the list takes to fade out (TrackFilter.css).
-const CLOSE_MS = 120;
-
-/** A drop-down of the choices `options` offers, in sections: several ticked
- * (the tracks to correct: any track one of them names), or one picked
- * (`single`: the reference). Closed, it shows the first one and how many. */
+/** The track picker: a drop-down (the app's, Dropdown) of the choices
+ * `options` offers, in sections; several ticked (the tracks to correct: any
+ * track one of them names), or one picked (`single`: the reference).
+ * Closed, it shows the first one and, several, how many of how many. */
 export function TrackFilterPicker({
   label,
   options,
@@ -107,54 +104,14 @@ export function TrackFilterPicker({
   disabled?: boolean;
 }) {
   const m = useT();
-  const id = useId();
-  const [open, setOpen] = useState(false);
-  const [closing, setClosing] = useState(false);
-  const root = useRef<HTMLSpanElement>(null);
-  const closeTimer = useRef<number | null>(null);
-
-  function close() {
-    if (!open || closing) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setOpen(false);
-      return;
-    }
-    setClosing(true);
-    closeTimer.current = window.setTimeout(() => {
-      setOpen(false);
-      setClosing(false);
-    }, CLOSE_MS);
-  }
-  useEffect(() => () => {
-    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
-  }, []);
-
-  // Closes on a click elsewhere, or Escape.
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (!root.current?.contains(e.target as Node)) close();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  });
-
   const sections: [string, TrackOption[]][] = [
     [m.picker.byIndex, options.indices],
     [m.picker.byLanguage, options.languages],
     [m.picker.byName, options.names],
   ];
   const all = sections.flatMap(([, list]) => list);
-  const empty = all.length === 0;
 
-  function toggle(key: TrackKey) {
+  function pick(key: TrackKey, close: () => void) {
     if (single) {
       onChange([key]);
       close();
@@ -163,69 +120,44 @@ export function TrackFilterPicker({
     }
   }
 
-  // Closed: the first choice, and how many of how many when several can be.
   const shown = value.includes(ALL_TRACKS) ? m.picker.all : value.length > 0 ? keyLabel(value[0]) : m.picker.nothing;
   const count = !single && value.length > 0 && !value.includes(ALL_TRACKS) ? `${value.length} / ${all.length}` : null;
 
   return (
-    <span className="track-filter" ref={root}>
-      <button
-        className={`track-filter-button${open && !closing ? " open" : ""}`}
-        aria-haspopup="listbox"
-        aria-expanded={open && !closing}
-        aria-label={label}
-        disabled={disabled || empty}
-        onClick={() => (open ? close() : setOpen(true))}
-      >
-        <span className="track-filter-shown">{shown}</span>
-        {count && <span className="track-filter-count">{count}</span>}
-        <svg className="track-filter-chevron" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M6 9l6 6 6-6" />
-        </svg>
-      </button>
-      {open && (
-        <div
-          className={`track-filter-list${closing ? " closing" : ""}`}
-          role="listbox"
-          aria-multiselectable={!single}
-          aria-label={label}
-        >
+    <Dropdown label={label} shown={shown} badge={count} disabled={disabled || all.length === 0} multi={!single}>
+      {(close) => (
+        <>
           {!single && (
-            <label className="track-filter-option">
-              <input type="checkbox" checked={value.includes(ALL_TRACKS)} onChange={() => toggle(ALL_TRACKS)} />
-              <span>{m.picker.all}</span>
-            </label>
+            <DropdownOption check selected={value.includes(ALL_TRACKS)} label={m.picker.all} onPick={() => pick(ALL_TRACKS, close)} />
           )}
           {sections.map(
             ([title, list]) =>
               list.length > 0 && (
-                <div key={title} className="track-filter-section" role="group" aria-label={title}>
-                  <span className="track-filter-heading">{title}</span>
+                <div key={title} role="group" aria-label={title} className="dropdown-group">
+                  <DropdownHeading>{title}</DropdownHeading>
                   {list.map((option) => (
-                    <label key={option.key} className="track-filter-option">
-                      <input
-                        type={single ? "radio" : "checkbox"}
-                        name={single ? id : undefined}
-                        checked={value.includes(option.key)}
-                        onChange={() => toggle(option.key)}
-                      />
-                      <span>{option.label}</span>
-                      {option.detail && <span className="track-filter-detail">{option.detail}</span>}
-                    </label>
+                    <DropdownOption
+                      key={option.key}
+                      check={!single}
+                      selected={value.includes(option.key)}
+                      label={option.label}
+                      detail={option.detail}
+                      onPick={() => pick(option.key, close)}
+                    />
                   ))}
                 </div>
               ),
           )}
           {!single && value.length > 0 && (
-            <div className="track-filter-footer">
+            <div className="dropdown-footer">
               <button className="small-button" onClick={() => onChange([])}>
                 {m.picker.none}
               </button>
             </div>
           )}
-        </div>
+        </>
       )}
-    </span>
+    </Dropdown>
   );
 }
 

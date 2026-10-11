@@ -1,3 +1,4 @@
+import { Select } from "./Dropdown";
 import { t } from "./i18n";
 
 // The usual languages, by ISO 639-2 code (as Matroska tags tracks), named
@@ -36,13 +37,15 @@ export function LanguageSelect({
   const found = extra.filter((c): c is string => !!c);
   const codes = [...new Set(onlyExtra ? found : [...found, ...Object.keys(languageNames())])];
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} aria-label={label}>
-      {emptyLabel !== undefined && <option value="">{emptyLabel}</option>}
-      {codes.map((code) => (
-        <option key={code} value={code}>
-          {languageLabel(code)}
-        </option>
-      ))}
-    </select>
+    <Select
+      label={label ?? ""}
+      value={value}
+      options={[
+        ...(emptyLabel !== undefined ? [{ value: "", label: emptyLabel }] : []),
+        ...codes.map((code) => ({ value: code, label: languageLabel(code) })),
+      ]}
+      onChange={onChange}
+      disabled={disabled}
+    />
   );
 }

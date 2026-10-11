@@ -13,6 +13,7 @@ import {
   type ExportFields,
 } from "./batchShared";
 import { InfoTip } from "./InfoTip";
+import { Select } from "./Dropdown";
 import { ListRow, MoveButtons, runBadge, useProbes, type BadgeKind } from "./Workspace";
 import {
   DetailChart,
@@ -401,18 +402,13 @@ export function MultiTrackBatch({
         </span>
         <span className="config-field">
           {m.common.labelled(m.batch.subtitles)}
-          <select
+          <Select
+            label={m.batch.subtitles}
             value={subsMode}
-            onChange={(e) => setSubsMode(e.target.value as SubtitleMode)}
+            options={SUBTITLE_MODES.map((mode) => ({ value: mode, label: m.subtitles.modes[mode] }))}
+            onChange={setSubsMode}
             disabled={busy}
-            aria-label={m.batch.subtitles}
-          >
-            {SUBTITLE_MODES.map((mode) => (
-              <option key={mode} value={mode}>
-                {m.subtitles.modes[mode]}
-              </option>
-            ))}
-          </select>
+          />
         </span>
         <InfoTip>{m.multi.hint}</InfoTip>
       </div>

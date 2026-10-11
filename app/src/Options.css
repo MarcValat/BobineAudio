@@ -43,7 +43,8 @@
   color: var(--text-muted);
 }
 
-.setting select {
+/* Its drop-downs as wide as the drawer. */
+.setting .dropdown-button {
   width: 100%;
 }
 

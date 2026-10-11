@@ -2,6 +2,7 @@ import { useEffect, useImperativeHandle, useMemo, useRef, useState } from "react
 import { fetchClip, fetchCorrectedClip, fetchWaveform, type SegmentOut } from "./api";
 import { candidateSpansIn, planResult, silentRegions, skippedRegions } from "./resultPlan";
 import { InfoTip } from "./InfoTip";
+import { Select } from "./Dropdown";
 import { MIN_VIEW_DURATION_S, type TimeView, zoomView } from "./timeView";
 import { formatOffsetMs, formatTime, segmentOffsetLabel } from "./SegmentChart";
 import { Waveform, type HighlightRegion } from "./Waveform";
@@ -630,23 +631,19 @@ export function TrackPreview({
           </div>
         )}
         {segments.length > MAX_SEGMENT_BUTTONS && (
-          <label className="preview-segment-picks">
+          <span className="preview-segment-picks">
             {t.preview.goTo}
-            <select
+            <Select
+              label={t.preview.goTo}
               value=""
-              onChange={(e) => {
-                const seg = segments[Number(e.target.value)];
+              placeholder={t.preview.aSegment(segments.length)}
+              options={segments.map((seg, i) => ({ value: String(i), label: `${i + 1}. ${segmentPickLabel(seg)}` }))}
+              onChange={(i) => {
+                const seg = segments[Number(i)];
                 if (seg) goToSegment(seg);
               }}
-            >
-              <option value="">{t.preview.aSegment(segments.length)}</option>
-              {segments.map((seg, i) => (
-                <option key={i} value={i}>
-                  {i + 1}. {segmentPickLabel(seg)}
-                </option>
-              ))}
-            </select>
-          </label>
+            />
+          </span>
         )}
         {(removedHighlight.length > 0 || addedHighlight.length > 0) && (
           <span className="waveform-legend">
