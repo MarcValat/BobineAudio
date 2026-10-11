@@ -20,7 +20,16 @@ import {
 } from "./batchShared";
 import { InfoTip } from "./InfoTip";
 import { MoveButtons, PairRow, runBadge, useProbes, type BadgeKind } from "./Workspace";
-import { DetailChart, DetailExport, DetailHeader, DetailTabs, TracksHeading, useDetailView } from "./Detail";
+import {
+  DetailChart,
+  DetailExport,
+  DetailHeader,
+  DetailTabs,
+  RetimedSubs,
+  SubtitleChoiceDialog,
+  TracksHeading,
+  useDetailView,
+} from "./Detail";
 import { LogPanel } from "./LogPanel";
 import { describeSegments } from "./SegmentChart";
 import { TrackPreview } from "./TrackPreview";
@@ -48,6 +57,9 @@ const trackLabel = (index: number, track: TrackInfo | undefined) => (track?.lang
 interface PairTracks {
   reference: number;
   candidates: number[];
+  /** The file to correct's subtitle tracks retimed with each corrected
+   * track, picked by hand ("Changer"); absent: per the subtitle setting. */
+  subtitles?: Record<number, number[]>;
 }
 
 /** A pair's tracks, both files' in one table: which file each comes from,
@@ -336,6 +348,8 @@ export function PairsBatch({
   const [editing, setEditing] = useState<{ row: number; track: number } | null>(null);
   // Which corrected track each pair's tabs show (by its files; absent: its first).
   const [shownTracks, setShownTracks] = useState<Record<string, number>>({});
+  // The row whose retimed subtitles are being changed ("Changer").
+  const [subsEditing, setSubsEditing] = useState<number | null>(null);
   // The row shown in the detail.
   const [selected, setSelected] = useState(0);
   // Every listed file, read once as soon as it's listed: its tracks (the
@@ -389,10 +403,34 @@ export function PairsBatch({
   function trackKey(i: number, track: number): string {
     return JSON.stringify([referenceFiles[i], tracksOf(i).reference, candidateFiles[i], track]);
   }
+  /** The subtitle tracks of row `i`'s file to correct retimed with each of
+   * its corrected tracks: picked by hand, or per the subtitle setting (each
+   * track's language's; "Langue ajoutée" for a pair's only one without
+   * any). One subtitle track goes with one audio track at most. */
+  function subsOf(i: number): Record<number, number[]> {
+    const { candidates, subtitles: picked } = tracksOf(i);
+    const probed = probes[candidateFiles[i]];
+    const fallback = candidates.length === 1 ? candidateLanguage || null : null;
+    return assignSubtitles(
+      candidates.map((index) => ({ index })),
+      (t) =>
+        picked?.[t.index] ??
+        subtitlesFor(probed?.subtitles ?? [], probed?.tracks?.find((tr) => tr.index === t.index)?.language || fallback, subsMode),
+    );
+  }
+
+  /** A change to row `i`'s tracks or subtitles: from then on they're its own. */
+  function editPairTracks(i: number, update: (tracks: PairTracks) => PairTracks) {
+    const key = filesKey(i);
+    const current = tracksOf(i);
+    setPairTracks((c) => ({ ...c, [key]: update(c[key] ?? current) }));
+  }
+
   /** Row `i`'s pair as it stands, for its export: every track it corrects. */
   function pairKey(i: number): string {
     const { reference, candidates } = tracksOf(i);
-    return JSON.stringify([referenceFiles[i], reference, candidateFiles[i], [...candidates].sort((a, b) => a - b)]);
+    // The subtitles it carries too: another pick makes its last export stale.
+    return JSON.stringify([referenceFiles[i], reference, candidateFiles[i], [...candidates].sort((a, b) => a - b), subsOf(i)]);
   }
   const runOf = (i: number, track: number): AnalysisRun | undefined => (i < pairCount ? analyses[trackKey(i, track)] : undefined);
   const runsOf = (i: number) => tracksOf(i).candidates.map((track) => runOf(i, track));
@@ -507,20 +545,8 @@ export function PairsBatch({
         return [
           {
             input: referenceFiles[i],
-            start: async (outputPath: string) => {
-              // The candidate file's subtitles in each audio's language come
-              // along, retimed with it (per the subtitle setting); one
-              // subtitle track goes with one audio track at most.
-              const candidate = await probe(candidateFiles[i]);
-              const subtitles = assignSubtitles(
-                done.map((index) => ({ index })),
-                (t) =>
-                  subtitlesFor(
-                    candidate.subtitles ?? [],
-                    candidate.tracks.find((tr) => tr.index === t.index)?.language || language,
-                    subsMode,
-                  ),
-              );
+            start: (outputPath: string) => {
+              const subtitles = subsOf(i);
               return startCrossFileSegmentedRenderJob(
                 referenceFiles[i],
                 reference,
@@ -545,7 +571,7 @@ export function PairsBatch({
 
   // Dropped on the left half: reference files; on the right: files to correct.
   const dropBlocked = dropBlockedReason(busy, blocked);
-  const fileDrag = useFileDrop(!hidden && !showTracksModal && editing === null, dropBlocked, (files, side) =>
+  const fileDrag = useFileDrop(!hidden && !showTracksModal && subsEditing === null && editing === null, dropBlocked, (files, side) =>
     (side === "left" ? setReferenceFiles : setCandidateFiles)((current) => [...current, ...files]),
   );
   useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
@@ -605,11 +631,6 @@ export function PairsBatch({
   const detailReferenceTrack = detailReference ? probes[detailReference]?.tracks?.find((t) => t.index === detailTracks.reference) : undefined;
   const shownTrackInfo = shownTrack !== undefined ? candidateInfo(shownTrack) : undefined;
 
-  /** A pick in the detail's table: from then on the pair has its own tracks. */
-  function pickTracks(update: (tracks: PairTracks) => PairTracks) {
-    const key = filesKey(selected);
-    setPairTracks((c) => ({ ...c, [key]: update(c[key] ?? detailTracks) }));
-  }
 
   return (
     <main className="batch-main" style={hidden ? { display: "none" } : undefined}>
@@ -815,10 +836,18 @@ export function PairsBatch({
                         reference={detailTracks.reference}
                         candidates={detailTracks.candidates}
                         disabled={busy}
-                        onReference={(index) => pickTracks((t) => ({ ...t, reference: index }))}
-                        onToggleCandidate={(index) => pickTracks((t) => ({ ...t, candidates: toggled(t.candidates, index) }))}
+                        onReference={(index) => editPairTracks(selected, (t) => ({ ...t, reference: index }))}
+                        onToggleCandidate={(index) => editPairTracks(selected, (t) => ({ ...t, candidates: toggled(t.candidates, index) }))}
                       />
                     </div>
+                    {(probes[detailCandidate!]?.subtitles.length ?? 0) > 0 && detailTracks.candidates.length > 0 && (
+                      <RetimedSubs
+                        subtitles={probes[detailCandidate!]!.subtitles}
+                        assigned={subsOf(selected)}
+                        disabled={busy}
+                        onChange={() => setSubsEditing(selected)}
+                      />
+                    )}
                   </div>
                   <DetailChart
                     summary={detailResult && describeSegments(detailResult.segments)}
@@ -884,6 +913,20 @@ export function PairsBatch({
 
       {showTracksModal && (
         <AllTracksModal referenceFiles={referenceFiles} candidateFiles={candidateFiles} onClose={() => setShowTracksModal(false)} />
+      )}
+
+      {subsEditing !== null && subsEditing < pairCount && (
+        <SubtitleChoiceDialog
+          title={m.multi.subsOf(basename(candidateFiles[subsEditing]))}
+          titleTooltip={candidateFiles[subsEditing]}
+          tracks={tracksOf(subsEditing).candidates.map((t) => [t, trackLabel(t, probes[candidateFiles[subsEditing]]?.tracks?.find((tr) => tr.index === t))] as const)}
+          subtitles={probes[candidateFiles[subsEditing]]?.subtitles ?? []}
+          assigned={subsOf(subsEditing)}
+          onToggle={(track, sub) =>
+            editPairTracks(subsEditing, (t) => ({ ...t, subtitles: { ...t.subtitles, [track]: toggled(subsOf(subsEditing)[track] ?? [], sub) } }))
+          }
+          onClose={() => setSubsEditing(null)}
+        />
       )}
 
       {editing !== null && editingRun?.result && (

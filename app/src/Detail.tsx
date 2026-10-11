@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import type { SegmentsResponse } from "./api";
+import type { SegmentsResponse, SubtitleInfo } from "./api";
 import { RevealButton, writtenFile, type AnalysisRun, type ExportFields } from "./batchShared";
 import { useT } from "./i18n";
 import { RedoIcon } from "./icons";
@@ -9,6 +9,9 @@ import { basename } from "./paths";
 import { PillSwitch } from "./PillSwitch";
 import { SegmentChart, SegmentChartPlaceholder } from "./SegmentChart";
 import { useElementSize } from "./useElementSize";
+import { Dialog, DialogHeader } from "./Dialog";
+import { SubtitleChecks } from "./SubtitleChecks";
+import { subtitleLabel, subtitleShortLabel, takenByOthers } from "./subtitles";
 
 /** The parts of a list item's detail (Workspace.css), shared by both batch
  * modes: a multitrack file's and a pair's are laid out alike -- a header
@@ -264,5 +267,78 @@ export function DetailExport({ entry }: { entry: ExportFields | null | undefined
       <RevealButton file={written} />
       <LogPanel lines={entry.exportLog} />
     </div>
+  );
+}
+
+/** Under the tracks table: the subtitle tracks retimed with the corrected
+ * ones ("@3 fre forcés", each one's full name on hover), and "Changer". */
+export function RetimedSubs({
+  subtitles,
+  assigned,
+  disabled,
+  onChange,
+}: {
+  /** The file's subtitle tracks. */
+  subtitles: SubtitleInfo[];
+  /** Those going with each corrected track (by its index). */
+  assigned: Record<number, number[]>;
+  disabled: boolean;
+  onChange: () => void;
+}) {
+  const t = useT();
+  const retimed = subtitles.filter((s) => Object.values(assigned).some((subs) => subs.includes(s.index)));
+  return (
+    <div className="detail-subs">
+      <span className="detail-subs-text" title={retimed.map((s) => subtitleLabel(s)).join("\n") || undefined}>
+        {t.multi.retimedSubs} {retimed.length > 0 ? retimed.map((s) => subtitleShortLabel(s)).join(", ") : t.multi.noSubs}
+      </span>
+      <button className="small-button" disabled={disabled} onClick={onChange}>
+        {t.multi.changeSubs}
+      </button>
+    </div>
+  );
+}
+
+/** "Changer": which subtitle tracks go with each corrected track, ticked
+ * by hand (it applies at once); one subtitle track with one audio track. */
+export function SubtitleChoiceDialog({
+  title,
+  titleTooltip,
+  tracks,
+  subtitles,
+  assigned,
+  onToggle,
+  onClose,
+}: {
+  title: string;
+  titleTooltip?: string;
+  /** The corrected tracks: index and name. */
+  tracks: readonly (readonly [number, string])[];
+  subtitles: SubtitleInfo[];
+  assigned: Record<number, number[]>;
+  onToggle: (track: number, sub: number) => void;
+  onClose: () => void;
+}) {
+  const t = useT();
+  return (
+    <Dialog onClose={onClose} closeOnBackdrop className="batch-choice-panel" labelledBy="subs-title">
+      <DialogHeader id="subs-title" title={title} titleTooltip={titleTooltip} onClose={onClose} closeIcon />
+      <div className="batch-choice-subs">
+        <h3>
+          {t.multi.subsToRetime} <InfoTip>{t.multi.subsToRetimeHint}</InfoTip>
+        </h3>
+        {tracks.map(([index, name]) => (
+          <div key={index} className="batch-choice-subs-row">
+            <span className="batch-target-name">{t.multi.withTrack(name)}</span>
+            <SubtitleChecks
+              subtitles={subtitles}
+              chosen={assigned[index] ?? []}
+              taken={takenByOthers(assigned, index)}
+              onToggle={(sub) => onToggle(index, sub)}
+            />
+          </div>
+        ))}
+      </div>
+    </Dialog>
   );
 }

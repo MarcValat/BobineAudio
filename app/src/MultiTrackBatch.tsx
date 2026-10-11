@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { startSegmentedRenderJob, startSegmentsJob, type SegmentsResponse, type SubtitleInfo, type TrackInfo } from "./api";
+import { startSegmentedRenderJob, startSegmentsJob, type SegmentsResponse, type TrackInfo } from "./api";
 import { runJob } from "./jobs";
 import { languageLabel, LanguageSelect } from "./languages";
 import {
@@ -14,7 +14,16 @@ import {
 } from "./batchShared";
 import { InfoTip } from "./InfoTip";
 import { ListRow, MoveButtons, runBadge, useProbes, type BadgeKind } from "./Workspace";
-import { DetailChart, DetailExport, DetailHeader, DetailTabs, TracksHeading, useDetailView } from "./Detail";
+import {
+  DetailChart,
+  DetailExport,
+  DetailHeader,
+  DetailTabs,
+  RetimedSubs,
+  SubtitleChoiceDialog,
+  TracksHeading,
+  useDetailView,
+} from "./Detail";
 import { LogPanel } from "./LogPanel";
 import { describeSegments } from "./SegmentChart";
 import { TrackPreview } from "./TrackPreview";
@@ -23,11 +32,9 @@ import { pickMediaFiles } from "./mediaDialog";
 import { DropOverlay, useFileDrop } from "./FileDrop";
 import { basename } from "./paths";
 import { SegmentEditor } from "./SegmentEditor";
-import { assignSubtitles, SUBTITLE_MODES, type SubtitleMode, subtitleLabel, subtitleShortLabel, subtitlesFor, takenByOthers } from "./subtitles";
+import { assignSubtitles, SUBTITLE_MODES, type SubtitleMode, subtitlesFor } from "./subtitles";
 import { devParam, errorMessage, toggled } from "./util";
-import { Dialog, DialogHeader } from "./Dialog";
 import { TrackTable } from "./TrackTable";
-import { SubtitleChecks } from "./SubtitleChecks";
 import { t, useT } from "./i18n";
 import { useSubtitleDefault } from "./settings";
 
@@ -84,48 +91,6 @@ function resolve(tracks: TrackInfo[], referenceLanguage: string, targetLanguages
     if (found.length > 0) targets.push(found[0]);
   }
   return { reference, targets, issues, manual: false };
-}
-
-/** "Changer" by a file's retimed subtitles: which subtitle tracks go with
- * each of its corrected tracks, ticked by hand (it applies at once). */
-function SubtitleChoiceModal({
-  path,
-  targets,
-  subtitles,
-  assigned,
-  onToggle,
-  onClose,
-}: {
-  path: string;
-  targets: TrackInfo[];
-  subtitles: SubtitleInfo[];
-  /** The subtitle tracks going with each corrected track now. */
-  assigned: Record<number, number[]>;
-  onToggle: (track: number, sub: number) => void;
-  onClose: () => void;
-}) {
-  const m = useT();
-  return (
-    <Dialog onClose={onClose} closeOnBackdrop className="batch-choice-panel" labelledBy="subs-title">
-      <DialogHeader id="subs-title" title={m.multi.subsOf(basename(path))} titleTooltip={path} onClose={onClose} closeIcon />
-      <div className="batch-choice-subs">
-        <h3>
-          {m.multi.subsToRetime} <InfoTip>{m.multi.subsToRetimeHint}</InfoTip>
-        </h3>
-        {targets.map((t) => (
-          <div key={t.index} className="batch-choice-subs-row">
-            <span className="batch-target-name">{m.multi.withTrack(trackName(t))}</span>
-            <SubtitleChecks
-              subtitles={subtitles}
-              chosen={assigned[t.index] ?? []}
-              taken={takenByOthers(assigned, t.index)}
-              onToggle={(sub) => onToggle(t.index, sub)}
-            />
-          </div>
-        ))}
-      </div>
-    </Dialog>
-  );
 }
 
 /** Batch mode's "Fichiers multipistes": a series of files that each hold
@@ -404,8 +369,6 @@ export function MultiTrackBatch({
     const status = detailRun?.targets[t.index]?.status;
     return status === "pending" || status === "running";
   });
-  const detailAssigned = detailPath && detailRes ? subsOf(detailPath, detailRes.targets) : {};
-  const detailSubs = (detailProbe?.subtitles ?? []).filter((s) => Object.values(detailAssigned).some((subs) => subs.includes(s.index)));
 
   /** A change to a file's tracks in its detail: from then on they're its
    * own ("(manuel)"), starting from what the languages picked. */
@@ -636,15 +599,12 @@ export function MultiTrackBatch({
                     </div>
                     {detailRes.issues.length > 0 && <span className="list-row-issues">⚠ {detailRes.issues.join(", ")}</span>}
                     {detailProbe.subtitles.length > 0 && detailRes.targets.length > 0 && (
-                      <div className="detail-subs">
-                        <span className="detail-subs-text" title={detailSubs.map((s) => subtitleLabel(s)).join("\n") || undefined}>
-                          {m.multi.retimedSubs}{" "}
-                          {detailSubs.length > 0 ? detailSubs.map((s) => subtitleShortLabel(s)).join(", ") : m.multi.noSubs}
-                        </span>
-                        <button className="small-button" disabled={busy} onClick={() => setSubsEditing(detailPath)}>
-                          {m.multi.changeSubs}
-                        </button>
-                      </div>
+                      <RetimedSubs
+                        subtitles={detailProbe.subtitles}
+                        assigned={subsOf(detailPath, detailRes.targets)}
+                        disabled={busy}
+                        onChange={() => setSubsEditing(detailPath)}
+                      />
                     )}
                   </div>
 
@@ -719,9 +679,10 @@ export function MultiTrackBatch({
       />
 
       {subsEditing && resolutions[subsEditing] && (
-        <SubtitleChoiceModal
-          path={subsEditing}
-          targets={resolutions[subsEditing]!.targets}
+        <SubtitleChoiceDialog
+          title={m.multi.subsOf(basename(subsEditing))}
+          titleTooltip={subsEditing}
+          tracks={resolutions[subsEditing]!.targets.map((t) => [t.index, trackName(t)] as const)}
           subtitles={probes[subsEditing]?.subtitles ?? []}
           assigned={subsOf(subsEditing, resolutions[subsEditing]!.targets)}
           onToggle={(track, sub) =>
