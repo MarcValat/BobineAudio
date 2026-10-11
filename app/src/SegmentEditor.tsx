@@ -15,8 +15,9 @@ import { ConfidenceGauge } from "./ConfidenceGauge";
 import { InfoTip } from "./InfoTip";
 import { RedoEditIcon, UndoIcon } from "./icons";
 import { PillSwitch } from "./PillSwitch";
-import { type TimeView, WHEEL_ZOOM_IN_FACTOR, WHEEL_ZOOM_OUT_FACTOR, useWheel, zoomView } from "./timeView";
+import { type TimeView, WHEEL_ZOOM_IN_FACTOR, WHEEL_ZOOM_OUT_FACTOR, useTimelinePointer, useWheel, zoomView } from "./timeView";
 import { TrackPreview, type TrackPreviewHandle } from "./TrackPreview";
+import { useMarkerGlide } from "./Waveform";
 import { useElementSize } from "./useElementSize";
 import "./SegmentEditor.css";
 import { Dialog, DialogHeader } from "./Dialog";
@@ -26,7 +27,7 @@ import { useT } from "./i18n";
 // text keeps one size on any window (see SegmentChart).
 const MIN_CHART_HEIGHT = 160;
 // Narrower than this, the editor shows its two columns as tabs.
-const NARROW_EDITOR_WIDTH = 1000;
+const NARROW_EDITOR_WIDTH = 1150;
 const MARGIN = { top: 20, right: 20, bottom: 32, left: 64 };
 // Must match engine/src/syncaudio/segments.py's _DRIFT_EPS_S: the editor
 // recomputes is_drift live as the user edits offset values (rather than
@@ -193,6 +194,9 @@ export function SegmentEditor({
   const [frozenRange, setFrozenRange] = useState<[number, number] | null>(null);
   // The stretch of the timeline on screen, shared with the waveforms (null: whole track).
   const [view, setView] = useState<TimeView | null>(null);
+  const [cursor, setCursor] = useState<number | null>(null);
+  // Playing: the marker moves every frame (no glide then).
+  const [playing, setPlaying] = useState(false);
   // Set once a drag actually moves, so the click ending it isn't also taken
   // as "move the playback position here".
   const movedRef = useRef(false);
@@ -324,6 +328,7 @@ export function SegmentEditor({
   // `view`): zooming or panning one moves the other.
   const viewStart = view?.start ?? 0;
   const viewDuration = view?.duration ?? totalDuration;
+  const cursorGlide = useMarkerGlide(!playing, viewStart, viewDuration, chartWidth, chartHeight);
   const x = (t: number) => (viewDuration > 0 ? ((t - viewStart) / viewDuration) * PLOT_W : 0);
   const xInv = (px: number) => (viewDuration > 0 ? viewStart + (px / PLOT_W) * viewDuration : 0);
   const inView = (px: number) => px >= 0 && px <= PLOT_W;
@@ -429,7 +434,6 @@ export function SegmentEditor({
       : null;
 
   const previewRef = useRef<TrackPreviewHandle>(null);
-  const [cursor, setCursor] = useState<number | null>(null);
   const clipId = useId();
 
   useWheel(svgRef, (e) => {
@@ -438,15 +442,19 @@ export function SegmentEditor({
     setView(zoomView({ start: viewStart, duration: viewDuration }, factor, t, totalDuration));
   });
 
-  /** Click on the chart (not on a boundary handle): move the playback
-   * position there, as a click on a waveform does. */
-  function handleChartClick(e: React.MouseEvent<SVGSVGElement>) {
-    if (movedRef.current) return;
-    if (!preview || (e.target as Element).closest(".boundary-handle")) return;
-    const t = timeFromClientX(e.clientX);
-    if (t < 0 || t > totalDuration) return;
-    previewRef.current?.seekTo(t);
-  }
+  /** The pointer on the chart, off the handles and the segments (which
+   * drag themselves): a click moves the playback position there, a left
+   * drag moves it with the pointer, a middle-button drag moves the view --
+   * the same as on the waveforms (useTimelinePointer). */
+  const chartPointer = useTimelinePointer(svgRef, {
+    timeAt: (clientX) => Math.max(0, Math.min(totalDuration, timeFromClientX(clientX))),
+    onSeek: (t) => previewRef.current?.seekTo(t),
+    onScrub: (t) => previewRef.current?.scrubTo(t),
+    onScrubEnd: (t) => previewRef.current?.endScrub(t),
+    // A share of the svg's width, the plot being a part of it.
+    onPan: (share) => previewRef.current?.pan((share * chartWidth) / PLOT_W),
+    skip: (target) => !preview || !!target.closest(".boundary-handle, .segment-hit"),
+  });
 
   /** Double-click: cut the segment under the pointer at that time. */
   function handleChartDoubleClick(e: React.MouseEvent<SVGSVGElement>) {
@@ -467,6 +475,7 @@ export function SegmentEditor({
       className={`editor-panel${preview ? " editor-panel-wide" : ""}${narrow ? " editor-narrow" : ""}`}
     >
         <DialogHeader
+          titleTooltip={subtitle}
           title={
             <>
             {t.editor.title}{" "}
@@ -524,7 +533,8 @@ export function SegmentEditor({
               className={`editor-chart${preview ? " editor-chart-listenable" : ""}${dragging ? " editor-chart-dragging" : ""}`}
               viewBox={`0 0 ${chartWidth} ${chartHeight}`}
               role="img"
-              onClick={handleChartClick}
+              onPointerDown={chartPointer.onPointerDown}
+              onMouseDown={chartPointer.onMouseDown}
               onDoubleClick={handleChartDoubleClick}
             >
               <defs>
@@ -621,7 +631,14 @@ export function SegmentEditor({
                 })}
 
                 {preview && cursor !== null && inView(x(cursor)) && (
-                  <line x1={x(cursor)} y1={0} x2={x(cursor)} y2={PLOT_H} className="playback-cursor" />
+                  <line
+                    x1={0}
+                    y1={0}
+                    x2={0}
+                    y2={PLOT_H}
+                    className={`playback-cursor${cursorGlide ? " glide" : ""}`}
+                    style={{ transform: `translateX(${x(cursor)}px)` }}
+                  />
                 )}
                 </g>
 
@@ -640,99 +657,6 @@ export function SegmentEditor({
               </g>
             </svg>
             </div>
-
-            <div className="editor-table-wrap list-scroll">
-              <table className="editor-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>
-                      {t.editor.start} <span className="th-unit">(s)</span>
-                    </th>
-                    <th>
-                      {t.editor.end} <span className="th-unit">(s)</span>
-                    </th>
-                    <th title={t.editor.offsetStartHint}>
-                      {t.editor.offsetStart} <span className="th-unit">(ms)</span>
-                    </th>
-                    <th title={t.editor.offsetEndHint}>
-                      {t.editor.offsetEnd} <span className="th-unit">(ms)</span>
-                    </th>
-                    <th>{t.editor.confidence}</th>
-                    <th>{t.editor.actions}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {segmentsPreview.map((seg, i) => (
-                    <tr key={i} className={seg.confidence < LOW_CONFIDENCE_THRESHOLD ? "editor-row-low-confidence" : undefined}>
-                      <td>{i + 1}</td>
-                      <td>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={cellValue(`start-${i}`, secondsText(seg.start_s))}
-                          disabled={i === 0}
-                          onChange={(e) => handleCellChange(`start-${i}`, e.target.value, (n) => updateTime(i, n))}
-                          onBlur={() => handleCellBlur(`start-${i}`)}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={cellValue(`end-${i}`, secondsText(seg.end_s))}
-                          disabled={i === segmentsPreview.length - 1}
-                          onChange={(e) => handleCellChange(`end-${i}`, e.target.value, (n) => updateTime(i + 1, n))}
-                          onBlur={() => handleCellBlur(`end-${i}`)}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={cellValue(`offsetStart-${i}`, msText(seg.offset_start))}
-                          onChange={(e) => handleCellChange(`offsetStart-${i}`, e.target.value, (n) => updateOffset("start", i, n / 1000))}
-                          onBlur={() => handleCellBlur(`offsetStart-${i}`)}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={cellValue(`offsetEnd-${i}`, msText(seg.offset_end))}
-                          onChange={(e) => handleCellChange(`offsetEnd-${i}`, e.target.value, (n) => updateOffset("end", i, n / 1000))}
-                          onBlur={() => handleCellBlur(`offsetEnd-${i}`)}
-                        />
-                      </td>
-                      <td className="editor-confidence-cell" title={t.editor.confidenceHint}>
-                        <ConfidenceGauge value={seg.confidence} />
-                      </td>
-                      <td>
-                        <button
-                          className="small-button"
-                          disabled={segmentsPreview.length < 2}
-                          title={
-                            segmentsPreview.length < 2
-                              ? t.editor.onlySegment
-                              : t.editor.removeHint(i + 1, i < segmentsPreview.length - 1 ? i + 2 : i)
-                          }
-                          onMouseEnter={() => setRemovalPreview(i)}
-                          onMouseLeave={() => setRemovalPreview(null)}
-                          onFocus={() => setRemovalPreview(i)}
-                          onBlur={() => setRemovalPreview(null)}
-                          onClick={() => {
-                            setRemovalPreview(null);
-                            applyEdit((s) => mergeSegment(s, i));
-                          }}
-                        >
-                          {t.common.remove}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           </div>
 
           {preview && (
@@ -746,12 +670,109 @@ export function SegmentEditor({
                 referenceStartTime={preview.referenceStartTime ?? 0}
                 trackStartTime={preview.trackStartTime ?? 0}
                 controller={previewRef}
-                onCursorChange={setCursor}
+                onCursorChange={(t, isPlaying) => {
+                  setCursor(t);
+                  setPlaying(isPlaying);
+                }}
                 view={view}
                 onViewChange={setView}
               />
             </div>
           )}
+        </div>
+
+        {/* Under both, across the editor (as the mockup): the segments' values. */}
+        <div className="editor-table-wrap list-scroll">
+          <table className="editor-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>
+                  {t.editor.start} <span className="th-unit">(s)</span>
+                </th>
+                <th>
+                  {t.editor.end} <span className="th-unit">(s)</span>
+                </th>
+                <th title={t.editor.offsetStartHint}>
+                  {t.editor.offsetStart} <span className="th-unit">(ms)</span>
+                </th>
+                <th title={t.editor.offsetEndHint}>
+                  {t.editor.offsetEnd} <span className="th-unit">(ms)</span>
+                </th>
+                <th>{t.editor.confidence}</th>
+                <th>{t.editor.actions}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {segmentsPreview.map((seg, i) => (
+                <tr key={i} className={seg.confidence < LOW_CONFIDENCE_THRESHOLD ? "editor-row-low-confidence" : undefined}>
+                  <td>{i + 1}</td>
+                  <td>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={cellValue(`start-${i}`, secondsText(seg.start_s))}
+                      disabled={i === 0}
+                      onChange={(e) => handleCellChange(`start-${i}`, e.target.value, (n) => updateTime(i, n))}
+                      onBlur={() => handleCellBlur(`start-${i}`)}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={cellValue(`end-${i}`, secondsText(seg.end_s))}
+                      disabled={i === segmentsPreview.length - 1}
+                      onChange={(e) => handleCellChange(`end-${i}`, e.target.value, (n) => updateTime(i + 1, n))}
+                      onBlur={() => handleCellBlur(`end-${i}`)}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={cellValue(`offsetStart-${i}`, msText(seg.offset_start))}
+                      onChange={(e) => handleCellChange(`offsetStart-${i}`, e.target.value, (n) => updateOffset("start", i, n / 1000))}
+                      onBlur={() => handleCellBlur(`offsetStart-${i}`)}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={cellValue(`offsetEnd-${i}`, msText(seg.offset_end))}
+                      onChange={(e) => handleCellChange(`offsetEnd-${i}`, e.target.value, (n) => updateOffset("end", i, n / 1000))}
+                      onBlur={() => handleCellBlur(`offsetEnd-${i}`)}
+                    />
+                  </td>
+                  <td className="editor-confidence-cell" title={t.editor.confidenceHint}>
+                    <ConfidenceGauge value={seg.confidence} />
+                  </td>
+                  <td>
+                    <button
+                      className="small-button"
+                      disabled={segmentsPreview.length < 2}
+                      title={
+                        segmentsPreview.length < 2
+                          ? t.editor.onlySegment
+                          : t.editor.removeHint(i + 1, i < segmentsPreview.length - 1 ? i + 2 : i)
+                      }
+                      onMouseEnter={() => setRemovalPreview(i)}
+                      onMouseLeave={() => setRemovalPreview(null)}
+                      onFocus={() => setRemovalPreview(i)}
+                      onBlur={() => setRemovalPreview(null)}
+                      onClick={() => {
+                        setRemovalPreview(null);
+                        applyEdit((s) => mergeSegment(s, i));
+                      }}
+                    >
+                      {t.common.remove}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
         <div className="editor-actions">

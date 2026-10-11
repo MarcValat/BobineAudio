@@ -606,10 +606,15 @@ button:focus-visible {
   font-style: italic;
 }
 
-/* Heads the three "what plays" checkboxes; a small gap before it sets it
-   apart from the playback buttons. */
+/* "Entendre :" and its three checkboxes, kept together. */
+.preview-hear {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  white-space: nowrap;
+}
+
 .preview-listen-label {
-  margin-left: 0.4em;
   color: var(--text-muted);
 }
 

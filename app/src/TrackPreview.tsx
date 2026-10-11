@@ -3,7 +3,7 @@ import { fetchClip, fetchCorrectedClip, fetchWaveform, type SegmentOut } from ".
 import { candidateSpansIn, planResult, silentRegions, skippedRegions } from "./resultPlan";
 import { InfoTip } from "./InfoTip";
 import { Select } from "./Dropdown";
-import { MIN_VIEW_DURATION_S, type TimeView, zoomView } from "./timeView";
+import { MIN_VIEW_DURATION_S, panView, type TimeView, zoomView } from "./timeView";
 import { formatOffsetMs, formatTime, segmentOffsetLabel } from "./SegmentChart";
 import { Waveform, type HighlightRegion } from "./Waveform";
 import { WaveformNavigator } from "./WaveformNavigator";
@@ -195,7 +195,7 @@ interface TrackPreviewProps {
   controller?: React.Ref<TrackPreviewHandle>;
   /** The playback marker's reference time, as it moves -- for a parent to
    * draw the same marker elsewhere. */
-  onCursorChange?: (t: number) => void;
+  onCursorChange?: (t: number, playing: boolean) => void;
   /** With both, the visible stretch is the parent's (null: not set yet),
    * shared with its own chart, instead of this component's own. */
   view?: TimeView | null;
@@ -207,6 +207,11 @@ interface TrackPreviewProps {
 
 export interface TrackPreviewHandle {
   seekTo(t: number): void;
+  /** The marker dragged to `t` (a parent's chart), then let go there. */
+  scrubTo(t: number): void;
+  endScrub(t: number): void;
+  /** The view moved by a share of its length. */
+  pan(share: number): void;
 }
 
 function segmentPickLabel(seg: SegmentOut): string {
@@ -304,11 +309,16 @@ export function TrackPreview({
   const cursorRef = useRef<number | null>(null);
 
   const appliedOffset = offsetAt(segments, previewStart);
-  const displayCursor = liveCursor ?? previewStart;
+  // While the marker is dragged: where it is (it follows the pointer;
+  // playback goes there once it's let go).
+  const [scrubTime, setScrubTime] = useState<number | null>(null);
+  const displayCursor = scrubTime ?? liveCursor ?? previewStart;
+  // It moves by itself (playing) or under the pointer: no glide then.
+  const markerMoving = liveCursor !== null || scrubTime !== null;
 
   useEffect(() => {
-    onCursorChange?.(displayCursor);
-  }, [displayCursor, onCursorChange]);
+    onCursorChange?.(displayCursor, markerMoving);
+  }, [displayCursor, markerMoving, onCursorChange]);
 
   // Compared by content: a parent editing segments may hand a new array with
   // the same values on every render.
@@ -329,7 +339,19 @@ export function TrackPreview({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segmentsKey]);
 
-  useImperativeHandle(controller, () => ({ seekTo: handleWaveformSeek }));
+  /** A drag of the marker let go at `t`: the position goes there. */
+  function endScrub(t: number) {
+    setScrubTime(null);
+    handleWaveformSeek(t);
+  }
+
+  /** The view moved by `share` of its length (a middle-button drag). */
+  function pan(share: number) {
+    if (refDuration === null || viewDuration === null) return;
+    setView(panView({ start: viewStart, duration: viewDuration }, share * viewDuration, refDuration));
+  }
+
+  useImperativeHandle(controller, () => ({ seekTo: handleWaveformSeek, scrubTo: setScrubTime, endScrub, pan }));
   // Informational only (see TrackPreviewProps' comment): the offset above is
   // measured on each track's own timeline, container delay excluded, so a
   // normal player (which applies that delay) would see this residual instead.
@@ -723,7 +745,11 @@ export function TrackPreview({
             dataStart={viewData.refPeaks.dataStart}
             dataEnd={viewData.refPeaks.dataEnd}
             cursor={displayCursor}
+            cursorGlide={!markerMoving}
             onSeek={handleWaveformSeek}
+            onScrub={setScrubTime}
+            onScrubEnd={endScrub}
+            onPan={pan}
             onZoom={zoomAt}
             label={t.preview.reference}
             className="waveform-reference"
@@ -736,7 +762,11 @@ export function TrackPreview({
             dataStart={viewData.candPeaks.dataStart}
             dataEnd={viewData.candPeaks.dataEnd}
             cursor={displayCursor}
+            cursorGlide={!markerMoving}
             onSeek={handleWaveformSeek}
+            onScrub={setScrubTime}
+            onScrubEnd={endScrub}
+            onPan={pan}
             onZoom={zoomAt}
             highlights={removedHighlight}
             label={t.preview.candidate}
@@ -757,7 +787,11 @@ export function TrackPreview({
             dataStart={viewData.finalPeaks.dataStart}
             dataEnd={viewData.finalPeaks.dataEnd}
             cursor={displayCursor}
+            cursorGlide={!markerMoving}
             onSeek={handleWaveformSeek}
+            onScrub={setScrubTime}
+            onScrubEnd={endScrub}
+            onPan={pan}
             onZoom={zoomAt}
             highlights={addedHighlight}
             label={t.preview.result}
@@ -805,50 +839,53 @@ export function TrackPreview({
         <button className="small-button preview-play" onClick={() => toggle.current()} disabled={loading} title={t.preview.spaceHint}>
           {loading ? t.preview.loading : liveCursor !== null ? t.preview.stop : t.preview.play}
         </button>
-        {/* What plays during "Écouter": any mix of the three. */}
-        <span className="preview-listen-label">{t.preview.hear}</span>
-        <label>
-          <input
-            type="checkbox"
-            checked={!refMuted}
-            onChange={() =>
-              setRefMuted((m) => {
-                const next = !m;
-                if (refGainRef.current) refGainRef.current.gain.value = next ? 0 : 1;
-                return next;
-              })
-            }
-          />
-          {t.preview.reference}
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={!candOriginalMuted}
-            onChange={() =>
-              setCandOriginalMuted((m) => {
-                const next = !m;
-                if (candOriginalGainRef.current) candOriginalGainRef.current.gain.value = next ? 0 : 1;
-                return next;
-              })
-            }
-          />
-          {t.preview.hearCandidate}
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={!candMuted}
-            onChange={() =>
-              setCandMuted((m) => {
-                const next = !m;
-                if (candGainRef.current) candGainRef.current.gain.value = next ? 0 : 1;
-                return next;
-              })
-            }
-          />
-          {t.preview.hearResult}
-        </label>
+        {/* What plays during "Écouter": any mix of the three -- one block, on
+            a line of its own when the row is too narrow. */}
+        <span className="preview-hear">
+          <span className="preview-listen-label">{t.preview.hear}</span>
+          <label>
+            <input
+              type="checkbox"
+              checked={!refMuted}
+              onChange={() =>
+                setRefMuted((m) => {
+                  const next = !m;
+                  if (refGainRef.current) refGainRef.current.gain.value = next ? 0 : 1;
+                  return next;
+                })
+              }
+            />
+            {t.preview.reference}
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={!candOriginalMuted}
+              onChange={() =>
+                setCandOriginalMuted((m) => {
+                  const next = !m;
+                  if (candOriginalGainRef.current) candOriginalGainRef.current.gain.value = next ? 0 : 1;
+                  return next;
+                })
+              }
+            />
+            {t.preview.hearCandidate}
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={!candMuted}
+              onChange={() =>
+                setCandMuted((m) => {
+                  const next = !m;
+                  if (candGainRef.current) candGainRef.current.gain.value = next ? 0 : 1;
+                  return next;
+                })
+              }
+            />
+            {t.preview.hearResult}
+          </label>
+        </span>
       </div>
       {error && <p className="error">{error}</p>}
     </div>
