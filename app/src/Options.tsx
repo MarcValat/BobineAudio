@@ -67,23 +67,23 @@ const CLOSE_MS = 180;
  * the suite), its control, and `note`, a fact worth seeing at once. */
 function Setting({
   label,
-  htmlFor,
+  labelId,
   hint,
   note,
   children,
 }: {
   label: ReactNode;
-  htmlFor?: string;
+  /** The name's id, for the control's aria-labelledby: a plain name, not a
+   * <label>, which would light the control up whenever it's hovered. */
+  labelId?: string;
   hint?: ReactNode;
   note?: ReactNode;
   children?: ReactNode;
 }) {
-  const name = htmlFor ? (
-    <label className="setting-name" htmlFor={htmlFor}>
+  const name = (
+    <span className="setting-name" id={labelId}>
       {label}
-    </label>
-  ) : (
-    <span className="setting-name">{label}</span>
+    </span>
   );
   return (
     <div className="setting">
@@ -129,17 +129,17 @@ function OptionsDrawer({ closing, onClose }: { closing: boolean; onClose: () => 
         />
       </Setting>
 
-      <Setting label={t.options.language} htmlFor="options-language" hint={t.options.languageHint}>
+      <Setting label={t.options.language} labelId="options-language" hint={t.options.languageHint}>
         {/* Each language by its own name, whatever the current one. */}
-        <select id="options-language" value={language} onChange={(e) => setLanguage(e.target.value as LanguageChoice)}>
+        <select aria-labelledby="options-language" value={language} onChange={(e) => setLanguage(e.target.value as LanguageChoice)}>
           <option value="system">{t.options.systemLanguage}</option>
           <option value="fr">Français</option>
           <option value="en">English</option>
         </select>
       </Setting>
 
-      <Setting label={t.options.subtitles} htmlFor="options-subtitles" hint={t.options.subtitlesHint}>
-        <select id="options-subtitles" value={subtitleDefault} onChange={(e) => saveSubtitleDefault(e.target.value as SubtitleMode)}>
+      <Setting label={t.options.subtitles} labelId="options-subtitles" hint={t.options.subtitlesHint}>
+        <select aria-labelledby="options-subtitles" value={subtitleDefault} onChange={(e) => saveSubtitleDefault(e.target.value as SubtitleMode)}>
           {SUBTITLE_MODES.map((mode) => (
             <option key={mode} value={mode}>
               {t.subtitles.modes[mode]}

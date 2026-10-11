@@ -461,9 +461,10 @@ export function MultiTrackBatch({
   return (
     <main className="batch-main" style={hidden ? { display: "none" } : undefined}>
       <div className="batch-config panel">
-        <label>
+        <span className="config-field">
           {m.multi.reference}
           <LanguageSelect
+            label={m.common.reference}
             value={referenceLanguage}
             onChange={(lang) => {
               setReferenceLanguage(lang);
@@ -474,7 +475,7 @@ export function MultiTrackBatch({
             emptyLabel="—"
             disabled={busy}
           />
-        </label>
+        </span>
         <span className="batch-languages">
           {m.multi.toCorrect}
           {languages.filter((l) => l !== referenceLanguage).length === 0 && <span className="batch-track-status">—</span>}
@@ -494,16 +495,21 @@ export function MultiTrackBatch({
               </label>
             ))}
         </span>
-        <label>
+        <span className="config-field">
           {m.common.labelled(m.batch.subtitles)}
-          <select value={subsMode} onChange={(e) => setSubsMode(e.target.value as SubtitleMode)} disabled={busy}>
+          <select
+            value={subsMode}
+            onChange={(e) => setSubsMode(e.target.value as SubtitleMode)}
+            disabled={busy}
+            aria-label={m.batch.subtitles}
+          >
             {SUBTITLE_MODES.map((mode) => (
               <option key={mode} value={mode}>
                 {m.subtitles.modes[mode]}
               </option>
             ))}
           </select>
-        </label>
+        </span>
         <InfoTip>{m.multi.hint}</InfoTip>
       </div>
 

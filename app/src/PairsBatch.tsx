@@ -178,10 +178,10 @@ interface TrackPickerProps {
 function TrackPicker({ label, tracks, loading, error, value, onChange, disabled }: TrackPickerProps) {
   const m = useT();
   return (
-    <label>
+    <span className="config-field">
       {m.common.labelled(label)}
       {tracks && tracks.length > 0 ? (
-        <select value={value} onChange={(e) => onChange(Number(e.target.value))} disabled={disabled}>
+        <select value={value} onChange={(e) => onChange(Number(e.target.value))} disabled={disabled} aria-label={label}>
           {tracks.map((t) => (
             <option key={t.index} value={t.index}>
               @{t.index} — {t.language ?? "?"} ({t.codec ?? "?"})
@@ -194,6 +194,7 @@ function TrackPicker({ label, tracks, loading, error, value, onChange, disabled 
           min={0}
           value={value}
           disabled={disabled}
+          aria-label={label}
           onChange={(e) => onChange(Math.max(0, Number(e.target.value)))}
         />
       )}
@@ -203,7 +204,7 @@ function TrackPicker({ label, tracks, loading, error, value, onChange, disabled 
           {m.pairs.tracksUnavailable}
         </span>
       )}
-    </label>
+    </span>
   );
 }
 
@@ -591,9 +592,10 @@ export function PairsBatch({
           onChange={setCandidateTrackIndex}
           disabled={busy}
         />
-        <label>
+        <span className="config-field">
           {m.pairs.language}
           <LanguageSelect
+            label={m.pairs.language}
             value={candidateLanguage}
             onChange={setCandidateLanguage}
             extra={candidateProbe.tracks?.map((t) => t.language) ?? []}
@@ -603,17 +605,22 @@ export function PairsBatch({
             disabled={busy}
           />
           <InfoTip>{m.pairs.languageHint}</InfoTip>
-        </label>
-        <label>
+        </span>
+        <span className="config-field">
           {m.common.labelled(m.batch.subtitles)}
-          <select value={subsMode} onChange={(e) => setSubsMode(e.target.value as SubtitleMode)} disabled={busy}>
+          <select
+            value={subsMode}
+            onChange={(e) => setSubsMode(e.target.value as SubtitleMode)}
+            disabled={busy}
+            aria-label={m.batch.subtitles}
+          >
             {SUBTITLE_MODES.map((mode) => (
               <option key={mode} value={mode}>
                 {m.subtitles.modes[mode]}
               </option>
             ))}
           </select>
-        </label>
+        </span>
         <InfoTip>{m.pairs.hint}</InfoTip>
       </div>
 

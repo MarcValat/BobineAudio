@@ -22,6 +22,7 @@ export function LanguageSelect({
   onlyExtra = false,
   emptyLabel,
   disabled,
+  label,
 }: {
   value: string;
   onChange: (code: string) => void;
@@ -29,11 +30,13 @@ export function LanguageSelect({
   onlyExtra?: boolean;
   emptyLabel?: string;
   disabled?: boolean;
+  /** Its name for a screen reader, when no <label> wraps it. */
+  label?: string;
 }) {
   const found = extra.filter((c): c is string => !!c);
   const codes = [...new Set(onlyExtra ? found : [...found, ...Object.keys(languageNames())])];
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
+    <select value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} aria-label={label}>
       {emptyLabel !== undefined && <option value="">{emptyLabel}</option>}
       {codes.map((code) => (
         <option key={code} value={code}>

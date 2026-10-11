@@ -23,7 +23,8 @@
   flex-wrap: wrap;
 }
 
-.batch-config label {
+.batch-config label,
+.batch-config .config-field {
   display: flex;
   align-items: center;
   gap: 0.5em;
