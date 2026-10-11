@@ -431,6 +431,6 @@ export const en: Messages = {
     hearResult: "Result",
     offsetHere: (offset) => `Offset here: ${offset}`,
     containerDelay: (applied, remaining) =>
-      `Of which ${applied} is already applied to this track by the file (container delay): in a player, the remaining offset is about ${remaining}. The offset shown, used for listening and export, is measured on the raw track; this detail is only informative.`,
+      `This file asks the player to play this track ${applied} late (container delay): in a player that applies it, it only seems off by about ${remaining}. Bobine ignores that delay, which some players apply badly: the offset shown is the raw track's, and the export writes it in sync, with no delay.`,
   },
 };

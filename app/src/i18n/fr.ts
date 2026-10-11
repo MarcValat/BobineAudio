@@ -440,7 +440,7 @@ export const fr = {
     hearResult: "Résultat",
     offsetHere: (offset: string) => `Décalage ici : ${offset}`,
     containerDelay: (applied: string, remaining: string) =>
-      `Dont ${applied} déjà appliqués par le fichier à cette piste (délai de conteneur) : dans un lecteur, le décalage restant est d'environ ${remaining}. Le décalage affiché, utilisé pour l'écoute et l'export, est mesuré sur la piste brute ; ce détail est seulement informatif.`,
+      `Ce fichier demande au lecteur de jouer cette piste avec un délai de ${applied} (délai de conteneur) : dans un lecteur qui l'applique, elle ne semble décalée que d'environ ${remaining}. Bobine ignore ce délai, que certains lecteurs appliquent mal : le décalage affiché est celui de la piste brute, et l'export l'écrit calée, sans délai.`,
   },
 };
 
