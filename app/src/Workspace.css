@@ -23,7 +23,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5em;
-  padding: 0 0.3em;
+  padding: 0 4px;
 }
 
 .panel .file-list-header h2 {
@@ -32,9 +32,12 @@
 }
 
 /* "Tout retirer ?" asked on its own line under the header. */
+/* Out to the header's padding: as wide as the rows under it. */
 .remove-all-confirm {
   order: 1;
-  flex: 1 0 100%;
+  flex: 1 0 calc(100% + 8px);
+  box-sizing: border-box;
+  margin: 0 -4px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -47,8 +50,13 @@
   animation: dropdown-in 120ms ease-out;
 }
 
+/* The question, then its two answers under it on the right. */
 .remove-all-confirm span {
-  flex: 1 1 14em;
+  flex: 1 0 100%;
+}
+
+.remove-all-confirm span + button {
+  margin-left: auto;
 }
 
 .file-list-rows {
