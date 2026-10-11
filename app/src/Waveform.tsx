@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from "react";
+import { useMemo, useRef, type ReactNode } from "react";
 import { formatTime } from "./SegmentChart";
 import { WHEEL_ZOOM_IN_FACTOR, WHEEL_ZOOM_OUT_FACTOR, useWheel } from "./timeView";
 import "./Waveform.css";
@@ -100,7 +100,11 @@ export function Waveform({
 
   const dataX0 = Math.max(0, timeToX(dataStart));
   const dataX1 = Math.min(WIDTH, timeToX(dataEnd));
-  const path = peaksMin && peaksMax ? peaksToPath(peaksMin, peaksMax, dataX0, dataX1, HEIGHT) : "";
+  // Not again at every render: the playhead moving renders it each frame.
+  const path = useMemo(
+    () => (peaksMin && peaksMax ? peaksToPath(peaksMin, peaksMax, dataX0, dataX1, HEIGHT) : ""),
+    [peaksMin, peaksMax, dataX0, dataX1],
+  );
 
   // A cut or inserted silence of tens of ms is a fraction of a pixel on a
   // whole-episode view: too thin to see, and hidden under the waveform.

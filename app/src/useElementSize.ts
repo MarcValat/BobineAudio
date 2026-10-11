@@ -22,3 +22,25 @@ export function useElementSize<T extends Element>(): [(el: T | null) => void, { 
 
   return [ref, size];
 }
+
+/** Whether the element given the returned callback ref is lower than
+ * `height` (false until measured). Unlike useElementSize, it renders again
+ * only when that flips, not at every pixel of a resize: a resize (or the
+ * list folding) would otherwise render everything under it each frame. */
+export function useShorterThan<T extends Element>(height: number): [(el: T | null) => void, boolean] {
+  const [element, setElement] = useState<T | null>(null);
+  const [shorter, setShorter] = useState(false);
+  const ref = useCallback((el: T | null) => setElement(el), []);
+
+  useEffect(() => {
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const h = entry.contentRect.height;
+      setShorter(h > 0 && h < height);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [element, height]);
+
+  return [ref, shorter];
+}

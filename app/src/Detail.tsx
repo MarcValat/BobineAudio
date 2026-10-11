@@ -8,7 +8,7 @@ import { LogPanel } from "./LogPanel";
 import { basename } from "./paths";
 import { PillSwitch } from "./PillSwitch";
 import { SegmentChart, SegmentChartPlaceholder } from "./SegmentChart";
-import { useElementSize } from "./useElementSize";
+import { useShorterThan } from "./useElementSize";
 import { Dialog, DialogHeader } from "./Dialog";
 import { SubtitleChecks } from "./SubtitleChecks";
 import { subtitleLabel, subtitleShortLabel, takenByOthers } from "./subtitles";
@@ -30,9 +30,8 @@ const COMPACT_HEIGHT = 560;
  * chart and readable waveforms at once: then they're two tabs, the `view`
  * picked; the classes put each part on its tab. */
 export function useDetailView() {
-  const [ref, size] = useElementSize<HTMLDivElement>();
+  const [ref, compact] = useShorterThan<HTMLDivElement>(COMPACT_HEIGHT);
   const [view, setView] = useState<AnalysisView>("listen");
-  const compact = size.height > 0 && size.height < COMPACT_HEIGHT;
   return {
     ref,
     compact,

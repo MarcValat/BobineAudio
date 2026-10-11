@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { peaksToPath } from "./Waveform";
 import "./Waveform.css";
 import { t } from "./i18n";
@@ -9,6 +9,31 @@ const HEIGHT = 30;
 // of a long track -- a window narrower than this would be near-impossible
 // to click/drag precisely.
 const MIN_WINDOW_PX = 6;
+// Columns drawn: as many as the zoomed waveforms', not one per peak of the
+// whole track (20,000 -- a path 25 times heavier, drawn again at every
+// frame of a resize, for a strip 26px high).
+const COLUMNS = 800;
+
+/** The peaks pooled into `columns` (min of the mins, max of the maxes):
+ * every peak still shows. */
+function pooled(min: number[], max: number[], columns: number): [number[], number[]] {
+  if (min.length <= columns) return [min, max];
+  const outMin: number[] = [];
+  const outMax: number[] = [];
+  for (let c = 0; c < columns; c++) {
+    const from = Math.floor((c * min.length) / columns);
+    const to = Math.max(from + 1, Math.floor(((c + 1) * min.length) / columns));
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let i = from; i < to; i++) {
+      if (min[i] < lo) lo = min[i];
+      if (max[i] > hi) hi = max[i];
+    }
+    outMin.push(lo);
+    outMax.push(hi);
+  }
+  return [outMin, outMax];
+}
 
 interface WaveformNavigatorProps {
   duration: number;
@@ -75,7 +100,12 @@ export function WaveformNavigator({ duration, viewStart, viewDuration, peaksMin,
     onNavigate(clampStart(frac * duration - viewDuration / 2));
   }
 
-  const path = peaksMin && peaksMax ? peaksToPath(peaksMin, peaksMax, 0, WIDTH, HEIGHT) : "";
+  // Once per track, not at every render (each pan of the view renders it).
+  const path = useMemo(() => {
+    if (!peaksMin || !peaksMax) return "";
+    const [min, max] = pooled(peaksMin, peaksMax, COLUMNS);
+    return peaksToPath(min, max, 0, WIDTH, HEIGHT);
+  }, [peaksMin, peaksMax]);
   const winX0 = Math.max(0, timeToX(viewStart));
   const winX1raw = Math.min(WIDTH, timeToX(viewStart + viewDuration));
   const winX1 = Math.max(winX1raw, winX0 + MIN_WINDOW_PX);
