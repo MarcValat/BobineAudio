@@ -1,6 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { SegmentOut } from "./api";
-import { useElementSize } from "./useElementSize";
 import "./SegmentChart.css";
 import { t, useT } from "./i18n";
 
@@ -154,40 +153,45 @@ export function SegmentChartPlaceholder({ children }: { children: ReactNode }) {
 }
 
 /** `fill`: take all the height its container gives it (a tab of its own)
- * instead of its usual fixed one. */
+ * instead of its usual fixed one.
+ *
+ * Its coordinates are shares of the plot (SVG percentages), not pixels of a
+ * measured size: the browser lays it out at any size by itself, text and
+ * strokes unscaled -- no measuring and drawing again in JS at every frame
+ * of a resize (that made resizing jerky while it showed). */
 export function SegmentChart({ segments, fill = false }: { segments: SegmentOut[]; fill?: boolean }) {
   const tr = useT();
-  const [boxRef, box] = useElementSize<HTMLDivElement>();
   const compact = useShortWindow();
 
   if (segments.length === 0) return null;
-  const width = Math.max(200, box.width || 760);
-  const height = fill ? Math.max(COMPACT_HEIGHT, box.height || HEIGHT) : compact ? COMPACT_HEIGHT : HEIGHT;
-  const PLOT_W = width - MARGIN.left - MARGIN.right;
-  const PLOT_H = height - MARGIN.top - MARGIN.bottom;
+  const height = compact ? COMPACT_HEIGHT : HEIGHT;
 
   const totalDuration = segments[segments.length - 1].end_s;
   const [minOffset, maxOffset] = offsetRange(segments.flatMap((s) => [s.offset_start, s.offset_end]));
 
-  const x = (t: number) => (totalDuration > 0 ? (t / totalDuration) * PLOT_W : 0);
-  const y = (offset: number) => PLOT_H - ((offset - minOffset) / (maxOffset - minOffset)) * PLOT_H;
+  const pct = (share: number) => `${(share * 100).toFixed(3)}%`;
+  const x = (t: number) => pct(totalDuration > 0 ? t / totalDuration : 0);
+  const yShare = (offset: number) => 1 - (offset - minOffset) / (maxOffset - minOffset);
+  const y = (offset: number) => pct(yShare(offset));
 
   const timeTicks = 5;
   const timeTickValues = Array.from({ length: timeTicks + 1 }, (_, i) => (totalDuration * i) / timeTicks);
 
   return (
     <div className={fill ? "segment-chart segment-chart-fill" : "segment-chart"}>
-      <div className="segment-chart-box" ref={boxRef} style={fill ? undefined : { height }}>
+      <div className="segment-chart-box" style={fill ? undefined : { height }}>
+      {/* The plot's own box, inside the axes' margins; the labels drawn
+          past its edges (overflow visible). */}
       <svg
-        viewBox={`0 0 ${width} ${height}`}
+        className="segment-chart-plot"
+        style={{ top: MARGIN.top, left: MARGIN.left, width: `calc(100% - ${MARGIN.left + MARGIN.right}px)`, height: `calc(100% - ${MARGIN.top + MARGIN.bottom}px)` }}
         role="img"
         aria-label={tr.chart.ariaLabel}
       >
-        <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
           {/* offset scale, with the zero line standing out */}
           {offsetTicks(minOffset, maxOffset, 3).map((v) => (
             <g key={v}>
-              <line x1={0} y1={y(v)} x2={PLOT_W} y2={y(v)} className={v === 0 ? "zero-line" : "grid-line"} />
+              <line x1={0} y1={y(v)} x2="100%" y2={y(v)} className={v === 0 ? "zero-line" : "grid-line"} />
               <text x={-8} y={y(v)} className="axis-label" textAnchor="end" dominantBaseline="middle">
                 {formatOffsetMs(v)}
               </text>
@@ -197,8 +201,8 @@ export function SegmentChart({ segments, fill = false }: { segments: SegmentOut[
           {/* segment boundaries + time axis */}
           {timeTickValues.map((t) => (
             <g key={t}>
-              <line x1={x(t)} y1={0} x2={x(t)} y2={PLOT_H} className="grid-line" />
-              <text x={x(t)} y={PLOT_H + 16} className="axis-label" textAnchor="middle">
+              <line x1={x(t)} y1={0} x2={x(t)} y2="100%" className="grid-line" />
+              <text x={x(t)} y="100%" dy={16} className="axis-label" textAnchor="middle">
                 {formatTime(t)}
               </text>
             </g>
@@ -206,21 +210,22 @@ export function SegmentChart({ segments, fill = false }: { segments: SegmentOut[
 
           {/* segments (see drawnOffsets) */}
           {segments.map((seg, i) => {
-            const [yStart, yEnd] = drawnOffsets(seg).map(y);
+            const [start, end] = drawnOffsets(seg);
             return (
               <g key={i}>
                 <line
                   x1={x(seg.start_s)}
-                  y1={yStart}
+                  y1={y(start)}
                   x2={x(seg.end_s)}
-                  y2={yEnd}
+                  y2={y(end)}
                   className={`segment-line ${seg.is_drift ? "drift" : "constant"}${
                     seg.confidence < LOW_CONFIDENCE_THRESHOLD ? " low-confidence" : ""
                   }`}
                 />
                 <text
-                  x={(x(seg.start_s) + x(seg.end_s)) / 2}
-                  y={(yStart + yEnd) / 2 - 8}
+                  x={pct(totalDuration > 0 ? (seg.start_s + seg.end_s) / 2 / totalDuration : 0)}
+                  y={pct((yShare(start) + yShare(end)) / 2)}
+                  dy={-8}
                   className="segment-label"
                   textAnchor="middle"
                 >
@@ -229,7 +234,6 @@ export function SegmentChart({ segments, fill = false }: { segments: SegmentOut[
               </g>
             );
           })}
-        </g>
       </svg>
       </div>
       <div className="segment-chart-footer">

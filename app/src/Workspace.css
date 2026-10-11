@@ -757,6 +757,28 @@
   grid-template-columns: 210px minmax(0, 1fr);
 }
 
+/* The column slides to its new width when folded or unfolded (only then:
+   Workspace.tsx's foldList). While it unfolds, the list is already laid
+   out at its full width (the panel clips it), revealed rather than
+   squeezed: no title wrapping for a few frames. */
+.list-folding .workspace {
+  transition: grid-template-columns 220ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.workspace:not(.list-collapsed) > .file-list > * {
+  min-width: calc(clamp(300px, 30vw, 470px) - 1.4em - 2px);
+}
+
+.workspace-pairs:not(.list-collapsed) > .file-list > * {
+  min-width: calc(clamp(340px, 38vw, 560px) - 1.4em - 2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .list-folding .workspace {
+    transition: none;
+  }
+}
+
 .fold-button.folded svg {
   transform: rotate(180deg);
 }
@@ -793,57 +815,4 @@
 
 .list-collapsed .pair-add {
   grid-template-columns: minmax(0, 1fr);
-}
-
-/* Folding (Workspace.tsx's foldList): only the new layout is shown, at
-   once, its pictures revealed by frames sliding from the old places to the
-   new -- the list's anchored at its left, the detail's at its right (its
-   right edge doesn't move): no squeezed text, and no fading between two
-   layouts (it showed both at once). */
-.list-folding .file-list {
-  view-transition-name: file-list;
-}
-
-.list-folding .file-detail {
-  view-transition-name: file-detail;
-}
-
-/* Their pictures without their own edge and background: the moving frames
-   draw them (else a second edge shows inside each frame). */
-.list-folding .file-list,
-.list-folding .file-detail {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-}
-
-/* Each frame drawn as a panel (App.css's .panel): where its picture
-   doesn't reach yet, it's the panel's own background and edge. */
-::view-transition-group(file-list),
-::view-transition-group(file-detail) {
-  overflow: clip;
-  border-radius: var(--radius);
-  background: linear-gradient(180deg, var(--surface), color-mix(in srgb, var(--surface) 82%, var(--bg)));
-  box-shadow: inset 0 0 0 1px var(--border);
-  animation-duration: 220ms;
-  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
-}
-
-::view-transition-old(file-list),
-::view-transition-old(file-detail) {
-  animation: none;
-  opacity: 0;
-}
-
-::view-transition-new(file-list),
-::view-transition-new(file-detail) {
-  animation: none;
-  width: 100%;
-  height: 100%;
-  object-fit: none;
-  object-position: left top;
-}
-
-::view-transition-new(file-detail) {
-  object-position: right top;
 }

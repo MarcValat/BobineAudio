@@ -13,6 +13,17 @@
   height: 100%;
 }
 
+/* The plot inside the axes' margins (SegmentChart.tsx sets them), its
+   labels past its edges. */
+.segment-chart-box {
+  position: relative;
+}
+
+.segment-chart svg.segment-chart-plot {
+  position: absolute;
+  overflow: visible;
+}
+
 /* On a tab of its own: the whole height, the box growing to fill it. */
 .segment-chart-fill {
   height: 100%;

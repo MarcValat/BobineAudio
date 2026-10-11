@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { flushSync } from "react-dom";
 import { probe, type SubtitleInfo, type TrackInfo } from "./api";
 import { moved } from "./batchShared";
 import type { RunStatus } from "./jobs";
@@ -224,22 +223,19 @@ export function ListRow({
   );
 }
 
-/** Folds or unfolds the list: the layout goes straight to its new state,
- * then the list and the detail slide there as pictures (View Transitions,
- * Workspace.css's .list-folding): animating the column's width laid the
- * whole detail out again at every frame (jerky once the waveforms are in),
- * and showed the unfolded list squeezed into the narrow column meanwhile.
- * At once where the engine lacks the API, and with reduced motion. */
+// How long the column takes to slide (Workspace.css's .list-folding).
+const FOLD_MS = 220;
+let foldTimer: number | undefined;
+
+/** Folds or unfolds the list, its column sliding to the new width -- only
+ * then: the column's width follows the window's, and a resize of the window
+ * mustn't trail behind. */
 function foldList(collapsed: boolean) {
-  const change = () => flushSync(() => saveListCollapsed(collapsed));
-  const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  if (reduced || typeof document.startViewTransition !== "function") {
-    change();
-    return;
-  }
   const root = document.documentElement;
   root.classList.add("list-folding");
-  document.startViewTransition(change).finished.finally(() => root.classList.remove("list-folding"));
+  window.clearTimeout(foldTimer);
+  foldTimer = window.setTimeout(() => root.classList.remove("list-folding"), FOLD_MS + 50);
+  saveListCollapsed(collapsed);
 }
 
 /** The list header's button folding the list to a narrow column (names and
