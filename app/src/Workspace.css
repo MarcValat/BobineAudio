@@ -318,9 +318,7 @@
   display: grid;
   grid-template-columns: minmax(250px, 330px) minmax(0, 1fr);
   gap: 1em;
-  /* The row is as tall as the chart (or its placeholder): the tracks
-     take that height, their table scrolling in it. */
-  align-items: stretch;
+  align-items: start;
 }
 
 /* The Segments tab of a short window: the tracks and the chart, as tall
@@ -333,9 +331,6 @@
 
 .detail-tracks {
   min-width: 0;
-  /* Adds nothing to the row's height, takes all of it. */
-  height: 0;
-  min-height: 100%;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -376,45 +371,9 @@
   padding: 0.1em 0.6em;
 }
 
-/* The tracks' frame, as tall as the chart's beside it: the table (it
-   scrolls past what fits, headers staying), then its foot. */
-.detail-tracks-box {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-
+/* About four tracks, then it scrolls (headers stay). */
 .detail-tracks-table {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-/* The frame around it has the border. */
-.detail-tracks-box .tracks-table-wrap {
-  border: none;
-  border-radius: 0;
-}
-
-.detail-tracks-footer {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2em;
-  padding: 0.4em 0.6em;
-  border-top: 1px solid var(--border);
-  font-size: 12px;
-}
-
-.detail-top-fill .detail-tracks-table {
-  max-height: none;
-}
-
-.detail-tracks-table table {
-  width: 100%;
+  max-height: 158px;
 }
 
 .detail-tracks-table th {

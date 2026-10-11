@@ -710,9 +710,6 @@ export function MultiTrackBatch({
                         </button>
                       )}
                     </div>
-                    {/* The table, and what goes with it in its frame's foot:
-                        as tall as the chart's frame beside it. */}
-                    <div className="detail-tracks-box">
                     <div className="tracks-table-wrap list-scroll detail-tracks-table">
                       <TrackTable
                         className="batch-tracks-table"
@@ -727,8 +724,6 @@ export function MultiTrackBatch({
                         onToggleTarget={(index) => editChoice(detailPath, (c) => ({ ...c, targets: toggled(c.targets, index) }))}
                       />
                     </div>
-                    {(detailRes.issues.length > 0 || (detailProbe.subtitles.length > 0 && detailRes.targets.length > 0)) && (
-                    <div className="detail-tracks-footer">
                     {detailRes.issues.length > 0 && <span className="list-row-issues">⚠ {detailRes.issues.join(", ")}</span>}
                     {detailProbe.subtitles.length > 0 && detailRes.targets.length > 0 && (
                       <div className="detail-subs">
@@ -741,9 +736,6 @@ export function MultiTrackBatch({
                         </button>
                       </div>
                     )}
-                    </div>
-                    )}
-                    </div>
                   </div>
 
                   <div className="detail-chart">

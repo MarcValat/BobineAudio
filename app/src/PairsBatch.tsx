@@ -806,7 +806,6 @@ export function PairsBatch({
                         </button>
                       )}
                     </div>
-                    <div className="detail-tracks-box">
                     <div className="tracks-table-wrap list-scroll detail-tracks-table">
                       <PairTrackTable
                         referenceTracks={probes[detailReference!]?.tracks}
@@ -817,7 +816,6 @@ export function PairsBatch({
                         onReference={(index) => pickTracks((t) => ({ ...t, reference: index }))}
                         onCandidate={(index) => pickTracks((t) => ({ ...t, candidate: index }))}
                       />
-                    </div>
                     </div>
                   </div>
                   <div className="detail-chart">

@@ -135,7 +135,7 @@ export function PairRow({
   const line = (kind: "ref" | "cand", file: { name: string; path?: string; missing: string }, actions?: ReactNode) => (
     <>
       <span className={`pair-row-kind pair-row-kind-${kind}`}>{kind === "ref" ? t.pairs.refShort : t.pairs.candShort}</span>
-      <span className={`pair-row-name${file.path ? "" : " pair-row-missing"}`} title={file.path}>
+      <span className={`pair-row-name${file.path ? "" : " pair-row-missing"}`} title={file.path} onClick={onSelect}>
         {file.path ? file.name : file.missing}
       </span>
       <span className="pair-row-actions">{file.path && actions}</span>
