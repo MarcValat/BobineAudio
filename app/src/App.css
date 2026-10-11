@@ -233,8 +233,8 @@ textarea {
 /* The two modes (PillSwitch, below), bigger than a switch inside a panel:
    the window's navigation. */
 .pill-switch.mode-switch {
+  --pill-inset: 4px;
   margin-left: 8px;
-  padding: 4px;
 }
 
 .pill-switch.mode-switch button {
@@ -244,14 +244,20 @@ textarea {
 }
 
 /* A choice between a few options, all visible, a selection pill sliding
-   under the picked one (PillSwitch.tsx): a sunken track, smaller buttons. */
+   under the picked one (PillSwitch.tsx): a sunken track, smaller buttons.
+   The pill sits `--pill-inset` inside the track on every side, its corners
+   rounded as much less (the track's radius, less its border and the
+   inset): two rounded corners one inside the other look parallel only
+   then. */
 .pill-switch {
+  --pill-inset: 3px;
+  --pill-radius: calc(var(--radius-sm) - 1px - var(--pill-inset));
   position: relative;
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  padding: 3px;
+  padding: var(--pill-inset);
   background: var(--surface-alt);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -266,7 +272,7 @@ textarea {
   color: var(--text-muted);
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--pill-radius);
 }
 
 .pill-switch button:hover:not(:disabled) {
@@ -283,9 +289,9 @@ textarea {
 
 .pill-switch-pill {
   position: absolute;
-  top: 3px;
-  bottom: 3px;
-  border-radius: 6px;
+  top: var(--pill-inset);
+  bottom: var(--pill-inset);
+  border-radius: var(--pill-radius);
   background: var(--surface);
   box-shadow: var(--shadow);
 }
