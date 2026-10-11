@@ -175,8 +175,16 @@
   visibility: hidden;
 }
 
+/* ↑ ↓ ✕: three icons, one size. */
 .list-row-actions button {
-  padding: 0.1em 0.45em;
+  width: 26px;
+  height: 24px;
+  padding: 0;
+}
+
+.list-row-actions button svg {
+  width: 13px;
+  height: 13px;
 }
 
 /* The badge, and the spinner at its right while something runs. */
@@ -765,11 +773,11 @@
   transition: grid-template-columns 220ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-.workspace:not(.list-collapsed) > .file-list > * {
+.list-folding .workspace:not(.list-collapsed) > .file-list > * {
   min-width: calc(clamp(300px, 30vw, 470px) - 1.4em - 2px);
 }
 
-.workspace-pairs:not(.list-collapsed) > .file-list > * {
+.list-folding .workspace-pairs:not(.list-collapsed) > .file-list > * {
   min-width: calc(clamp(340px, 38vw, 560px) - 1.4em - 2px);
 }
 

@@ -158,6 +158,13 @@
   color: var(--text);
 }
 
+/* A button showing an icon only: the icon at its exact center. */
+.icon-small-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .icon-small-button svg {
   width: 1.05em;
   height: 1.05em;

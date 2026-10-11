@@ -108,3 +108,23 @@ export function FoldIcon() {
     </svg>
   );
 }
+
+/** An arrow up: move a row up the list. */
+export function ArrowUpIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 19V5" />
+      <path d="M6 11l6-6 6 6" />
+    </svg>
+  );
+}
+
+/** An arrow down: move a row down the list. */
+export function ArrowDownIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 5v14" />
+      <path d="M6 13l6 6 6-6" />
+    </svg>
+  );
+}

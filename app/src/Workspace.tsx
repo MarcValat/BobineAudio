@@ -4,7 +4,7 @@ import { moved } from "./batchShared";
 import type { RunStatus } from "./jobs";
 import { errorMessage, shortcutKey } from "./util";
 import { useT } from "./i18n";
-import { FoldIcon, LayersIcon, LinkIcon } from "./icons";
+import { ArrowDownIcon, ArrowUpIcon, CloseIcon, FoldIcon, LayersIcon, LinkIcon } from "./icons";
 import { Tooltip } from "./InfoTip";
 import { saveListCollapsed } from "./settings";
 import "./Workspace.css";
@@ -277,9 +277,9 @@ export function useListKeys(enabled: boolean, count: number, index: number, onSe
   }, [enabled]);
 }
 
-/** A row's ↑ ↓ ✕: moves it within the list, or drops it. The arrows carry
- * U+FE0E, which asks for the plain text glyph: Windows may otherwise draw
- * them as colored emoji. */
+/** A row's ↑ ↓ ✕: moves it within the list, or drops it. Icons, not
+ * characters: a font's arrows sit off-center in a button (and Windows may
+ * draw them as emoji). */
 export function MoveButtons({
   count,
   index,
@@ -295,31 +295,31 @@ export function MoveButtons({
   return (
     <>
       <button
-        className="small-button"
+        className="small-button icon-small-button"
         onClick={() => onChange((f) => moved(f, index, index - 1))}
         disabled={disabled || index === 0}
         title={t.batch.moveUp}
         aria-label={t.batch.moveUp}
       >
-        {"↑︎"}
+        <ArrowUpIcon />
       </button>
       <button
-        className="small-button"
+        className="small-button icon-small-button"
         onClick={() => onChange((f) => moved(f, index, index + 1))}
         disabled={disabled || index === count - 1}
         title={t.batch.moveDown}
         aria-label={t.batch.moveDown}
       >
-        {"↓︎"}
+        <ArrowDownIcon />
       </button>
       <button
-        className="small-button"
+        className="small-button icon-small-button"
         onClick={() => onChange((f) => f.filter((_, i) => i !== index))}
         disabled={disabled}
         title={t.common.remove}
         aria-label={t.common.remove}
       >
-        ✕
+        <CloseIcon />
       </button>
     </>
   );
