@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type FocusEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import "./InfoTip.css";
 import { useT } from "./i18n";
@@ -47,24 +47,42 @@ function Bubble({ anchor, open, children }: { anchor: React.RefObject<HTMLElemen
   );
 }
 
+/** A bubble's open state and the handlers opening it: on hover, or on
+ * keyboard focus only -- a button keeps the focus once clicked, and the
+ * window hands it back when it's focused again (after a resize): the
+ * bubble mustn't come back then, with the pointer elsewhere. It closes
+ * when the window loses the focus. */
+function useBubble() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener("blur", close);
+    return () => window.removeEventListener("blur", close);
+  }, [open]);
+  return {
+    open,
+    setOpen,
+    handlers: {
+      onMouseEnter: () => setOpen(true),
+      onMouseLeave: () => setOpen(false),
+      onFocus: (e: FocusEvent<HTMLElement>) => {
+        if ((e.target as HTMLElement).matches(":focus-visible")) setOpen(true);
+      },
+      onBlur: () => setOpen(false),
+    },
+  };
+}
+
 /** A small "?" that shows `children` on hover or keyboard focus -- usage
  * hints stay one glance away instead of taking a line of the layout. */
 export function InfoTip({ children }: { children: ReactNode }) {
   const t = useT();
   const iconRef = useRef<HTMLSpanElement>(null);
-  const [open, setOpen] = useState(false);
+  const { open, handlers } = useBubble();
 
   return (
-    <span
-      ref={iconRef}
-      className="info-tip"
-      tabIndex={0}
-      aria-label={t.common.help}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onFocus={() => setOpen(true)}
-      onBlur={() => setOpen(false)}
-    >
+    <span ref={iconRef} className="info-tip" tabIndex={0} aria-label={t.common.help} {...handlers}>
       {/* Drawn, not typed: a glyph sits wherever the font puts it, never
           quite centered in its circle. */}
       <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -85,17 +103,9 @@ export function InfoTip({ children }: { children: ReactNode }) {
  * disabled button too (the wrapper gets it). */
 export function Tooltip({ text, children }: { text: ReactNode; children: ReactNode }) {
   const ref = useRef<HTMLSpanElement>(null);
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, handlers } = useBubble();
   return (
-    <span
-      ref={ref}
-      className="tooltip-anchor"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onFocus={() => setOpen(true)}
-      onBlur={() => setOpen(false)}
-      onClick={() => setOpen(false)}
-    >
+    <span ref={ref} className="tooltip-anchor" {...handlers} onClick={() => setOpen(false)}>
       {children}
       <Bubble anchor={ref} open={open}>
         {text}
