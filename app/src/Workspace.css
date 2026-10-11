@@ -137,14 +137,14 @@
 }
 
 .list-row:hover .list-row-actions,
-.list-row:focus-within .list-row-actions {
+.list-row:has(:focus-visible) .list-row-actions {
   opacity: 1;
   pointer-events: auto;
 }
 
 /* The buttons take the badge's place meanwhile. */
 .list-row:hover .list-row-status,
-.list-row:focus-within .list-row-status {
+.list-row:has(:focus-visible) .list-row-status {
   visibility: hidden;
 }
 
@@ -538,7 +538,7 @@
 }
 
 .pair-row:hover .pair-row-actions,
-.pair-row:focus-within .pair-row-actions {
+.pair-row:has(:focus-visible) .pair-row-actions {
   opacity: 1;
   pointer-events: auto;
 }
@@ -554,7 +554,7 @@
 
 /* The badge stays: the files' buttons have their own column. */
 .pair-row:hover .pair-row-status,
-.pair-row:focus-within .pair-row-status {
+.pair-row:has(:focus-visible) .pair-row-status {
   visibility: visible;
 }
 
