@@ -295,7 +295,10 @@ def corrected_clip(
     )
     cmd = [
         resolve_ffmpeg(), "-hide_banner", "-loglevel", "error",
-        *_seek_args(spec, seek), "-i", spec.path, "-t", f"{max(0.0, latest - seek) + 1.0:.6f}",
+        # -t before -i: how much of the input to read. After it, it would cut
+        # the output, whose silence before the track (a negative offset) made
+        # the clip shorter than the reference's.
+        *_seek_args(spec, seek), "-t", f"{max(0.0, latest - seek) + 1.0:.6f}", "-i", spec.path,
         "-filter_complex", filt, "-map", "[out]",
         "-ar", str(sample_rate), "-f", "wav", "-acodec", "pcm_s16le", "-",
     ]

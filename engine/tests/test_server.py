@@ -479,3 +479,92 @@ def test_a_cancelled_export_leaves_no_partial_file(offset_mkv: tuple[Path, float
     )
     assert events[-1]["type"] == "cancelled"
     assert not output_path.exists()
+
+
+# --- Playback edge cases (the GUI's Écouter: three clips from one position) ---
+
+
+def _wav_seconds(content: bytes) -> float:
+    """A WAV's length from the samples actually there: ffmpeg streams it with
+    an unknown size in its header (0xFFFFFFFF), which the wave module would
+    believe."""
+    import struct
+
+    channels, rate = struct.unpack("<HI", content[22:28])
+    block_align = struct.unpack("<H", content[32:34])[0]
+    data = content.index(b"data") + 8
+    return (len(content) - data) / block_align / rate
+
+
+_ONE_SEGMENT = [{"start_s": 0.0, "end_s": 30.0, "offset_start": 3.0, "offset_end": 3.0, "is_drift": False}]
+
+
+@pytest.mark.parametrize("start", [0.0, 15.0, 28.5])
+def test_clip_lengths_match_between_reference_and_result(offset_mkv: tuple[Path, float], start: float) -> None:
+    """The three clips play together: the result must last as long as the
+    reference's (up to the track's end), or they drift apart and stop at
+    different times."""
+    mkv, _ = offset_mkv
+    ref = client.get("/clip", params={"path": str(mkv), "index": 0, "start": start, "duration": 12.0})
+    res = client.post(
+        "/corrected-clip", json={"path": str(mkv), "index": 1, "segments": _ONE_SEGMENT, "start": start, "duration": 12.0}
+    )
+    assert ref.status_code == 200 and res.status_code == 200
+    ref_s, res_s = _wav_seconds(ref.content), _wav_seconds(res.content)
+    assert abs(ref_s - min(12.0, 30.0 - start)) < 0.1
+    assert abs(res_s - ref_s) < 0.1, (ref_s, res_s)
+
+
+def test_clip_negative_start_is_read_from_zero(offset_mkv: tuple[Path, float]) -> None:
+    mkv, _ = offset_mkv
+    resp = client.get("/clip", params={"path": str(mkv), "index": 0, "start": -50, "duration": 2.0})
+    assert resp.status_code == 200
+    assert abs(_wav_seconds(resp.content) - 2.0) < 0.1
+
+
+def test_corrected_clip_with_a_drift_and_a_jump(offset_mkv: tuple[Path, float]) -> None:
+    mkv, _ = offset_mkv
+    segments = [
+        {"start_s": 0.0, "end_s": 10.0, "offset_start": 3.0, "offset_end": 3.2, "is_drift": True},
+        {"start_s": 10.0, "end_s": 30.0, "offset_start": 2.5, "offset_end": 2.5, "is_drift": False},
+    ]
+    resp = client.post(
+        "/corrected-clip", json={"path": str(mkv), "index": 1, "segments": segments, "start": 5.0, "duration": 12.0}
+    )
+    assert resp.status_code == 200
+    assert abs(_wav_seconds(resp.content) - 12.0) < 0.1
+
+
+def test_corrected_clip_with_an_offset_reaching_before_the_track(offset_mkv: tuple[Path, float]) -> None:
+    """A track early on the reference (negative offset) at the very start:
+    the part before the track's start is silence, not an error."""
+    mkv, _ = offset_mkv
+    segments = [{"start_s": 0.0, "end_s": 30.0, "offset_start": -2.0, "offset_end": -2.0, "is_drift": False}]
+    resp = client.post(
+        "/corrected-clip", json={"path": str(mkv), "index": 1, "segments": segments, "start": 0.0, "duration": 5.0}
+    )
+    assert resp.status_code == 200
+    assert abs(_wav_seconds(resp.content) - 5.0) < 0.1, _wav_seconds(resp.content)
+
+
+def test_corrected_clip_with_an_offset_reaching_past_the_track(offset_mkv: tuple[Path, float]) -> None:
+    """A track late on the reference near its end: what's past the track's
+    end is silence, the clip keeps its length."""
+    mkv, _ = offset_mkv
+    segments = [{"start_s": 0.0, "end_s": 30.0, "offset_start": 8.0, "offset_end": 8.0, "is_drift": False}]
+    resp = client.post(
+        "/corrected-clip", json={"path": str(mkv), "index": 1, "segments": segments, "start": 25.0, "duration": 5.0}
+    )
+    assert resp.status_code == 200
+    assert abs(_wav_seconds(resp.content) - 5.0) < 0.1, _wav_seconds(resp.content)
+
+
+def test_corrected_clip_past_the_last_segment_is_a_clear_400(offset_mkv: tuple[Path, float]) -> None:
+    """Asked past every segment (the GUI keeps the position within the track
+    now): a 400 that says so, not a crash."""
+    mkv, _ = offset_mkv
+    resp = client.post(
+        "/corrected-clip", json={"path": str(mkv), "index": 1, "segments": _ONE_SEGMENT, "start": 40.0, "duration": 5.0}
+    )
+    assert resp.status_code == 400
+    assert resp.json()["detail"]
