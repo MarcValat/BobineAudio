@@ -177,13 +177,16 @@ export function DetailTabs({
 }
 
 /** "PISTES ?" over the tracks table, and "(manuel)" with the button back
- * to the top bar's pick (`reset`) once they were picked by hand. */
+ * to the top bar's pick (`reset`) once they were picked by hand -- or
+ * "(auto)" when the top bar's reference doesn't fit them (`auto`: why). */
 export function TracksHeading({
   hint,
   reset,
+  auto,
 }: {
   hint: string;
   reset?: { label: string; title: string; disabled: boolean; onClick: () => void };
+  auto?: string;
 }) {
   const t = useT();
   return (
@@ -191,6 +194,11 @@ export function TracksHeading({
       <h3>
         {t.multi.tracks} <InfoTip>{hint}</InfoTip>
       </h3>
+      {auto && (
+        <span className="list-row-manual">
+          {t.multi.auto} <InfoTip>{auto}</InfoTip>
+        </span>
+      )}
       {reset && <span className="list-row-manual">{t.multi.manual}</span>}
       {reset && (
         <button className="small-button" disabled={reset.disabled} title={reset.title} onClick={reset.onClick}>

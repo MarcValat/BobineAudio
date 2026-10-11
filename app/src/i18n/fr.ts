@@ -230,9 +230,21 @@ export const fr = {
     exportAll: "Exporter tout",
   },
 
+  picker: {
+    all: "Toutes les pistes",
+    byIndex: "Numéro de piste",
+    byLanguage: "Langue",
+    byName: "Nom de piste",
+    files: (n: number) => `${n} fichier${n > 1 ? "s" : ""}`,
+    none: "Aucune",
+    nothing: "—",
+  },
+
   multi: {
-    noTrack: (lang: string) => `aucune piste ${lang}`,
-    severalTracks: (lang: string) => `plusieurs pistes ${lang}`,
+    noTrack: (what: string) => `aucune piste ${what}`,
+    auto: " (auto)",
+    autoHint:
+      "La référence choisie en haut ne désigne pas une seule piste de ce fichier (aucune, ou plusieurs) : la 1re piste sert de référence et les autres sont à corriger. Coche ses pistes dans le tableau pour les fixer.",
     subsOf: (name: string) => `Sous-titres de ${name}`,
     subsToRetime: "Sous-titres à recaler",
     subsToRetimeHint:
@@ -241,7 +253,7 @@ export const fr = {
     reference: "Référence :",
     toCorrect: "À corriger :",
     hint:
-      "Chaque fichier contient déjà la référence et les pistes à corriger. Les pistes sont choisies par langue, pour tous les fichiers : un fichier où une langue manque ou apparaît plusieurs fois est signalé ⚠, et ses pistes peuvent être cochées à la main dans son détail. Les sous-titres choisis (texte seulement : SRT, ASS) sont recalés avec la piste audio de leur langue ; les autres sont gardés tels quels.",
+      "Chaque fichier contient déjà la référence et les pistes à corriger. Les pistes sont choisies pour tous les fichiers, par numéro, langue ou nom de piste : un fichier où une piste à corriger manque est signalé ⚠, un fichier où la référence ne désigne pas une seule piste passe en « (auto) », et ses pistes peuvent être cochées à la main dans son détail. Les sous-titres choisis (texte seulement : SRT, ASS) sont recalés avec la piste audio de leur langue ; les autres sont gardés tels quels.",
     files: "Fichiers",
     file: "Fichier",
     addHint: "Ajouter des fichiers qui contiennent chacun la référence et les pistes à corriger",

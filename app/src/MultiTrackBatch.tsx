@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { startSegmentedRenderJob, startSegmentsJob, type SegmentsResponse, type TrackInfo } from "./api";
 import { runJob } from "./jobs";
-import { languageLabel, LanguageSelect } from "./languages";
+import { ALL_TRACKS, defaultPick, keyName, matchesAny, matchesKey, trackOptions, TrackFilterPicker, type TrackKey } from "./TrackFilter";
 import {
   AnalyzeButton,
   BatchFooter,
@@ -57,6 +57,9 @@ interface Resolution {
   targets: TrackInfo[];
   issues: string[];
   manual: boolean;
+  /** The reference picked at the top names none of its tracks, or several:
+   * picked as the single-file view did instead ("(auto)"). */
+  auto: boolean;
 }
 
 /** One file's analyses (one per corrected track) and its single export. Kept
@@ -67,30 +70,32 @@ interface FileRun extends ExportFields {
   targets: Record<number, AnalysisRun>;
 }
 
-function resolve(tracks: TrackInfo[], referenceLanguage: string, targetLanguages: string[], choice?: TrackChoice): Resolution {
+/** A file's tracks as the top bar picks them (by number, language or
+ * name, see TrackFilter), or as ticked in its detail (`choice`). A
+ * reference naming none of its tracks, or several, doesn't block it: its
+ * first track (or first match) is the reference, and every other track is
+ * to correct when the reference matched none ("(auto)"). A track to correct
+ * that a ticked entry should name but can't is flagged (⚠). */
+function resolve(tracks: TrackInfo[], referenceKey: TrackKey, targetKeys: TrackKey[], choice?: TrackChoice): Resolution {
   if (choice) {
     return {
       reference: tracks.find((t) => t.index === choice.reference) ?? null,
       targets: tracks.filter((t) => choice.targets.includes(t.index)),
       issues: [],
       manual: true,
+      auto: false,
     };
   }
-  const issues: string[] = [];
-  const withLanguage = (lang: string) => tracks.filter((t) => t.language === lang);
-  const references = withLanguage(referenceLanguage);
-  const reference = references[0] ?? null;
-  if (references.length === 0) issues.push(t().multi.noTrack(referenceLanguage));
-  if (references.length > 1) issues.push(t().multi.severalTracks(referenceLanguage));
-  const targets: TrackInfo[] = [];
-  for (const lang of targetLanguages) {
-    if (lang === referenceLanguage) continue;
-    const found = withLanguage(lang).filter((t) => t !== reference);
-    if (found.length === 0) issues.push(t().multi.noTrack(lang));
-    if (found.length > 1) issues.push(t().multi.severalTracks(lang));
-    if (found.length > 0) targets.push(found[0]);
+  const matches = referenceKey ? tracks.filter((t) => matchesKey(t, referenceKey)) : [];
+  const reference = matches[0] ?? tracks[0] ?? null;
+  if (matches.length === 0) {
+    return { reference, targets: tracks.filter((t) => t !== reference), issues: [], manual: false, auto: true };
   }
-  return { reference, targets, issues, manual: false };
+  const others = tracks.filter((t) => t !== reference);
+  const issues = targetKeys
+    .filter((key) => key !== ALL_TRACKS && !others.some((t) => matchesKey(t, key)))
+    .map((key) => t().multi.noTrack(keyName(key)));
+  return { reference, targets: others.filter((t) => matchesAny(t, targetKeys)), issues, manual: false, auto: matches.length > 1 };
 }
 
 /** Batch mode's "Fichiers multipistes": a series of files that each hold
@@ -116,8 +121,10 @@ export function MultiTrackBatch({
 }) {
   const m = useT();
   const [files, setFiles] = useState<string[]>([]);
-  const [referenceLanguage, setReferenceLanguage] = useState("");
-  const [targetLanguages, setTargetLanguages] = useState<string[]>([]);
+  // What the top bar picks in every file (see TrackFilter): the reference,
+  // and the tracks to correct (any track one of these names).
+  const [referenceKey, setReferenceKey] = useState<TrackKey>("");
+  const [targetKeys, setTargetKeys] = useState<TrackKey[]>([]);
   const [choices, setChoices] = useState<Record<string, TrackChoice>>({});
   // Starts as the default setting (Options), and follows it when it changes.
   const subtitleDefault = useSubtitleDefault();
@@ -164,29 +171,21 @@ export function MultiTrackBatch({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Languages start out as the first probed file's: its first track as the
-  // reference, every other language to correct. Only while none is set, so a
-  // pick of the user's is never overridden.
+  // The picks start out from the first probed file (see defaultPick). Only
+  // while none is set, so a pick of the user's is never overridden.
   const firstTracks = files.map((f) => probes[f]?.tracks).find((t) => t && t.length > 0);
   useEffect(() => {
-    if (referenceLanguage || !firstTracks) return;
-    const reference = firstTracks[0].language ?? "";
-    if (!reference) return;
-    setReferenceLanguage(reference);
-    setTargetLanguages([
-      ...new Set(firstTracks.map((t) => t.language).filter((l): l is string => !!l && l !== reference)),
-    ]);
-  }, [firstTracks, referenceLanguage]);
+    if (referenceKey || !firstTracks) return;
+    const pick = defaultPick(firstTracks);
+    setReferenceKey(pick.reference);
+    setTargetKeys(pick.targets);
+  }, [firstTracks, referenceKey]);
 
-  const languages = [
-    ...new Set(
-      files.flatMap((f) => probes[f]?.tracks?.map((t) => t.language) ?? []).filter((l): l is string => !!l),
-    ),
-  ];
+  const options = trackOptions(files.flatMap((f) => (probes[f]?.tracks ? [probes[f].tracks!] : [])));
   const resolutions: Record<string, Resolution | null> = Object.fromEntries(
     files.map((f) => {
       const tracks = probes[f]?.tracks;
-      return [f, tracks ? resolve(tracks, referenceLanguage, targetLanguages, choices[f]) : null];
+      return [f, tracks ? resolve(tracks, referenceKey, targetKeys, choices[f]) : null];
     }),
   );
 
@@ -387,37 +386,18 @@ export function MultiTrackBatch({
       <div className="batch-config panel">
         <span className="config-field">
           {m.multi.reference}
-          <LanguageSelect
+          <TrackFilterPicker
             label={m.common.reference}
-            value={referenceLanguage}
-            onChange={(lang) => {
-              setReferenceLanguage(lang);
-              setTargetLanguages((t) => t.filter((l) => l !== lang));
-            }}
-            extra={languages}
-            onlyExtra
-            emptyLabel="—"
+            options={options}
+            value={referenceKey ? [referenceKey] : []}
+            onChange={([key]) => setReferenceKey(key)}
+            single
             disabled={busy}
           />
         </span>
-        <span className="batch-languages">
+        <span className="config-field">
           {m.multi.toCorrect}
-          {languages.filter((l) => l !== referenceLanguage).length === 0 && <span className="batch-track-status">—</span>}
-          {languages
-            .filter((l) => l !== referenceLanguage)
-            .map((lang) => (
-              <label key={lang}>
-                <input
-                  type="checkbox"
-                  checked={targetLanguages.includes(lang)}
-                  disabled={busy}
-                  onChange={() =>
-                    setTargetLanguages((t) => toggled(t, lang))
-                  }
-                />
-                {languageLabel(lang)}
-              </label>
-            ))}
+          <TrackFilterPicker label={m.common.toCorrect} options={options} value={targetKeys} onChange={setTargetKeys} disabled={busy} />
         </span>
         <span className="config-field">
           {m.common.labelled(m.batch.subtitles)}
@@ -449,8 +429,8 @@ export function MultiTrackBatch({
                 setRuns({});
                 setShownTracks({});
                 // Picked again from the next files added.
-                setReferenceLanguage("");
-                setTargetLanguages([]);
+                setReferenceKey("");
+                setTargetKeys([]);
               }}
               disabled={busy || files.length === 0}
             >
@@ -497,6 +477,7 @@ export function MultiTrackBatch({
                           {probed?.error && <span className="error">{probed.error}</span>}
                           {res && tracksSummary(path, res)}
                           {res?.manual && <span className="list-row-manual">{m.multi.manual}</span>}
+                          {res?.auto && <span className="list-row-manual">{m.multi.auto}</span>}
                           {res && res.issues.length > 0 && <span className="list-row-issues">⚠ {res.issues.join(", ")}</span>}
                         </>
                       }
@@ -567,6 +548,7 @@ export function MultiTrackBatch({
                   <div className="detail-tracks">
                     <TracksHeading
                       hint={m.multi.tracksHint}
+                      auto={detailRes.auto ? m.multi.autoHint : undefined}
                       reset={
                         detailRes.manual
                           ? {

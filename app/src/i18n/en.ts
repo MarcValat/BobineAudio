@@ -227,9 +227,21 @@ export const en: Messages = {
     exportAll: "Export all",
   },
 
+  picker: {
+    all: "All tracks",
+    byIndex: "Track number",
+    byLanguage: "Language",
+    byName: "Track name",
+    files: (n) => `${n} file${n === 1 ? "" : "s"}`,
+    none: "None",
+    nothing: "—",
+  },
+
   multi: {
-    noTrack: (lang) => `no ${lang} track`,
-    severalTracks: (lang) => `several ${lang} tracks`,
+    noTrack: (what) => `no ${what} track`,
+    auto: " (auto)",
+    autoHint:
+      "The reference picked at the top doesn't name exactly one track of this file (none, or several): its first track is the reference and the others are to correct. Tick its tracks in the table to set them.",
     subsOf: (name) => `Subtitles of ${name}`,
     subsToRetime: "Subtitles to retime",
     subsToRetimeHint:
@@ -238,7 +250,7 @@ export const en: Messages = {
     reference: "Reference:",
     toCorrect: "To correct:",
     hint:
-      "Each file already holds the reference and the tracks to correct. Tracks are picked by language, for every file: a file where a language is missing or appears more than once is flagged ⚠, and its tracks can be ticked by hand in its detail. The chosen subtitles (text only: SRT, ASS) are retimed with their language's audio track; the others are kept as they are.",
+      "Each file already holds the reference and the tracks to correct. Tracks are picked for every file, by number, language or track name: a file missing a track to correct is flagged ⚠, a file where the reference doesn't name exactly one track goes “(auto)”, and its tracks can be ticked by hand in its detail. The chosen subtitles (text only: SRT, ASS) are retimed with their language's audio track; the others are kept as they are.",
     files: "Files",
     file: "File",
     addHint: "Add files that each hold the reference and the tracks to correct",
