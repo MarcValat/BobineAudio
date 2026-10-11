@@ -7,7 +7,7 @@ import { MIN_VIEW_DURATION_S, type TimeView, zoomView } from "./timeView";
 import { formatOffsetMs, formatTime, segmentOffsetLabel } from "./SegmentChart";
 import { Waveform, type HighlightRegion } from "./Waveform";
 import { WaveformNavigator } from "./WaveformNavigator";
-import { errorMessage } from "./util";
+import { errorMessage, inFront, shortcutKey } from "./util";
 import { MinusIcon, PlusIcon } from "./icons";
 import { useT } from "./i18n";
 
@@ -620,8 +620,27 @@ export function TrackPreview({
   const removedHighlight: HighlightRegion[] = (viewData?.removed ?? []).map((r) => ({ ...r, kind: "removed" }));
   const addedHighlight: HighlightRegion[] = (viewData?.added ?? []).map((r) => ({ ...r, kind: "added" }));
 
+  // Space plays from the position, or stops: the shown preview only (not
+  // one hidden on the other mode or tab, nor behind a dialog).
+  const root = useRef<HTMLDivElement>(null);
+  const toggle = useRef(() => {});
+  // (Nothing while a clip loads: it would start once loaded anyway.)
+  toggle.current = () => {
+    if (playbackStartRef.current !== null) stop();
+    else if (!loading) loadAndPlay();
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== " " || !shortcutKey(e) || !root.current?.offsetParent || !inFront(root.current)) return;
+      e.preventDefault();
+      toggle.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
-    <div className="preview">
+    <div className="preview" ref={root}>
       {/* One wrapping row (zoom, segment shortcuts, legend): height is what a
           small screen lacks. */}
       <div className="preview-toolbar">
@@ -772,7 +791,7 @@ export function TrackPreview({
             onChange={(e) => setPreviewStart(Number(e.target.value))}
           />
         </label>
-        <button className="small-button" onClick={() => loadAndPlay()} disabled={loading}>
+        <button className="small-button" onClick={() => loadAndPlay()} disabled={loading} title={t.preview.spaceHint}>
           {loading ? t.preview.loading : t.preview.play}
         </button>
         <button className="small-button" onClick={stop} disabled={loadedClipStart === null && liveCursor === null}>

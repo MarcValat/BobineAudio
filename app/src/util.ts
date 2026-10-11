@@ -37,3 +37,23 @@ export function devParam(name: string): string | null {
 export function toggled<T>(list: T[], item: T): T[] {
   return list.includes(item) ? list.filter((x) => x !== item) : [...list, item];
 }
+
+/** Whether a key press is free for the window's shortcuts (↑ ↓ through the
+ * list, Space to listen): not with a modifier, not while typing or picking
+ * in a drop-down, not on a button the key would press -- but a list row
+ * (focused once clicked) leaves them free. */
+export function shortcutKey(e: KeyboardEvent): boolean {
+  if (e.ctrlKey || e.altKey || e.metaKey || e.defaultPrevented) return false;
+  const target = e.target instanceof HTMLElement ? e.target : null;
+  if (!target || target === document.body) return true;
+  if (target.closest(".list-row-main")) return true;
+  if (target.isContentEditable || target.closest("input, textarea, select, button, a, [role=listbox], [role=option]")) return false;
+  return true;
+}
+
+/** Whether `el` is in front: not behind an open dialog (the editor, the
+ * logs...) unless it's in the topmost one. */
+export function inFront(el: Element): boolean {
+  const dialogs = document.querySelectorAll(".dialog-overlay");
+  return dialogs.length === 0 || dialogs[dialogs.length - 1].contains(el);
+}

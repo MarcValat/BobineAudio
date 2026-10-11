@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { SegmentsResponse, SubtitleInfo } from "./api";
-import { RevealButton, writtenFile, type AnalysisRun, type ExportFields } from "./batchShared";
+import { nextStep, RevealButton, writtenFile, type AnalysisRun, type ExportFields } from "./batchShared";
 import { useT } from "./i18n";
 import { RedoIcon } from "./icons";
 import { InfoTip, Tooltip } from "./InfoTip";
@@ -66,8 +66,10 @@ export function ViewSwitch({ value, onChange }: { value: AnalysisView; onChange:
 
 /** The detail's title row: the item's name and what it is, then its
  * buttons -- "Réanalyser" (the shown track alone), "Modifier les segments",
- * and its next step as the one gradient button: "Analyser" while some of
- * its tracks aren't analyzed, then its export. */
+ * and its next step -- "Analyser" while some of its tracks aren't
+ * analyzed, then its export -- as the gradient button when the item holds
+ * the window's next step (`primary`: it's alone in the list; with several,
+ * the footer's buttons do). */
 export function DetailHeader({
   title,
   titleTooltip,
@@ -78,6 +80,8 @@ export function DetailHeader({
   missing,
   analyzing,
   done,
+  exported,
+  primary,
   disabled,
   analyzeDisabled = false,
   blockedTitle,
@@ -98,6 +102,9 @@ export function DetailHeader({
   missing: number;
   analyzing: boolean;
   done: number;
+  /** Its export is written (and still what it would write). */
+  exported: boolean;
+  primary: boolean;
   /** Something runs (here or in the other mode): nothing starts. */
   disabled: boolean;
   /** Nothing to analyze it with (no reference, a file that can't be read). */
@@ -110,6 +117,7 @@ export function DetailHeader({
   onExport: () => void;
 }) {
   const t = useT();
+  const next = primary ? nextStep({ analyzing, missing, exportable: done > 0 ? 1 : 0, exported: exported ? 1 : 0 }) : null;
   return (
     <div className="detail-header">
       <div className="detail-title">
@@ -132,7 +140,7 @@ export function DetailHeader({
       )}
       {(missing > 0 || analyzing) && (
         <button
-          className="primary-button"
+          className={next === "analyze" ? "primary-button" : ""}
           disabled={analyzing || disabled || analyzeDisabled}
           title={blockedTitle ?? analyzeTitle}
           onClick={onAnalyze}
@@ -142,7 +150,7 @@ export function DetailHeader({
       )}
       {done > 0 && (
         <button
-          className={missing === 0 && !analyzing ? "primary-button" : ""}
+          className={next === "export" ? "primary-button" : ""}
           disabled={disabled}
           title={blockedTitle}
           onClick={onExport}

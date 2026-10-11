@@ -5,6 +5,7 @@ import { ALL_TRACKS, defaultPick, keyName, matchesAny, matchesKey, trackOptions,
 import {
   AnalyzeButton,
   BatchFooter,
+  nextStep,
   IDLE_EXPORT,
   rowState,
   useExportQueue,
@@ -14,7 +15,7 @@ import {
 } from "./batchShared";
 import { InfoTip } from "./InfoTip";
 import { Select } from "./Dropdown";
-import { EmptyWorkspace, ListRow, ModeCards, MoveButtons, runBadge, useProbes, type BadgeKind, type BatchMode } from "./Workspace";
+import { EmptyWorkspace, ListRow, FoldButton, ModeCards, RemoveAllButton, useListKeys, MoveButtons, runBadge, useProbes, type BadgeKind, type BatchMode } from "./Workspace";
 import {
   DetailChart,
   DetailExport,
@@ -37,7 +38,7 @@ import { assignSubtitles, SUBTITLE_MODES, type SubtitleMode, subtitlesFor } from
 import { devParam, errorMessage, toggled } from "./util";
 import { TrackTable } from "./TrackTable";
 import { t, useT } from "./i18n";
-import { useSubtitleDefault } from "./settings";
+import { useListCollapsed, useSubtitleDefault } from "./settings";
 
 /** "@1 fre": a track as the list and the detail name it. */
 const trackName = (track: TrackInfo) => `@${track.index} ${track.language ?? "?"}`;
@@ -144,6 +145,7 @@ export function MultiTrackBatch({
   const [selected, setSelected] = useState<string | null>(null);
   const [shownTracks, setShownTracks] = useState<Record<string, number>>({});
   const view = useDetailView();
+  const collapsed = useListCollapsed();
   const busy = analyzing || queue.exporting;
   useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
 
@@ -166,6 +168,8 @@ export function MultiTrackBatch({
     if (selected !== null && files.includes(selected)) return;
     setSelected(files[0] ?? null);
   }, [files, selected]);
+
+  useListKeys(!hidden, files.length, selected === null ? -1 : files.indexOf(selected), (i) => setSelected(files[i]));
 
   // Dev only (see devParam): `?batchFiles=a|b` adds files.
   useEffect(() => {
@@ -328,6 +332,17 @@ export function MultiTrackBatch({
   const exportedCount = files.filter((f) => runOf(f)?.exportStatus === "done").length;
   const flaggedCount = files.filter((f) => (resolutions[f]?.issues.length ?? 0) > 0 || probes[f]?.error).length;
   const analyzable = files.some((f) => resolutions[f]?.reference && resolutions[f]!.targets.length > 0);
+  // The window's next step: the footer's with several files, the detail's
+  // with one.
+  const listNext =
+    files.length > 1
+      ? nextStep({
+          analyzing,
+          missing: missingCount,
+          exportable: files.filter((f) => doneTargets(f).length > 0).length,
+          exported: exportedCount,
+        })
+      : null;
 
   const editingRun = editing ? runOf(editing.path)?.targets[editing.track] : null;
 
@@ -432,13 +447,14 @@ export function MultiTrackBatch({
           <InfoTip>{m.multi.hint}</InfoTip>
         </div>
 
-        <div className="workspace">
+        <div className={`workspace${collapsed ? " list-collapsed" : ""}`}>
           <section className="panel file-list">
             <div className="file-list-header">
               <h2>{m.multi.filesCount(files.length)}</h2>
-              <button
-                className="small-button"
-                onClick={() => {
+              <RemoveAllButton
+                results={Object.values(runs).some((run) => Object.values(run.targets).some((t) => t.status === "done"))}
+                disabled={busy}
+                onRemove={() => {
                   setFiles([]);
                   setChoices({});
                   setRuns({});
@@ -447,10 +463,8 @@ export function MultiTrackBatch({
                   setReferenceKey("");
                   setTargetKeys([]);
                 }}
-                disabled={busy}
-              >
-                {m.common.removeAll}
-              </button>
+              />
+              <FoldButton collapsed={collapsed} />
             </div>
 
             <ul className="file-list-rows list-scroll">
@@ -523,6 +537,8 @@ export function MultiTrackBatch({
                 missing={detailMissing}
                 analyzing={detailAnalyzing}
                 done={detailDone}
+                exported={detailRun?.exportStatus === "done"}
+                primary={files.length === 1}
                 disabled={busy || blocked}
                 analyzeDisabled={!detailRes?.reference}
                 blockedTitle={blocked ? m.batch.otherModeBusy : undefined}
@@ -650,6 +666,7 @@ export function MultiTrackBatch({
               missing={missingCount}
               analyzed={analyzedCount}
               unit="track"
+              primary={listNext === "analyze"}
               disabled={!analyzable || busy || blocked}
               blocked={blocked}
               onAnalyze={(all) => handleAnalyze(all)}
@@ -657,6 +674,7 @@ export function MultiTrackBatch({
           }
           queue={queue}
           canExport={analyzedCount > 0}
+          exportNext={listNext === "export"}
           onExport={() => handleExport()}
         />
         </>

@@ -11,6 +11,7 @@ import { LanguageSelect } from "./languages";
 import {
   AnalyzeButton,
   BatchFooter,
+  nextStep,
   IDLE_EXPORT,
   rowState,
   useExportQueue,
@@ -21,7 +22,7 @@ import {
 import { InfoTip } from "./InfoTip";
 import { Select } from "./Dropdown";
 import { ALL_TRACKS, defaultPick, keyName, matchesAny, matchesKey, trackOptions, TrackFilterPicker, type TrackKey } from "./TrackFilter";
-import { EmptyWorkspace, ModeCards, MoveButtons, PairRow, runBadge, useProbes, type BadgeKind, type BatchMode } from "./Workspace";
+import { EmptyWorkspace, FoldButton, ModeCards, RemoveAllButton, useListKeys, MoveButtons, PairRow, runBadge, useProbes, type BadgeKind, type BatchMode } from "./Workspace";
 import {
   DetailChart,
   DetailExport,
@@ -45,7 +46,7 @@ import { devParam, errorMessage, toggled } from "./util";
 import { Dialog, DialogHeader } from "./Dialog";
 import { TrackTable } from "./TrackTable";
 import { useT } from "./i18n";
-import { useSubtitleDefault } from "./settings";
+import { useListCollapsed, useSubtitleDefault } from "./settings";
 
 
 /** "S01E01 VO.mkv" -> "S01E01 VO": a pair named after its reference. */
@@ -279,6 +280,7 @@ export function PairsBatch({
   // it can't be read (its pair is flagged, as a multitrack file is).
   const probes = useProbes(useMemo(() => [...referenceFiles, ...candidateFiles], [referenceFiles, candidateFiles]));
   const view = useDetailView();
+  const collapsed = useListCollapsed();
 
   // The picks start out from the first pair's files (see defaultPick). Only
   // while none is set, so a pick of the user's is never overridden.
@@ -308,6 +310,7 @@ export function PairsBatch({
 
   const pairCount = Math.min(referenceFiles.length, candidateFiles.length);
   const rowCount = Math.max(referenceFiles.length, candidateFiles.length);
+  useListKeys(!hidden, rowCount, selected, setSelected);
 
   /** Row `i`'s files, which its own tracks (pairTracks) are kept by. */
   const filesKey = (i: number) => JSON.stringify([referenceFiles[i], candidateFiles[i]]);
@@ -461,6 +464,17 @@ export function PairsBatch({
   const analyzedCount = pairRows.filter(pairDone).length;
   const exportedCount = pairRows.filter((i) => exportOf(i)?.exportStatus === "done").length;
   const canExport = pairRows.some((i) => doneTracks(i).length > 0);
+  // The window's next step: the footer's with several pairs, the detail's
+  // with one.
+  const listNext =
+    pairCount > 1
+      ? nextStep({
+          analyzing,
+          missing: pairCount - analyzedCount,
+          exportable: pairRows.filter((i) => doneTracks(i).length > 0).length,
+          exported: exportedCount,
+        })
+      : null;
 
   /** Exports every successfully-analyzed pair, in the order analyzed --
    * pairs that failed detection or never ran are left alone (exportStatus
@@ -635,7 +649,7 @@ export function PairsBatch({
           <InfoTip>{m.pairs.hint}</InfoTip>
         </div>
 
-          <div className="workspace workspace-pairs">
+          <div className={`workspace workspace-pairs${collapsed ? " list-collapsed" : ""}`}>
             <section className="panel file-list">
               <div className="file-list-header">
                 <h2>
@@ -644,9 +658,10 @@ export function PairsBatch({
                 <button className="small-button" onClick={() => setShowTracksModal(true)}>
                   {m.pairs.checkAllTracks}
                 </button>
-                <button
-                  className="small-button"
-                  onClick={() => {
+                <RemoveAllButton
+                  results={Object.values(analyses).some((a) => a.status === "done")}
+                  disabled={busy}
+                  onRemove={() => {
                     setReferenceFiles([]);
                     setCandidateFiles([]);
                     setAnalyses({});
@@ -657,10 +672,8 @@ export function PairsBatch({
                     setCandidateKeys([]);
                     setShownTracks({});
                   }}
-                  disabled={busy}
-                >
-                  {m.common.removeAll}
-                </button>
+                />
+                <FoldButton collapsed={collapsed} />
               </div>
 
               <ul className="file-list-rows list-scroll">
@@ -721,6 +734,8 @@ export function PairsBatch({
                 missing={detailMissing}
                 analyzing={detailAnalyzing}
                 done={detailDone}
+                exported={detailExport?.exportStatus === "done"}
+                primary={pairCount === 1}
                 disabled={busy || blocked}
                 analyzeDisabled={unreadable(selected).length > 0}
                 blockedTitle={blocked ? m.batch.otherModeBusy : undefined}
@@ -839,6 +854,7 @@ export function PairsBatch({
               missing={pairCount - analyzedCount}
               analyzed={analyzedCount}
               unit="pair"
+              primary={listNext === "analyze"}
               disabled={pairCount === 0 || busy || blocked}
               blocked={blocked}
               onAnalyze={(all) => handleAnalyze(all)}
@@ -846,6 +862,7 @@ export function PairsBatch({
           }
           queue={queue}
           canExport={canExport}
+          exportNext={listNext === "export"}
           onExport={() => handleExport()}
         />
         </>

@@ -47,3 +47,19 @@ export function saveCheckUpdates(check: boolean): void {
 export function useCheckUpdates(): boolean {
   return useSyncExternalStore(subscribe, loadCheckUpdates);
 }
+
+const LIST_COLLAPSED_KEY = "syncaudio.listCollapsed";
+
+/** Whether the file list is folded to a narrow column (both modes). */
+export function loadListCollapsed(): boolean {
+  return loadSetting(LIST_COLLAPSED_KEY) === "1";
+}
+
+export function saveListCollapsed(collapsed: boolean): void {
+  saveSetting(LIST_COLLAPSED_KEY, collapsed ? "1" : null);
+  changed();
+}
+
+export function useListCollapsed(): boolean {
+  return useSyncExternalStore(subscribe, loadListCollapsed);
+}

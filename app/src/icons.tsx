@@ -98,3 +98,13 @@ export function LinkIcon() {
     </svg>
   );
 }
+
+/** Two chevrons to the left: fold a column away (turned around to unfold). */
+export function FoldIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M11 17l-5-5 5-5" />
+      <path d="M18 17l-5-5 5-5" />
+    </svg>
+  );
+}

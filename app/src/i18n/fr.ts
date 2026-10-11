@@ -18,6 +18,10 @@ export const fr = {
     edit: "Modifier",
     remove: "Retirer",
     removeAll: "Tout retirer",
+    removeAllQuestion: "Retirer tous les fichiers ? Leurs analyses et modifications seront perdues.",
+    keep: "Garder",
+    foldList: "Replier la liste",
+    unfoldList: "Déplier la liste",
     written: (name: string) => `Fichier écrit : ${name}`,
     exportCancelled: "Export annulé : aucun fichier n'a été écrit.",
     editSegments: "Modifier les segments",
@@ -400,6 +404,7 @@ export const fr = {
     position: "Position (s) :",
     loading: "Chargement...",
     play: "Écouter",
+    spaceHint: "Espace : écouter ou arrêter",
     stop: "Arrêter",
     hear: "Entendre :",
     // The "Entendre" checkboxes: short, the row also holds the playback.

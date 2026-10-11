@@ -15,6 +15,28 @@ export function moved<T>(arr: T[], from: number, to: number): T[] {
   return copy;
 }
 
+/** What the gradient button does next (one in the window): analyze while
+ * something isn't analyzed (or is being), then export what's analyzed and
+ * not exported yet; nothing once all is done. */
+export type NextStep = "analyze" | "export" | null;
+
+export function nextStep({
+  analyzing,
+  missing,
+  exportable,
+  exported,
+}: {
+  analyzing: boolean;
+  /** Not analyzed yet, or failed. */
+  missing: number;
+  /** Has something analyzed to export. */
+  exportable: number;
+  exported: number;
+}): NextStep {
+  if (analyzing || missing > 0) return "analyze";
+  return exportable > exported ? "export" : null;
+}
+
 /** A batch's analyze button: the items (tracks, pairs) not analyzed yet
  * when there are, keeping the others and their edits -- with a way to redo
  * everything -- or everything again once all are done. */
@@ -23,6 +45,7 @@ export function AnalyzeButton({
   missing,
   analyzed,
   unit,
+  primary,
   disabled,
   blocked,
   onAnalyze,
@@ -32,6 +55,8 @@ export function AnalyzeButton({
   analyzed: number;
   /** What's counted. */
   unit: "track" | "pair";
+  /** It's the window's next step (see nextStep): the gradient. */
+  primary: boolean;
   disabled: boolean;
   blocked: boolean;
   onAnalyze: (all: boolean) => void;
@@ -41,7 +66,7 @@ export function AnalyzeButton({
   const redoTitle = t.batch.reanalyzeHint;
   if (analyzing) {
     return (
-      <button className="primary-button" disabled>
+      <button className={primary ? "primary-button" : ""} disabled>
         {t.common.analysisRunning}
       </button>
     );
@@ -63,7 +88,7 @@ export function AnalyzeButton({
         </button>
       )}
       <button
-        className="primary-button"
+        className={primary ? "primary-button" : ""}
         disabled={disabled}
         title={blockedTitle ?? (analyzed > 0 ? t.batch.analyzeRestHint(unit) : undefined)}
         onClick={() => onAnalyze(false)}
@@ -247,8 +272,9 @@ export function useExportQueue(outputDir: string | null) {
   return { exporting, cancelling, run, cancel };
 }
 
-/** A batch mode's footer: output folder, progress line, analyze and export
- * (or cancel) buttons. */
+/** A mode's footer: output folder, progress line, analyze and export (or
+ * cancel) buttons, the export the gradient when it's the next step
+ * (`exportNext`). */
 export function BatchFooter({
   outputDir,
   onOutputDirChange,
@@ -258,6 +284,7 @@ export function BatchFooter({
   analyzeButton,
   queue,
   canExport,
+  exportNext,
   onExport,
 }: {
   outputDir: string | null;
@@ -268,6 +295,7 @@ export function BatchFooter({
   analyzeButton: ReactNode;
   queue: ReturnType<typeof useExportQueue>;
   canExport: boolean;
+  exportNext: boolean;
   onExport: () => void;
 }) {
   const t = useT();
@@ -282,7 +310,7 @@ export function BatchFooter({
         </button>
       ) : (
         <button
-          className="primary-button"
+          className={exportNext ? "primary-button" : ""}
           onClick={onExport}
           disabled={!canExport || busy || blocked}
           title={blocked ? t.batch.otherModeBusy : undefined}

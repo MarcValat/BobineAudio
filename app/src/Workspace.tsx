@@ -2,9 +2,11 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { probe, type SubtitleInfo, type TrackInfo } from "./api";
 import { moved } from "./batchShared";
 import type { RunStatus } from "./jobs";
-import { errorMessage } from "./util";
+import { errorMessage, shortcutKey } from "./util";
 import { useT } from "./i18n";
-import { LayersIcon, LinkIcon } from "./icons";
+import { FoldIcon, LayersIcon, LinkIcon } from "./icons";
+import { Tooltip } from "./InfoTip";
+import { saveListCollapsed } from "./settings";
 import "./Workspace.css";
 
 /** The workspace's two ways (picked in the top bar): files that each hold
@@ -54,6 +56,53 @@ export function ModeCards({ mode, onChange }: { mode: BatchMode; onChange?: (mod
         </button>
       ))}
     </div>
+  );
+}
+
+/** "Tout retirer", in a list's header: at once while nothing would be lost,
+ * otherwise asking first, on a line under the header (`results`: analyses
+ * or edits would go with the files). Escape keeps them. */
+export function RemoveAllButton({ results, disabled, onRemove }: { results: boolean; disabled: boolean; onRemove: () => void }) {
+  const t = useT();
+  const [asking, setAsking] = useState(false);
+  const confirm = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!asking) return;
+    confirm.current?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setAsking(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [asking]);
+  return (
+    <>
+      <button
+        className={`small-button${asking ? " icon-button-on" : ""}`}
+        disabled={disabled}
+        aria-expanded={results ? asking : undefined}
+        onClick={() => (results ? setAsking(!asking) : onRemove())}
+      >
+        {t.common.removeAll}
+      </button>
+      {asking && (
+        <div className="remove-all-confirm" role="alertdialog" aria-label={t.common.removeAllQuestion}>
+          <span>{t.common.removeAllQuestion}</span>
+          <button
+            ref={confirm}
+            className="small-button export-cancel"
+            disabled={disabled}
+            onClick={() => {
+              setAsking(false);
+              onRemove();
+            }}
+          >
+            {t.common.removeAll}
+          </button>
+          <button className="small-button" onClick={() => setAsking(false)}>
+            {t.common.keep}
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -143,8 +192,19 @@ export function ListRow({
   onSelect: () => void;
   actions?: ReactNode;
 }) {
+  const row = useRef<HTMLLIElement>(null);
+  // Selected (by a click, or ↑ ↓ -- see useListKeys): in view, and the
+  // focus follows it when it was on another row.
+  useEffect(() => {
+    if (!selected || !row.current) return;
+    row.current.scrollIntoView({ block: "nearest" });
+    const focused = document.activeElement;
+    if (focused?.classList.contains("list-row-main") && row.current.parentElement?.contains(focused)) {
+      row.current.querySelector<HTMLElement>(".list-row-main")?.focus();
+    }
+  }, [selected]);
   return (
-    <li className={`list-row list-row-state-${state}${selected ? " selected" : ""} ${className}`}>
+    <li ref={row} className={`list-row list-row-state-${state}${selected ? " selected" : ""} ${className}`}>
       <button className="list-row-main" onClick={onSelect} aria-current={selected || undefined} title={path}>
         <span className="list-row-bar" />
         <span className="list-row-text">
@@ -161,6 +221,45 @@ export function ListRow({
       {actions && <span className="list-row-actions">{actions}</span>}
     </li>
   );
+}
+
+/** The list header's button folding the list to a narrow column (names and
+ * states only, for a small window) or unfolding it; remembered, the same
+ * in both modes (useListCollapsed). */
+export function FoldButton({ collapsed }: { collapsed: boolean }) {
+  const t = useT();
+  const label = collapsed ? t.common.unfoldList : t.common.foldList;
+  return (
+    <Tooltip text={label}>
+      <button
+        className={`small-button icon-small-button fold-button${collapsed ? " folded" : ""}`}
+        aria-label={label}
+        aria-expanded={!collapsed}
+        onClick={() => saveListCollapsed(!collapsed)}
+      >
+        <FoldIcon />
+      </button>
+    </Tooltip>
+  );
+}
+
+/** ↑ ↓ select the previous or next row of a shown list (`enabled`), from
+ * anywhere in the window but a field, a drop-down or a dialog. */
+export function useListKeys(enabled: boolean, count: number, index: number, onSelect: (index: number) => void): void {
+  const latest = useRef({ count, index, onSelect });
+  latest.current = { count, index, onSelect };
+  useEffect(() => {
+    if (!enabled) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.key !== "ArrowUp" && e.key !== "ArrowDown") || !shortcutKey(e) || document.querySelector(".dialog-overlay")) return;
+      const { count, index, onSelect } = latest.current;
+      const next = index + (e.key === "ArrowDown" ? 1 : -1);
+      e.preventDefault();
+      if (next >= 0 && next < count) onSelect(next);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [enabled]);
 }
 
 /** A row's ↑ ↓ ✕: moves it within the list, or drops it. The arrows carry
