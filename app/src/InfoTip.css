@@ -4,8 +4,9 @@
   position: relative;
   display: inline-flex;
   /* Its text's size, but never under 14px (by a small uppercase title). */
-  width: max(1.05em, 14px);
-  height: max(1.05em, 14px);
+  /* Whole pixels: its mark drawn sharp, not across half pixels. */
+  width: round(max(1.05em, 14px), 1px);
+  height: round(max(1.05em, 14px), 1px);
   flex: 0 0 auto;
   border-radius: 50%;
   color: color-mix(in srgb, var(--accent) 75%, var(--text-muted));

@@ -6,7 +6,10 @@
   gap: 0.6em;
   min-width: 7em;
   max-width: 100%;
-  padding: 0.45em 0.7em 0.45em 0.85em;
+  /* Whole pixels high: its chevron on whole pixels. */
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 0.7em 0 0.85em;
   background-color: var(--surface-alt);
   font-weight: 500;
 }

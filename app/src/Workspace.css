@@ -152,13 +152,18 @@
   color: var(--drift);
 }
 
+/* Centered by the layout, not by a translate(-50%) (it could land on half a
+   pixel, blurring the icons); whole-pixel gaps, every button on the same
+   pixel grid. */
 .list-row-actions {
   position: absolute;
-  top: 50%;
-  right: 0.7em;
-  transform: translateY(-50%);
+  top: 0;
+  bottom: 0;
+  margin: auto 0;
+  height: fit-content;
+  right: 10px;
   display: flex;
-  gap: 0.15em;
+  gap: 2px;
   padding: 2px;
   border-radius: 8px;
   background: var(--surface);
@@ -188,8 +193,8 @@
 }
 
 .list-row-actions button svg {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
 }
 
 /* The badge, and the spinner at its right while something runs. */
@@ -346,6 +351,11 @@
 .detail-header .detail-icon-button {
   width: 36px;
   padding-inline: 0;
+}
+
+.detail-header .detail-icon-button svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* Under the header: the tabs, then the tracks beside the chart, then the
@@ -557,8 +567,8 @@
 .pair-row-actions > span {
   display: flex;
   justify-content: flex-end;
-  gap: 0.15em;
-  min-height: 1.6em;
+  gap: 2px;
+  min-height: 24px;
 }
 
 /* "+ Références" / "+ À corriger" under the list, each with its half of
