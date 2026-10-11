@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   probe,
   startSegmentsJob,
   startCrossFileSegmentedRenderJob,
-  type ProbeResponse,
   type SegmentsResponse,
   type TrackInfo,
 } from "./api";
@@ -19,14 +18,12 @@ import {
   type AnalysisRun,
   type ExportFields,
 } from "./batchShared";
-import { InfoTip, Tooltip } from "./InfoTip";
-import { DetailExport, MoveButtons, PairRow, type BadgeKind } from "./Workspace";
+import { InfoTip } from "./InfoTip";
+import { MoveButtons, PairRow, runBadge, useProbes, type BadgeKind } from "./Workspace";
+import { DetailChart, DetailExport, DetailHeader, DetailTabs, TracksHeading, useDetailView } from "./Detail";
 import { LogPanel } from "./LogPanel";
-import { PillSwitch } from "./PillSwitch";
-import { SegmentChart, SegmentChartPlaceholder, describeSegments } from "./SegmentChart";
+import { describeSegments } from "./SegmentChart";
 import { TrackPreview } from "./TrackPreview";
-import { RedoIcon } from "./icons";
-import { useElementSize } from "./useElementSize";
 import { SegmentEditor } from "./SegmentEditor";
 import { DropZone } from "./DropZone";
 import { pickMediaFiles } from "./mediaDialog";
@@ -39,10 +36,6 @@ import { TrackTable } from "./TrackTable";
 import { useT } from "./i18n";
 import { useSubtitleDefault } from "./settings";
 
-
-// Height of the detail's body below which the chart and the waveforms are
-// shown one at a time (the Segments / Écoute tabs).
-const COMPACT_ANALYSIS_HEIGHT = 480;
 
 /** "S01E01 VO.mkv" -> "S01E01 VO": a pair named after its reference. */
 const stem = (name: string) => name.replace(/\.[^.]+$/, "");
@@ -348,10 +341,8 @@ export function PairsBatch({
   // Every listed file, read once as soon as it's listed: its tracks (the
   // detail's table and title, the waveforms' container-delay note), or why
   // it can't be read (its pair is flagged, as a multitrack file is).
-  const [probes, setProbes] = useState<Record<string, ProbeResponse>>({});
-  const [probeErrors, setProbeErrors] = useState<Record<string, string>>({});
-  const [analysisViewRef, analysisViewSize] = useElementSize<HTMLDivElement>();
-  const [analysisView, setAnalysisView] = useState<"segments" | "listen">("listen");
+  const probes = useProbes(useMemo(() => [...referenceFiles, ...candidateFiles], [referenceFiles, candidateFiles]));
+  const view = useDetailView();
 
   const referenceProbe = useTracksOf(referenceFiles[0]);
   const candidateProbe = useTracksOf(candidateFiles[0]);
@@ -432,20 +423,9 @@ export function PairsBatch({
 
   const detailReference: string | undefined = referenceFiles[selected];
   const detailCandidate: string | undefined = candidateFiles[selected];
-  const requested = useRef(new Set<string>());
-  useEffect(() => {
-    for (const path of [...referenceFiles, ...candidateFiles]) {
-      if (requested.current.has(path)) continue;
-      requested.current.add(path);
-      probe(path)
-        .then((res) => setProbes((c) => ({ ...c, [path]: res })))
-        .catch((err) => setProbeErrors((c) => ({ ...c, [path]: errorMessage(err) })));
-    }
-  }, [referenceFiles, candidateFiles]);
-
   /** Why row `i`'s files can't be read, if one can't. */
   const unreadable = (i: number): string[] =>
-    [...new Set([referenceFiles[i], candidateFiles[i]])].flatMap((path) => (path && probeErrors[path] ? [probeErrors[path]] : []));
+    [...new Set([referenceFiles[i], candidateFiles[i]])].flatMap((path) => (path && probes[path]?.error ? [probes[path].error] : []));
 
   /** Analyzes the corrected tracks that aren't yet (new pairs, new tracks,
    * failed ones), keeping the rest and any edit made to them; or all of
@@ -602,16 +582,10 @@ export function PairsBatch({
     if (i >= pairCount) return [st.unpaired, "error"];
     if (unreadable(i).length > 0) return [m.multi.status.unreadable, "error"];
     const statuses = runsOf(i).map((a) => a?.status);
-    const exportStatus = exportOf(i)?.exportStatus;
-    if (exportStatus === "running") return [st.exporting, "running"];
-    if (statuses.includes("running")) return [st.running, "running"];
-    if (statuses.includes("pending")) return [st.pending, "queued"];
-    if (exportStatus === "done") return [st.exported, "exported"];
-    if (exportStatus === "error") return [st.exportFailed, "error"];
-    if (statuses.includes("error")) return [st.failed, "error"];
-    if (pairDone(i)) return exportStatus === "cancelled" ? [st.cancelled, "analyzed"] : [st.analyzed, "analyzed"];
-    if (statuses.length === 0) return [m.multi.status.check, "warning"];
-    return [st.toAnalyze, "idle"];
+    return (
+      runBadge(statuses, exportOf(i)?.exportStatus, st) ??
+      (statuses.length === 0 ? [m.multi.status.check, "warning"] : [st.toAnalyze, "idle"])
+    );
   }
 
   // The detail: the selected row, and the corrected track its tabs show.
@@ -627,8 +601,8 @@ export function PairsBatch({
   const detailMissing = detailPaired ? detailTracks.candidates.length - detailDone : 0;
   const detailExport = exportOf(selected);
   const detailKey = shownTrack !== undefined ? trackKey(selected, shownTrack) : "";
-  const candidateInfo = (index: number) => (detailCandidate ? probes[detailCandidate]?.tracks.find((t) => t.index === index) : undefined);
-  const detailReferenceTrack = detailReference ? probes[detailReference]?.tracks.find((t) => t.index === detailTracks.reference) : undefined;
+  const candidateInfo = (index: number) => (detailCandidate ? probes[detailCandidate]?.tracks?.find((t) => t.index === index) : undefined);
+  const detailReferenceTrack = detailReference ? probes[detailReference]?.tracks?.find((t) => t.index === detailTracks.reference) : undefined;
   const shownTrackInfo = shownTrack !== undefined ? candidateInfo(shownTrack) : undefined;
 
   /** A pick in the detail's table: from then on the pair has its own tracks. */
@@ -636,7 +610,6 @@ export function PairsBatch({
     const key = filesKey(selected);
     setPairTracks((c) => ({ ...c, [key]: update(c[key] ?? detailTracks) }));
   }
-  const compactAnalysis = analysisViewSize.height > 0 && analysisViewSize.height < COMPACT_ANALYSIS_HEIGHT;
 
   return (
     <main className="batch-main" style={hidden ? { display: "none" } : undefined}>
@@ -768,61 +741,36 @@ export function PairsBatch({
           </section>
 
           <section className="panel file-detail">
-            <div className="detail-header">
-              <div className="detail-title">
-                <span className="detail-name" title={detailReference ?? detailCandidate}>
-                  {m.pairs.pairTitle(selected + 1, stem(basename(detailReference ?? detailCandidate ?? "")))}
-                </span>
-                {detailPaired && (
-                  <span className="detail-meta">
-                    {m.pairs.pairMeta(
-                      trackLabel(detailTracks.reference, detailReferenceTrack),
-                      basename(detailReference!),
-                      detailTracks.candidates.map((t) => trackLabel(t, candidateInfo(t))).join(", ") || "—",
-                      basename(detailCandidate!),
-                    )}
-                  </span>
-                )}
-              </div>
-              {shownTrack !== undefined && (detailRun?.status === "done" || detailRun?.status === "error") && (
-                <Tooltip text={m.batch.reanalyzeOneHint}>
-                  <button
-                    className="icon-small-button detail-icon-button"
-                    disabled={busy || blocked}
-                    onClick={() => runPlan([{ row: selected, track: shownTrack }])}
-                    aria-label={m.batch.reanalyzeOne}
-                  >
-                    <RedoIcon />
-                  </button>
-                </Tooltip>
-              )}
-              {detailResult && shownTrack !== undefined && (
-                <button disabled={queue.exporting} onClick={() => setEditing({ row: selected, track: shownTrack })}>
-                  {m.single.editSegments}
-                </button>
-              )}
-              {/* One gradient button: the pair's next step. */}
-              {(detailMissing > 0 || detailAnalyzing) && (
-                <button
-                  className="primary-button"
-                  disabled={detailAnalyzing || busy || blocked || unreadable(selected).length > 0}
-                  title={blocked ? m.batch.otherModeBusy : m.pairs.analyzePairHint}
-                  onClick={() => handleAnalyze(false, selected)}
-                >
-                  {detailAnalyzing ? m.common.analysisRunning : m.multi.analyzeFile}
-                </button>
-              )}
-              {detailDone > 0 && (
-                <button
-                  className={detailMissing === 0 && !detailAnalyzing ? "primary-button" : ""}
-                  disabled={busy || blocked}
-                  title={blocked ? m.batch.otherModeBusy : undefined}
-                  onClick={() => handleExport(selected)}
-                >
-                  {m.pairs.exportPair}
-                </button>
-              )}
-            </div>
+            <DetailHeader
+              title={m.pairs.pairTitle(selected + 1, stem(basename(detailReference ?? detailCandidate ?? "")))}
+              titleTooltip={detailReference ?? detailCandidate}
+              meta={
+                detailPaired &&
+                m.pairs.pairMeta(
+                  trackLabel(detailTracks.reference, detailReferenceTrack),
+                  basename(detailReference!),
+                  detailTracks.candidates.map((t) => trackLabel(t, candidateInfo(t))).join(", ") || "—",
+                  basename(detailCandidate!),
+                )
+              }
+              onReanalyze={
+                shownTrack !== undefined && (detailRun?.status === "done" || detailRun?.status === "error")
+                  ? () => runPlan([{ row: selected, track: shownTrack }])
+                  : undefined
+              }
+              onEdit={detailResult && shownTrack !== undefined ? () => setEditing({ row: selected, track: shownTrack }) : undefined}
+              editDisabled={queue.exporting}
+              missing={detailMissing}
+              analyzing={detailAnalyzing}
+              done={detailDone}
+              disabled={busy || blocked}
+              analyzeDisabled={unreadable(selected).length > 0}
+              blockedTitle={blocked ? m.batch.otherModeBusy : undefined}
+              analyzeTitle={m.pairs.analyzePairHint}
+              exportLabel={m.pairs.exportPair}
+              onAnalyze={() => handleAnalyze(false, selected)}
+              onExport={() => handleExport(selected)}
+            />
 
             {!detailPaired && <p className="placeholder">{m.pairs.unpairedDetail}</p>}
             {unreadable(selected).map((error) => (
@@ -831,66 +779,39 @@ export function PairsBatch({
               </p>
             ))}
             {detailPaired && unreadable(selected).length === 0 && (
-              <div className="detail-body" ref={analysisViewRef}>
-                {/* Too little height for all at once: the tracks and the
-                    chart, or the waveforms, as tabs. */}
+              <div className="detail-body" ref={view.ref}>
                 {shownTrack !== undefined && (
-                  <div className="detail-tabs">
-                    <PillSwitch
-                      className="detail-track-tabs"
-                      label={m.multi.shownTrack}
-                      options={detailTracks.candidates.map((t) => [String(t), trackLabel(t, candidateInfo(t))] as const)}
-                      value={String(shownTrack)}
-                      onChange={(t) => setShownTracks((c) => ({ ...c, [filesKey(selected)]: Number(t) }))}
-                    />
-                    {compactAnalysis && detailResult && (
-                    <PillSwitch
-                      className="view-switch"
-                      label={m.common.view}
-                      options={[
-                        ["segments", m.common.segments],
-                        ["listen", m.common.listen],
-                      ]}
-                      value={analysisView}
-                      onChange={setAnalysisView}
-                    />
-                    )}
-                  </div>
+                  <DetailTabs
+                    tracks={detailTracks.candidates.map((t) => [String(t), trackLabel(t, candidateInfo(t))] as const)}
+                    value={String(shownTrack)}
+                    onChange={(t) => setShownTracks((c) => ({ ...c, [filesKey(selected)]: Number(t) }))}
+                    view={view.compact && detailResult ? { value: view.view, onChange: view.setView } : undefined}
+                  />
                 )}
-                <div
-                  className={
-                    compactAnalysis && detailResult && analysisView === "listen"
-                      ? "view-hidden"
-                      : `detail-top${compactAnalysis && detailResult ? " detail-top-fill" : ""}`
-                  }
-                >
+                <div className={view.topClass(!!detailResult)}>
                   <div className="detail-tracks">
-                    <div className="detail-heading">
-                      <h3>
-                        {m.multi.tracks} <InfoTip>{m.pairs.tracksHint}</InfoTip>
-                      </h3>
-                      {detailOwnTracks && <span className="list-row-manual">{m.multi.manual}</span>}
-                      {detailOwnTracks && (
-                        <button
-                          className="small-button"
-                          disabled={busy}
-                          title={m.pairs.byDefaultHint}
-                          onClick={() =>
-                            setPairTracks((c) => {
-                              const next = { ...c };
-                              delete next[filesKey(selected)];
-                              return next;
-                            })
-                          }
-                        >
-                          {m.pairs.byDefault}
-                        </button>
-                      )}
-                    </div>
+                    <TracksHeading
+                      hint={m.pairs.tracksHint}
+                      reset={
+                        detailOwnTracks
+                          ? {
+                              label: m.pairs.byDefault,
+                              title: m.pairs.byDefaultHint,
+                              disabled: busy,
+                              onClick: () =>
+                                setPairTracks((c) => {
+                                  const next = { ...c };
+                                  delete next[filesKey(selected)];
+                                  return next;
+                                }),
+                            }
+                          : undefined
+                      }
+                    />
                     <div className="tracks-table-wrap list-scroll detail-tracks-table">
                       <PairTrackTable
-                        referenceTracks={probes[detailReference!]?.tracks}
-                        candidateTracks={probes[detailCandidate!]?.tracks}
+                        referenceTracks={probes[detailReference!]?.tracks ?? undefined}
+                        candidateTracks={probes[detailCandidate!]?.tracks ?? undefined}
                         reference={detailTracks.reference}
                         candidates={detailTracks.candidates}
                         disabled={busy}
@@ -899,35 +820,18 @@ export function PairsBatch({
                       />
                     </div>
                   </div>
-                  <div className="detail-chart">
-                    <div className="detail-heading">
-                      <h3>{m.common.segments}</h3>
-                      <span className="detail-heading-summary">{detailResult && describeSegments(detailResult.segments)}</span>
-                    </div>
-                    {detailResult ? (
-                      <SegmentChart segments={detailResult.segments} fill={compactAnalysis} />
-                    ) : (
-                      // Its room kept while there's nothing to draw yet.
-                      <SegmentChartPlaceholder>
-                        {shownTrack === undefined && <p className="placeholder">{m.pairs.noTarget}</p>}
-                        {shownTrack !== undefined && !detailRun && <p className="placeholder">{m.multi.notAnalyzed}</p>}
-                        {detailRun?.status === "pending" && <p className="placeholder">{m.batch.pending}</p>}
-                        {detailRun?.status === "running" && (
-                          <p className="placeholder detail-running">
-                            <span className="spinner spinner-small" />
-                            {m.common.analysisRunning}
-                          </p>
-                        )}
-                        {detailRun?.status === "error" && <p className="error">{detailRun.error ?? m.common.error}</p>}
-                        <LogPanel lines={detailRun?.log ?? []} />
-                      </SegmentChartPlaceholder>
-                    )}
-                  </div>
+                  <DetailChart
+                    summary={detailResult && describeSegments(detailResult.segments)}
+                    result={detailResult}
+                    run={detailRun}
+                    fill={view.compact}
+                    noTrack={shownTrack === undefined ? m.pairs.noTarget : null}
+                  />
                 </div>
                 {/* Not while it's being edited: the editor has its own
                     preview, and two playing at once would overlap. */}
                 {detailResult && shownTrack !== undefined && !(editing?.row === selected && editing.track === shownTrack) && (
-                  <div className={compactAnalysis && analysisView !== "listen" ? "view-hidden" : "segments-result"}>
+                  <div className={view.listenClass()}>
                     <TrackPreview
                       key={detailKey}
                       referenceFilePath={detailReference!}

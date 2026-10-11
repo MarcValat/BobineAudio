@@ -22,6 +22,7 @@ import { TrackPreview } from "./TrackPreview";
 import { BatchView, type BatchMode } from "./BatchView";
 import { OptionsButton } from "./Options";
 import { PillSwitch } from "./PillSwitch";
+import { ViewSwitch, type AnalysisView } from "./Detail";
 // The app's own icon, the same as the window's and the installer's.
 import logoUrl from "../src-tauri/icons/128x128.png";
 import { UpdateButton } from "./UpdateButton";
@@ -121,7 +122,7 @@ function App() {
   const [exportExcluded, setExportExcluded] = useState<number[]>([]);
   const [exportState, setExportState] = useState<ExportState>(IDLE_EXPORT);
   const [analysisViewRef, analysisViewSize] = useElementSize<HTMLDivElement>();
-  const [analysisView, setAnalysisView] = useState<"segments" | "listen">("listen");
+  const [analysisView, setAnalysisView] = useState<AnalysisView>("listen");
   // Bumped each time a file is opened: a job started for the previous file
   // (analysis, prefetch) that answers afterwards is ignored instead of
   // landing in the new file's view.
@@ -586,16 +587,7 @@ function App() {
             {/* Too little height for the chart and readable waveforms at
                 once: one at a time, as tabs. */}
             {compactAnalysis && shownEntry?.result && (
-              <PillSwitch
-                className="view-switch"
-                label={t.common.view}
-                options={[
-                  ["segments", t.common.segments],
-                  ["listen", t.common.listen],
-                ]}
-                value={analysisView}
-                onChange={setAnalysisView}
-              />
+              <ViewSwitch value={analysisView} onChange={setAnalysisView} />
             )}
             {shownTrack && shownEntry?.result && (
               <button className="small-button analysis-edit" onClick={() => setEditingTrack(shownTrack.index)}>

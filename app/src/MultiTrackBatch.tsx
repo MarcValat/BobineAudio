@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { probe, startSegmentedRenderJob, startSegmentsJob, type SegmentsResponse, type SubtitleInfo, type TrackInfo } from "./api";
+import { useEffect, useState } from "react";
+import { startSegmentedRenderJob, startSegmentsJob, type SegmentsResponse, type SubtitleInfo, type TrackInfo } from "./api";
 import { runJob } from "./jobs";
 import { languageLabel, LanguageSelect } from "./languages";
 import {
@@ -12,14 +12,12 @@ import {
   type AnalysisRun,
   type ExportFields,
 } from "./batchShared";
-import { InfoTip, Tooltip } from "./InfoTip";
-import { DetailExport, ListRow, MoveButtons, type BadgeKind } from "./Workspace";
+import { InfoTip } from "./InfoTip";
+import { ListRow, MoveButtons, runBadge, useProbes, type BadgeKind } from "./Workspace";
+import { DetailChart, DetailExport, DetailHeader, DetailTabs, TracksHeading, useDetailView } from "./Detail";
 import { LogPanel } from "./LogPanel";
-import { PillSwitch } from "./PillSwitch";
-import { SegmentChart, SegmentChartPlaceholder, describeSegments } from "./SegmentChart";
+import { describeSegments } from "./SegmentChart";
 import { TrackPreview } from "./TrackPreview";
-import { RedoIcon } from "./icons";
-import { useElementSize } from "./useElementSize";
 import { DropZone } from "./DropZone";
 import { pickMediaFiles } from "./mediaDialog";
 import { DropOverlay, useFileDrop } from "./FileDrop";
@@ -33,18 +31,8 @@ import { SubtitleChecks } from "./SubtitleChecks";
 import { t, useT } from "./i18n";
 import { useSubtitleDefault } from "./settings";
 
-// Height of the detail's body below which the tracks and chart, and the
-// waveforms, are shown one at a time (the Segments / Écoute tabs).
-const COMPACT_ANALYSIS_HEIGHT = 560;
-
 /** "@1 fre": a track as the list and the detail name it. */
 const trackName = (track: TrackInfo) => `@${track.index} ${track.language ?? "?"}`;
-
-interface FileProbe {
-  tracks: TrackInfo[] | null;
-  subtitles: SubtitleInfo[];
-  error: string | null;
-}
 
 /** A file's tracks picked by hand ("Choisir"), instead of by language. */
 interface TrackChoice {
@@ -163,7 +151,6 @@ export function MultiTrackBatch({
 }) {
   const m = useT();
   const [files, setFiles] = useState<string[]>([]);
-  const [probes, setProbes] = useState<Record<string, FileProbe>>({});
   const [referenceLanguage, setReferenceLanguage] = useState("");
   const [targetLanguages, setTargetLanguages] = useState<string[]>([]);
   const [choices, setChoices] = useState<Record<string, TrackChoice>>({});
@@ -181,8 +168,7 @@ export function MultiTrackBatch({
   // its tabs show (absent: its first).
   const [selected, setSelected] = useState<string | null>(null);
   const [shownTracks, setShownTracks] = useState<Record<string, number>>({});
-  const [analysisViewRef, analysisViewSize] = useElementSize<HTMLDivElement>();
-  const [analysisView, setAnalysisView] = useState<"segments" | "listen">("listen");
+  const view = useDetailView();
   const busy = analyzing || queue.exporting;
   useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
 
@@ -197,23 +183,7 @@ export function MultiTrackBatch({
   const fileDrag = useFileDrop(!hidden && subsEditing === null && editing === null, dropBlocked, addPaths);
 
   // Each file's tracks are read once, as soon as it's listed.
-  const requested = useRef(new Set<string>());
-  useEffect(() => {
-    for (const path of files) {
-      if (requested.current.has(path)) continue;
-      requested.current.add(path);
-      probe(path)
-        .then((res) =>
-          setProbes((p) => ({ ...p, [path]: { tracks: res.tracks, subtitles: res.subtitles ?? [], error: null } })),
-        )
-        .catch((err) =>
-          setProbes((p) => ({
-            ...p,
-            [path]: { tracks: null, subtitles: [], error: errorMessage(err) },
-          })),
-        );
-    }
-  }, [files]);
+  const probes = useProbes(files);
 
   // A file is always shown while the list has some: the first one listed,
   // or the next one up when the shown one is removed.
@@ -412,16 +382,10 @@ export function MultiTrackBatch({
     if (probed.error || !res) return [s.unreadable, "error"];
     const run = runOf(path);
     const statuses = res.reference ? res.targets.map((t) => run?.targets[t.index]?.status) : [];
-    if (run?.exportStatus === "running") return [s.exporting, "running"];
-    if (statuses.includes("running")) return [s.running, "running"];
-    if (statuses.includes("pending")) return [s.pending, "queued"];
-    if (run?.exportStatus === "done") return [s.exported, "exported"];
-    if (run?.exportStatus === "error") return [s.exportFailed, "error"];
-    if (statuses.includes("error")) return [s.failed, "error"];
-    if (statuses.length > 0 && statuses.every((st) => st === "done")) {
-      return run?.exportStatus === "cancelled" ? [s.cancelled, "analyzed"] : [s.analyzed(statuses.length), "analyzed"];
-    }
-    return res.issues.length > 0 || !res.reference || res.targets.length === 0 ? [s.check, "warning"] : [s.toAnalyze, "idle"];
+    return (
+      runBadge(statuses, run?.exportStatus, { ...s, analyzed: s.analyzed(statuses.length) }) ??
+      (res.issues.length > 0 || !res.reference || res.targets.length === 0 ? [s.check, "warning"] : [s.toAnalyze, "idle"])
+    );
   }
 
   // The detail: the selected file, and the corrected track its tabs show.
@@ -433,9 +397,6 @@ export function MultiTrackBatch({
   const shownRun = shownTrack ? detailRun?.targets[shownTrack.index] : undefined;
   const shownResult = shownRun?.status === "done" ? shownRun.result : null;
   const detailReference = detailRes?.reference ?? null;
-  // Below this height, the chart and readable waveforms don't fit together:
-  // one at a time, as tabs (as the single-file view does).
-  const compactAnalysis = analysisViewSize.height > 0 && analysisViewSize.height < COMPACT_ANALYSIS_HEIGHT;
   const detailDone = detailPath ? doneTargets(detailPath).length : 0;
   // Tracks its "Analyser" would do: not analyzed yet, or failed.
   const detailMissing = detailRes?.reference ? detailRes.targets.length - detailDone : 0;
@@ -600,116 +561,65 @@ export function MultiTrackBatch({
 
         {detailPath && (
           <section className="panel file-detail">
-            <div className="detail-header">
-              <div className="detail-title">
-                <span className="detail-name" title={detailPath}>
-                  {basename(detailPath)}
-                </span>
-                <span className="detail-meta">
-                  {detailProbe?.tracks
-                    ? m.multi.meta(detailProbe.tracks.length, detailProbe.subtitles.length)
-                    : !detailProbe?.error && m.multi.readingTracks}
-                </span>
-              </div>
-              {shownTrack && (shownRun?.status === "done" || shownRun?.status === "error") && (
-                <Tooltip text={m.batch.reanalyzeOneHint}>
-                  <button
-                    className="icon-small-button detail-icon-button"
-                    disabled={busy || blocked}
-                    onClick={() => reanalyzeTrack(detailPath, shownTrack)}
-                    aria-label={m.batch.reanalyzeOne}
-                  >
-                    <RedoIcon />
-                  </button>
-                </Tooltip>
-              )}
-              {shownTrack && shownResult && (
-                <button disabled={queue.exporting} onClick={() => setEditing({ path: detailPath, track: shownTrack.index })}>
-                  {m.single.editSegments}
-                </button>
-              )}
-              {/* One gradient button: the file's next step. */}
-              {(detailMissing > 0 || detailAnalyzing) && (
-                <button
-                  className="primary-button"
-                  disabled={detailAnalyzing || busy || blocked || !detailRes?.reference}
-                  title={blocked ? m.batch.otherModeBusy : m.multi.analyzeFileHint}
-                  onClick={() => handleAnalyze(false, detailPath)}
-                >
-                  {detailAnalyzing ? m.common.analysisRunning : m.multi.analyzeFile}
-                </button>
-              )}
-              {detailDone > 0 && (
-                <button
-                  className={detailMissing === 0 && !detailAnalyzing ? "primary-button" : ""}
-                  disabled={busy || blocked}
-                  title={blocked ? m.batch.otherModeBusy : undefined}
-                  onClick={() => handleExport(detailPath)}
-                >
-                  {m.multi.exportFile}
-                </button>
-              )}
-            </div>
+            <DetailHeader
+              title={basename(detailPath)}
+              titleTooltip={detailPath}
+              meta={
+                detailProbe?.tracks
+                  ? m.multi.meta(detailProbe.tracks.length, detailProbe.subtitles.length)
+                  : !detailProbe?.error && m.multi.readingTracks
+              }
+              onReanalyze={
+                shownTrack && (shownRun?.status === "done" || shownRun?.status === "error")
+                  ? () => reanalyzeTrack(detailPath, shownTrack)
+                  : undefined
+              }
+              onEdit={shownTrack && shownResult ? () => setEditing({ path: detailPath, track: shownTrack.index }) : undefined}
+              editDisabled={queue.exporting}
+              missing={detailMissing}
+              analyzing={detailAnalyzing}
+              done={detailDone}
+              disabled={busy || blocked}
+              analyzeDisabled={!detailRes?.reference}
+              blockedTitle={blocked ? m.batch.otherModeBusy : undefined}
+              analyzeTitle={m.multi.analyzeFileHint}
+              exportLabel={m.multi.exportFile}
+              onAnalyze={() => handleAnalyze(false, detailPath)}
+              onExport={() => handleExport(detailPath)}
+            />
 
             {detailProbe?.error && <p className="error">{detailProbe.error}</p>}
             {detailRes && detailProbe?.tracks && (
-              <div className="detail-body" ref={analysisViewRef}>
+              <div className="detail-body" ref={view.ref}>
                 {shownTrack && (
-                  <div className="detail-tabs">
-                    <PillSwitch
-                      className="detail-track-tabs"
-                      label={m.multi.shownTrack}
-                      options={detailRes.targets.map((t) => [String(t.index), trackName(t)] as const)}
-                      value={String(shownTrack.index)}
-                      onChange={(index) => setShownTracks((c) => ({ ...c, [detailPath]: Number(index) }))}
-                    />
-                    {/* Too little height for all at once: the tracks and
-                        the chart, or the waveforms, as tabs. */}
-                    {compactAnalysis && shownResult && (
-                      <PillSwitch
-                        className="view-switch"
-                        label={m.common.view}
-                        options={[
-                          ["segments", m.common.segments],
-                          ["listen", m.common.listen],
-                        ]}
-                        value={analysisView}
-                        onChange={setAnalysisView}
-                      />
-                    )}
-                  </div>
+                  <DetailTabs
+                    tracks={detailRes.targets.map((t) => [String(t.index), trackName(t)] as const)}
+                    value={String(shownTrack.index)}
+                    onChange={(index) => setShownTracks((c) => ({ ...c, [detailPath]: Number(index) }))}
+                    view={view.compact && shownResult ? { value: view.view, onChange: view.setView } : undefined}
+                  />
                 )}
 
-                <div
-                  className={
-                    compactAnalysis && shownResult && analysisView === "listen"
-                      ? "view-hidden"
-                      : `detail-top${compactAnalysis && shownResult ? " detail-top-fill" : ""}`
-                  }
-                >
+                <div className={view.topClass(!!shownResult)}>
                   <div className="detail-tracks">
-                    <div className="detail-heading">
-                      <h3>
-                        {m.multi.tracks} <InfoTip>{m.multi.tracksHint}</InfoTip>
-                      </h3>
-                      {detailRes.manual && <span className="list-row-manual">{m.multi.manual}</span>}
-                      {detailRes.manual && (
-                        <button
-                          className="small-button"
-                          disabled={busy}
-                          title={m.multi.byLanguageHint}
-                          onClick={() =>
-                            setChoices((c) => {
-                              const next = { ...c };
-                              delete next[detailPath];
-                              return next;
-                            })
-                          }
-                        >
-                          {m.multi.byLanguage}
-                        </button>
-                      )}
-                    </div>
+                    <TracksHeading
+                      hint={m.multi.tracksHint}
+                      reset={
+                        detailRes.manual
+                          ? {
+                              label: m.multi.byLanguage,
+                              title: m.multi.byLanguageHint,
+                              disabled: busy,
+                              onClick: () =>
+                                setChoices((c) => {
+                                  const next = { ...c };
+                                  delete next[detailPath];
+                                  return next;
+                                }),
+                            }
+                          : undefined
+                      }
+                    />
                     <div className="tracks-table-wrap list-scroll detail-tracks-table">
                       <TrackTable
                         className="batch-tracks-table"
@@ -738,33 +648,18 @@ export function MultiTrackBatch({
                     )}
                   </div>
 
-                  <div className="detail-chart">
-                    <div className="detail-heading">
-                      <h3>{m.common.segments}</h3>
-                      <span className="detail-heading-summary">
+                  <DetailChart
+                    summary={
+                      <>
                         {detailReference && shownTrack && m.multi.againstReference(trackName(detailReference))}
                         {shownResult && ` · ${describeSegments(shownResult.segments)}`}
-                      </span>
-                    </div>
-                    {shownResult ? (
-                      <SegmentChart segments={shownResult.segments} fill={compactAnalysis} />
-                    ) : (
-                      // Its room kept while there's nothing to draw yet.
-                      <SegmentChartPlaceholder>
-                        {detailRes.targets.length === 0 && <p className="placeholder">{m.multi.noTarget}</p>}
-                        {shownTrack && !shownRun && <p className="placeholder">{m.multi.notAnalyzed}</p>}
-                        {shownRun?.status === "pending" && <p className="placeholder">{m.batch.pending}</p>}
-                        {shownRun?.status === "running" && (
-                          <p className="placeholder detail-running">
-                            <span className="spinner spinner-small" />
-                            {m.common.analysisRunning}
-                          </p>
-                        )}
-                        {shownRun?.status === "error" && <p className="error">{shownRun.error ?? m.common.error}</p>}
-                        <LogPanel lines={shownRun?.log ?? []} />
-                      </SegmentChartPlaceholder>
-                    )}
-                  </div>
+                      </>
+                    }
+                    result={shownResult}
+                    run={shownRun}
+                    fill={view.compact}
+                    noTrack={detailRes.targets.length === 0 ? m.multi.noTarget : null}
+                  />
                 </div>
 
                 {/* Hidden rather than unmounted on the other tab, so playback
@@ -772,7 +667,7 @@ export function MultiTrackBatch({
                     edited: the editor has its own preview, and two playing at
                     once would overlap. */}
                 {shownTrack && shownResult && detailReference && !(editing?.path === detailPath && editing.track === shownTrack.index) && (
-                  <div className={compactAnalysis && analysisView !== "listen" ? "view-hidden" : "segments-result"}>
+                  <div className={view.listenClass()}>
                     <TrackPreview
                       key={`${detailPath}|${shownTrack.index}`}
                       referenceFilePath={detailPath}
