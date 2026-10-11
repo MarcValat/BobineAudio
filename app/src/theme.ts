@@ -29,7 +29,27 @@ export function applyTheme(choice: ThemeChoice): void {
   } catch {
     // not running in Tauri
   }
+  syncWindowBackground(choice);
 }
+
+// App.css's --bg, per theme.
+const WINDOW_BACKGROUND = { light: "#f3f4fa", dark: "#0b0d17" };
+const systemDark = window.matchMedia?.("(prefers-color-scheme: dark)");
+
+/** The window's own background in the page's: what shows for an instant
+ * where a fast resize uncovers the window before the page is drawn there
+ * (black otherwise). Followed when the system theme changes too. */
+function syncWindowBackground(choice: ThemeChoice = loadTheme()): void {
+  const dark = choice === "system" ? !!systemDark?.matches : choice === "dark";
+  try {
+    getCurrentWindow()
+      .setBackgroundColor(WINDOW_BACKGROUND[dark ? "dark" : "light"])
+      .catch(() => {});
+  } catch {
+    // not running in Tauri
+  }
+}
+systemDark?.addEventListener("change", () => syncWindowBackground());
 
 /** Runs `change` as one cross-fade of the whole window (the View Transitions
  * API, App.css's ::view-transition rules): every text, panel, icon and
