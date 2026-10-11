@@ -286,15 +286,6 @@
   padding-block: 0;
 }
 
-/* The title on one line, the file's name cut short (all of it in the
-   subtitle's tooltip): a long one made the header two lines high. */
-.editor-panel .dialog-header h2 {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* "file · track", beside the title. */
 .editor-subtitle {
   margin-left: 0.6em;
