@@ -1,23 +1,32 @@
 import { useEffect, useState } from "react";
-import { probe, startSegmentsJob, startCrossFileSegmentedRenderJob, type SegmentsResponse, type TrackInfo } from "./api";
+import {
+  probe,
+  startSegmentsJob,
+  startCrossFileSegmentedRenderJob,
+  type ProbeResponse,
+  type SegmentsResponse,
+  type TrackInfo,
+} from "./api";
 import { runJob } from "./jobs";
 import { LanguageSelect } from "./languages";
 import {
-  AnalysisStatus,
   AnalyzeButton,
   BatchFooter,
-  ExportCell,
-  FileCell,
   IDLE_EXPORT,
-  RevealButton,
   rowState,
   useExportQueue,
   dropBlockedReason,
-  writtenFile,
   type AnalysisRun,
   type ExportFields,
 } from "./batchShared";
-import { InfoTip } from "./InfoTip";
+import { InfoTip, Tooltip } from "./InfoTip";
+import { DetailExport, MoveButtons, PairRow, type BadgeKind } from "./Workspace";
+import { LogPanel } from "./LogPanel";
+import { PillSwitch } from "./PillSwitch";
+import { SegmentChart, describeSegments } from "./SegmentChart";
+import { TrackPreview } from "./TrackPreview";
+import { RedoIcon } from "./icons";
+import { useElementSize } from "./useElementSize";
 import { SegmentEditor } from "./SegmentEditor";
 import { DropZone } from "./DropZone";
 import { pickMediaFiles } from "./mediaDialog";
@@ -30,6 +39,16 @@ import { TrackTable } from "./TrackTable";
 import { useT } from "./i18n";
 import { useSubtitleDefault } from "./settings";
 
+
+// Height of the detail's body below which the chart and the waveforms are
+// shown one at a time (the Segments / Écoute tabs).
+const COMPACT_ANALYSIS_HEIGHT = 480;
+
+/** "S01E01 VO.mkv" -> "S01E01 VO": a pair named after its reference. */
+const stem = (name: string) => name.replace(/\.[^.]+$/, "");
+
+/** "@1 fre", or "@1" while its file's tracks aren't read. */
+const trackLabel = (index: number, track: TrackInfo | undefined) => (track?.language ? `@${index} ${track.language}` : `@${index}`);
 
 /** One pair's analysis and export. */
 type PairAnalysis = AnalysisRun & ExportFields;
@@ -206,10 +225,10 @@ function AllTracksModal({ referenceFiles, candidateFiles, onClose }: { reference
  * only VF); "Vérifier toutes les pistes" lets that assumption actually be
  * checked instead of just hoped.
  *
- * Laid out as one table, one row per pair: both files, the analysis, the
- * export and the row's actions side by side, so nothing needs lining up
- * across separate lists. The table takes the height the window leaves and
- * scrolls in its own frame; nothing else in the view scrolls.
+ * Laid out as a list of pairs (both files, each movable within its own
+ * column) beside the selected pair's detail: its chart, waveforms and
+ * listening, its own Analyser / Exporter cette paire. With no file yet,
+ * two drop zones, one per column.
  *
  * Always kept mounted by the caller (App.tsx) even while on the other tab
  * -- `hidden` just toggles visibility -- so switching tabs never resets
@@ -248,6 +267,13 @@ export function PairsBatch({
   const queue = useExportQueue(outputDir);
   const [showTracksModal, setShowTracksModal] = useState(false);
   const [editingPairIndex, setEditingPairIndex] = useState<number | null>(null);
+  // The row shown in the detail.
+  const [selected, setSelected] = useState(0);
+  // The detail's files, read once each (their tracks' languages and start
+  // times, for its title and the waveforms' container-delay note).
+  const [probes, setProbes] = useState<Record<string, ProbeResponse>>({});
+  const [analysisViewRef, analysisViewSize] = useElementSize<HTMLDivElement>();
+  const [analysisView, setAnalysisView] = useState<"segments" | "listen">("listen");
 
   const referenceProbe = useTracksOf(referenceFiles[0]);
   const candidateProbe = useTracksOf(candidateFiles[0]);
@@ -296,6 +322,25 @@ export function PairsBatch({
     );
   }
 
+  // The detail always shows a row while there are some.
+  useEffect(() => {
+    if (selected >= rowCount) setSelected(Math.max(0, rowCount - 1));
+  }, [selected, rowCount]);
+
+  const detailReference: string | undefined = referenceFiles[selected];
+  const detailCandidate: string | undefined = candidateFiles[selected];
+  useEffect(() => {
+    for (const path of [detailReference, detailCandidate]) {
+      if (!path || probes[path]) continue;
+      probe(path)
+        .then((res) => setProbes((c) => ({ ...c, [path]: res })))
+        .catch(() => {
+          // informational only: the title goes without the languages
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- probes is a cache, not an input
+  }, [detailReference, detailCandidate]);
+
   /** Analyzes the pairs that aren't yet (new ones, failed ones), keeping the
    * rest and any edit made to them; or all of them again (`all`). */
   async function handleAnalyze(all: boolean) {
@@ -341,11 +386,11 @@ export function PairsBatch({
    * disabled while *either* operation runs, not just their own: export
    * reads `analyses` as it currently stands, so a concurrent re-analysis
    * could rewrite a pair's segments out from under an export already using
-   * them. */
-  function handleExportAll() {
+   * them. Every pair, or row `only` ("Exporter cette paire"). */
+  function handleExport(only?: number) {
     queue.run(
       pairAnalyses.flatMap((a, i) => {
-        if (!isDone(a)) return [];
+        if (!isDone(a) || (only !== undefined && i !== only)) return [];
         const key = pairKey(i);
         return [
           {
@@ -410,6 +455,31 @@ export function PairsBatch({
   }, [editingPairIndex]);
   const editingAnalysis = editingPairIndex !== null ? analysisOf(editingPairIndex) : undefined;
 
+  /** A row's badge: what's running first, then what's wrong, then how far it got. */
+  function pairBadge(i: number): [string, BadgeKind] {
+    const st = m.pairs.status;
+    if (i >= pairCount) return [st.unpaired, "error"];
+    const a = analysisOf(i);
+    if (a?.exportStatus === "running") return [st.exporting, "running"];
+    if (a?.status === "running") return [st.running, "running"];
+    if (a?.status === "pending") return [st.pending, "queued"];
+    if (a?.exportStatus === "done") return [st.exported, "exported"];
+    if (a?.exportStatus === "error") return [st.exportFailed, "error"];
+    if (a?.status === "error") return [st.failed, "error"];
+    if (isDone(a)) return a?.exportStatus === "cancelled" ? [st.cancelled, "analyzed"] : [st.analyzed, "analyzed"];
+    return [st.toAnalyze, "idle"];
+  }
+
+  // The detail: the selected row.
+  const detailPaired = selected < pairCount;
+  const detailRun = analysisOf(selected);
+  const detailResult = isDone(detailRun) ? detailRun!.result : null;
+  const detailAnalyzing = detailRun?.status === "pending" || detailRun?.status === "running";
+  const detailKey = detailPaired ? pairKey(selected) : "";
+  const detailReferenceTrack = detailReference ? probes[detailReference]?.tracks.find((t) => t.index === referenceTrackIndex) : undefined;
+  const detailCandidateTrack = detailCandidate ? probes[detailCandidate]?.tracks.find((t) => t.index === candidateTrackIndex) : undefined;
+  const compactAnalysis = analysisViewSize.height > 0 && analysisViewSize.height < COMPACT_ANALYSIS_HEIGHT;
+
   return (
     <main className="batch-main" style={hidden ? { display: "none" } : undefined}>
       <div className="batch-config panel">
@@ -457,128 +527,207 @@ export function PairsBatch({
         <InfoTip>{m.pairs.hint}</InfoTip>
       </div>
 
-      <section className="panel batch-jobs">
-        <div className="batch-jobs-header">
-          <h2>{m.pairs.pairs}</h2>
-          <button
-            className="small-button"
-            onClick={() => {
-              setReferenceFiles([]);
-              setCandidateFiles([]);
-              setAnalyses({});
-            }}
-            disabled={busy || rowCount === 0}
-          >
-            {m.common.removeAll}
-          </button>
-          <button className="small-button" onClick={() => setShowTracksModal(true)} disabled={rowCount === 0}>
-            {m.pairs.checkAllTracks}
-          </button>
-          <InfoTip>{m.pairs.pairsHint}</InfoTip>
-        </div>
+      {rowCount === 0 ? (
+        <section className="panel pairs-empty">
+          <div className="pairs-empty-intro">
+            <h3>{m.pairs.emptyTitle}</h3>
+            <p>{m.pairs.emptyHint}</p>
+          </div>
+          <div className="pairs-empty-zones">
+            <DropZone title={m.pairs.dropReferences} disabled={dropBlocked !== null} onClick={addFiles(setReferenceFiles, m.pairs.pickReferences)}>
+              {m.pairs.dropReferencesHint}
+            </DropZone>
+            <DropZone title={m.pairs.dropCandidates} disabled={dropBlocked !== null} onClick={addFiles(setCandidateFiles, m.pairs.pickCandidates)}>
+              {m.pairs.dropCandidatesHint}
+            </DropZone>
+          </div>
+        </section>
+      ) : (
+        <div className="workspace workspace-pairs">
+          <section className="panel file-list">
+            <div className="file-list-header">
+              <h2>
+                {m.pairs.pairsCount(pairCount)} <InfoTip>{m.pairs.pairsHint}</InfoTip>
+              </h2>
+              <button className="small-button" onClick={() => setShowTracksModal(true)}>
+                {m.pairs.checkAllTracks}
+              </button>
+              <button
+                className="small-button"
+                onClick={() => {
+                  setReferenceFiles([]);
+                  setCandidateFiles([]);
+                  setAnalyses({});
+                }}
+                disabled={busy}
+              >
+                {m.common.removeAll}
+              </button>
+            </div>
 
-        {/* Always shown, even empty: its column headers hold the buttons that
-            add files to each column. */}
-        <div className="batch-table-wrap list-scroll">
-          <table>
-            <colgroup>
-              <col className="batch-col-index" />
-              <col />
-              <col />
-              <col className="batch-col-status" />
-              <col className="batch-col-status" />
-              <col className="batch-col-folder" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th className="batch-index">#</th>
-                <th>
-                  <div className="batch-th-add">
-                    <span>{m.common.reference}</span>
-                    <button
-                      className="small-button"
-                      onClick={addFiles(setReferenceFiles, m.pairs.pickReferences)}
-                      disabled={busy}
-                      title={m.pairs.addReferenceHint}
-                    >
-                      {m.common.add}
-                    </button>
-                  </div>
-                </th>
-                <th>
-                  <div className="batch-th-add">
-                    <span>{m.common.toCorrect}</span>
-                    <button
-                      className="small-button"
-                      onClick={addFiles(setCandidateFiles, m.pairs.pickCandidates)}
-                      disabled={busy}
-                      title={m.pairs.addCandidateHint}
-                    >
-                      {m.common.add}
-                    </button>
-                  </div>
-                </th>
-                <th>{m.common.analysis}</th>
-                <th>{m.common.export}</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rowCount === 0 && (
-                <tr>
-                  <td colSpan={6} className="batch-empty">
-                    <DropZone title={m.files.dropZoneMany} disabled={dropBlocked !== null} onClick={addFiles(setReferenceFiles, m.pairs.pickReferences)}>
-                      {m.pairs.empty}
-                    </DropZone>
-                  </td>
-                </tr>
-              )}
+            <ul className="file-list-rows list-scroll">
               {Array.from({ length: rowCount }, (_, i) => {
                 const a = analysisOf(i);
+                const [badge, badgeKind] = pairBadge(i);
                 return (
-                  <tr
+                  <PairRow
                     key={i}
-                    className={`batch-row-state-${rowState(i < pairCount ? [a] : [], a?.exportStatus, i >= pairCount)}${
-                      i >= pairCount ? " batch-row-unpaired" : ""
-                    }`}
-                  >
-                    <td className="batch-index">{i + 1}</td>
-                    <FileCell
-                      files={referenceFiles}
-                      index={i}
-                      disabled={busy}
-                      onChange={setReferenceFiles}
-                    />
-                    <FileCell
-                      files={candidateFiles}
-                      index={i}
-                      disabled={busy}
-                      onChange={setCandidateFiles}
-                    />
-                    <td className={`batch-status batch-status-${a?.status ?? "pending"}`}>
-                      {i < pairCount ? (
-                        <AnalysisStatus
-                          run={a}
-                          busy={busy}
-                          exporting={queue.exporting}
-                          onEdit={() => setEditingPairIndex(i)}
-                          onReanalyze={() => runPlan([i])}
-                        />
-                      ) : (
-                        m.pairs.unpaired
-                      )}
-                    </td>
-                    <ExportCell entry={a} />
-                    <td className="batch-row-actions">
-                      <RevealButton file={writtenFile(a)} />
-                    </td>
-                  </tr>
+                    label={m.pairs.pairTitle(i + 1, basename(referenceFiles[i] ?? candidateFiles[i]))}
+                    reference={{ name: basename(referenceFiles[i] ?? ""), path: referenceFiles[i], missing: m.pairs.noReference }}
+                    candidate={{ name: basename(candidateFiles[i] ?? ""), path: candidateFiles[i], missing: m.pairs.noCandidate }}
+                    referenceActions={
+                      <MoveButtons count={referenceFiles.length} index={i} disabled={busy} onChange={(update) => setReferenceFiles(update)} />
+                    }
+                    candidateActions={
+                      <MoveButtons count={candidateFiles.length} index={i} disabled={busy} onChange={(update) => setCandidateFiles(update)} />
+                    }
+                    state={rowState(i < pairCount ? [a] : [], a?.exportStatus, i >= pairCount)}
+                    badge={badge}
+                    badgeKind={badgeKind}
+                    selected={i === selected}
+                    onSelect={() => setSelected(i)}
+                  />
                 );
               })}
-            </tbody>
-          </table>
+            </ul>
+            <div className="pair-add">
+              <button disabled={busy} title={m.pairs.addReferenceHint} onClick={addFiles(setReferenceFiles, m.pairs.pickReferences)}>
+                <span>{m.pairs.addReferences}</span>
+                <span>{m.pairs.dropLeft}</span>
+              </button>
+              <button disabled={busy} title={m.pairs.addCandidateHint} onClick={addFiles(setCandidateFiles, m.pairs.pickCandidates)}>
+                <span>{m.pairs.addCandidates}</span>
+                <span>{m.pairs.dropRight}</span>
+              </button>
+            </div>
+          </section>
+
+          <section className="panel file-detail">
+            <div className="detail-header">
+              <div className="detail-title">
+                <span className="detail-name" title={detailReference ?? detailCandidate}>
+                  {m.pairs.pairTitle(selected + 1, stem(basename(detailReference ?? detailCandidate ?? "")))}
+                </span>
+                {detailPaired && (
+                  <span className="detail-meta">
+                    {m.pairs.pairMeta(
+                      trackLabel(referenceTrackIndex, detailReferenceTrack),
+                      basename(detailReference!),
+                      trackLabel(candidateTrackIndex, detailCandidateTrack),
+                      basename(detailCandidate!),
+                    )}
+                  </span>
+                )}
+              </div>
+              {detailPaired && (detailRun?.status === "done" || detailRun?.status === "error") && (
+                <Tooltip text={m.batch.reanalyzeOneHint}>
+                  <button
+                    className="icon-small-button detail-icon-button"
+                    disabled={busy || blocked}
+                    onClick={() => runPlan([selected])}
+                    aria-label={m.batch.reanalyzeOne}
+                  >
+                    <RedoIcon />
+                  </button>
+                </Tooltip>
+              )}
+              {detailResult && (
+                <button disabled={queue.exporting} onClick={() => setEditingPairIndex(selected)}>
+                  {m.single.editSegments}
+                </button>
+              )}
+              {/* One gradient button: the pair's next step. */}
+              {detailPaired && !detailResult && (
+                <button
+                  className="primary-button"
+                  disabled={detailAnalyzing || busy || blocked}
+                  title={blocked ? m.batch.otherModeBusy : m.pairs.analyzePairHint}
+                  onClick={() => runPlan([selected])}
+                >
+                  {detailAnalyzing ? m.common.analysisRunning : m.multi.analyzeFile}
+                </button>
+              )}
+              {detailResult && (
+                <button
+                  className="primary-button"
+                  disabled={busy || blocked}
+                  title={blocked ? m.batch.otherModeBusy : undefined}
+                  onClick={() => handleExport(selected)}
+                >
+                  {m.pairs.exportPair}
+                </button>
+              )}
+            </div>
+
+            {!detailPaired && <p className="placeholder">{m.pairs.unpairedDetail}</p>}
+            {detailPaired && (
+              <div className="detail-body" ref={analysisViewRef}>
+                <div className="detail-tabs">
+                  <span className="detail-tab-summary">
+                    {detailResult ? describeSegments(detailResult.segments) : m.pairs.status.toAnalyze}
+                  </span>
+                  {compactAnalysis && detailResult && (
+                    <PillSwitch
+                      className="view-switch"
+                      label={m.common.view}
+                      options={[
+                        ["segments", m.common.segments],
+                        ["listen", m.common.listen],
+                      ]}
+                      value={analysisView}
+                      onChange={setAnalysisView}
+                    />
+                  )}
+                </div>
+                <div
+                  className={
+                    compactAnalysis && detailResult && analysisView === "listen"
+                      ? "view-hidden"
+                      : `detail-chart${compactAnalysis && detailResult ? " detail-top-fill" : ""}`
+                  }
+                >
+                  {detailResult ? (
+                    <SegmentChart segments={detailResult.segments} fill={compactAnalysis} />
+                  ) : (
+                    // Its room kept while there's nothing to draw yet.
+                    <div className="detail-chart-empty">
+                      {!detailRun && <p className="placeholder">{m.multi.notAnalyzed}</p>}
+                      {detailRun?.status === "pending" && <p className="placeholder">{m.batch.pending}</p>}
+                      {detailRun?.status === "running" && (
+                        <p className="placeholder detail-running">
+                          <span className="spinner spinner-small" />
+                          {m.common.analysisRunning}
+                        </p>
+                      )}
+                      {detailRun?.status === "error" && <p className="error">{detailRun.error ?? m.common.error}</p>}
+                      <LogPanel lines={detailRun?.log ?? []} />
+                    </div>
+                  )}
+                </div>
+                {/* Not while it's being edited: the editor has its own
+                    preview, and two playing at once would overlap. */}
+                {detailResult && editingPairIndex !== selected && (
+                  <div className={compactAnalysis && analysisView !== "listen" ? "view-hidden" : "segments-result"}>
+                    <TrackPreview
+                      key={detailKey}
+                      referenceFilePath={detailReference!}
+                      candidateFilePath={detailCandidate!}
+                      referenceIndex={referenceTrackIndex}
+                      trackIndex={candidateTrackIndex}
+                      segments={detailResult.segments}
+                      referenceStartTime={detailReferenceTrack?.start_time ?? 0}
+                      trackStartTime={detailCandidateTrack?.start_time ?? 0}
+                      extraControls={<LogPanel lines={detailRun?.log ?? []} />}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            <DetailExport entry={detailRun} />
+          </section>
         </div>
-      </section>
+      )}
 
       <BatchFooter
         outputDir={outputDir}
@@ -601,12 +750,12 @@ export function PairsBatch({
             unit="pair"
             disabled={pairCount === 0 || busy || blocked}
             blocked={blocked}
-            onAnalyze={handleAnalyze}
+            onAnalyze={(all) => handleAnalyze(all)}
           />
         }
         queue={queue}
         canExport={analyzedCount > 0}
-        onExport={handleExportAll}
+        onExport={() => handleExport()}
       />
 
       {showTracksModal && (

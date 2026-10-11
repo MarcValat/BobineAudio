@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
-import { moved } from "./batchShared";
+import { moved, RevealButton, writtenFile, type ExportFields } from "./batchShared";
+import { LogPanel } from "./LogPanel";
+import { basename } from "./paths";
 import { useT } from "./i18n";
 import "./Workspace.css";
 
@@ -98,5 +100,81 @@ export function MoveButtons({
         ✕
       </button>
     </>
+  );
+}
+
+/** One pair of the pairs list: its reference file over its file to correct,
+ * each with its own ↑ ↓ ✕ (they move within their own column), and a badge
+ * for the pair. The whole row selects it; the files' buttons sit above that
+ * (a button can't hold buttons). */
+export function PairRow({
+  label,
+  reference,
+  candidate,
+  referenceActions,
+  candidateActions,
+  state,
+  badge,
+  badgeKind,
+  selected,
+  onSelect,
+}: {
+  /** What the row button says to a screen reader ("Paire 2"). */
+  label: string;
+  reference: { name: string; path?: string; missing: string };
+  candidate: { name: string; path?: string; missing: string };
+  referenceActions?: ReactNode;
+  candidateActions?: ReactNode;
+  state: string;
+  badge: string;
+  badgeKind: BadgeKind;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const t = useT();
+  const line = (kind: "ref" | "cand", file: { name: string; path?: string; missing: string }, actions?: ReactNode) => (
+    <>
+      <span className={`pair-row-kind pair-row-kind-${kind}`}>{kind === "ref" ? t.pairs.refShort : t.pairs.candShort}</span>
+      <span className={`pair-row-name${file.path ? "" : " pair-row-missing"}`} title={file.path}>
+        {file.path ? file.name : file.missing}
+      </span>
+      <span className="pair-row-actions">{file.path && actions}</span>
+    </>
+  );
+  return (
+    <li className={`list-row pair-row list-row-state-${state}${selected ? " selected" : ""}`}>
+      <button className="list-row-main pair-row-select" onClick={onSelect} aria-current={selected || undefined} aria-label={label} />
+      <span className="pair-row-grid">
+        <span className="list-row-bar" />
+        {line("ref", reference, referenceActions)}
+        <span className="list-row-status pair-row-status">
+          <span className={`list-badge list-badge-${badgeKind}`}>{badge}</span>
+          {badgeKind === "running" && <span className="spinner spinner-small" aria-hidden="true" />}
+        </span>
+        {line("cand", candidate, candidateActions)}
+      </span>
+    </li>
+  );
+}
+
+/** Under a detail: how its export went (running, the file written with its
+ * folder, the error, cancelled), with its log. Nothing before an export. */
+export function DetailExport({ entry }: { entry: ExportFields | null | undefined }) {
+  const t = useT();
+  if (!entry || entry.exportStatus === "idle") return null;
+  const written = writtenFile(entry);
+  return (
+    <div className={`detail-export batch-status-${entry.exportStatus}`}>
+      {entry.exportStatus === "running" && t.common.exportRunning}
+      {entry.exportStatus === "done" && written && (
+        <span className="render-success" title={written}>
+          {t.single.written(basename(written))}
+        </span>
+      )}
+      {entry.exportStatus === "error" && (entry.exportError ?? t.common.error)}
+      {entry.exportStatus === "cancelled" && t.single.exportCancelled}
+      <RevealButton file={written} />
+      <LogPanel lines={entry.exportLog} />
+    </div>
   );
 }

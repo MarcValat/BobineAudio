@@ -6,16 +6,14 @@ import {
   AnalyzeButton,
   BatchFooter,
   IDLE_EXPORT,
-  RevealButton,
   rowState,
   useExportQueue,
   dropBlockedReason,
-  writtenFile,
   type AnalysisRun,
   type ExportFields,
 } from "./batchShared";
 import { InfoTip, Tooltip } from "./InfoTip";
-import { ListRow, MoveButtons, type BadgeKind } from "./Workspace";
+import { DetailExport, ListRow, MoveButtons, type BadgeKind } from "./Workspace";
 import { LogPanel } from "./LogPanel";
 import { PillSwitch } from "./PillSwitch";
 import { SegmentChart, describeSegments } from "./SegmentChart";
@@ -438,7 +436,6 @@ export function MultiTrackBatch({
   // Below this height, the chart and readable waveforms don't fit together:
   // one at a time, as tabs (as the single-file view does).
   const compactAnalysis = analysisViewSize.height > 0 && analysisViewSize.height < COMPACT_ANALYSIS_HEIGHT;
-  const detailWritten = writtenFile(detailRun);
   const detailDone = detailPath ? doneTargets(detailPath).length : 0;
   // Tracks its "Analyser" would do: not analyzed yet, or failed.
   const detailMissing = detailRes?.reference ? detailRes.targets.length - detailDone : 0;
@@ -516,17 +513,6 @@ export function MultiTrackBatch({
             <h2>{files.length > 0 ? m.multi.filesCount(files.length) : m.multi.files}</h2>
             <button
               className="small-button"
-              disabled={busy}
-              title={m.multi.addHint}
-              onClick={async () => {
-                const picked = await pickMediaFiles(true);
-                if (picked) addPaths(picked);
-              }}
-            >
-              {m.common.add}
-            </button>
-            <button
-              className="small-button"
               onClick={() => {
                 setFiles([]);
                 setChoices({});
@@ -589,7 +575,19 @@ export function MultiTrackBatch({
                   );
                 })}
               </ul>
-              <p className="file-list-drop">{m.multi.dropMore}</p>
+              {/* Adding more: a click picks files, or they're dropped on the window. */}
+              <button
+                className="file-list-add"
+                disabled={busy}
+                title={m.multi.addHint}
+                onClick={async () => {
+                  const picked = await pickMediaFiles(true);
+                  if (picked) addPaths(picked);
+                }}
+              >
+                <span>{m.multi.addMore}</span>
+                <span>{m.multi.dropMore}</span>
+              </button>
             </>
           )}
         </section>
@@ -782,20 +780,7 @@ export function MultiTrackBatch({
               </div>
             )}
 
-            {detailRun && detailRun.exportStatus !== "idle" && (
-              <div className={`detail-export batch-status-${detailRun.exportStatus}`}>
-                {detailRun.exportStatus === "running" && m.common.exportRunning}
-                {detailRun.exportStatus === "done" && detailWritten && (
-                  <span className="render-success" title={detailWritten}>
-                    {m.single.written(basename(detailWritten))}
-                  </span>
-                )}
-                {detailRun.exportStatus === "error" && (detailRun.exportError ?? m.common.error)}
-                {detailRun.exportStatus === "cancelled" && m.single.exportCancelled}
-                <RevealButton file={detailWritten} />
-                <LogPanel lines={detailRun.exportLog} />
-              </div>
-            )}
+            <DetailExport entry={detailRun} />
           </section>
         )}
       </div>

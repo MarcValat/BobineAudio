@@ -258,7 +258,8 @@ export const fr = {
     progressExported: (n: number) => ` · ${n} exporté${n > 1 ? "s" : ""}`,
     progressFlagged: (n: number) => ` · ⚠ ${n} à vérifier`,
     filesCount: (n: number) => `Fichiers · ${n}`,
-    dropMore: "Glisse d'autres vidéos ou un dossier pour les ajouter",
+    addMore: "+ Ajouter des vidéos",
+    dropMore: "ou glisse-les, ou un dossier, sur la fenêtre",
     pickFile: "Choisis un fichier dans la liste.",
     meta: (audio: number, subs: number) =>
       `${audio} piste${audio > 1 ? "s" : ""} audio · ${subs} sous-titre${subs > 1 ? "s" : ""}`,
@@ -297,7 +298,7 @@ export const fr = {
     checkAllTracks: "Vérifier toutes les pistes",
     referenceFiles: "Fichiers de référence",
     candidateFiles: "Fichiers à corriger",
-    language: "Langue :",
+    language: "Langue ajoutée :",
     fileLanguage: (language: string | null) => `Celle du fichier (${language ?? "aucune"})`,
     languageHint:
       "Langue attribuée à la piste corrigée dans le fichier exporté. « Celle du fichier » garde la sienne ; utile pour une piste qui n'en a pas (un .wav, par exemple).",
@@ -316,6 +317,42 @@ export const fr = {
     progressAnalyzed: (done: number, total: number) => ` · ${done}/${total} analysée${done > 1 ? "s" : ""}`,
     progressExported: (n: number) => ` · ${n} exportée${n > 1 ? "s" : ""}`,
     progressUnpaired: (n: number) => ` · ${n} fichier${n > 1 ? "s" : ""} sans paire`,
+    pairsCount: (n: number) => `Paires · ${n}`,
+    pairTitle: (n: number, name: string) => `Paire ${n} · ${name}`,
+    pairMeta: (reference: string, referenceFile: string, track: string, trackFile: string) =>
+      `${reference} de « ${referenceFile} » → ${track} de « ${trackFile} », ajoutée à la vidéo de référence`,
+    refShort: "Réf.",
+    candShort: "Corr.",
+    noCandidate: "— aucun fichier à corriger",
+    noReference: "— aucun fichier de référence",
+    unpairedDetail:
+      "Ce fichier n'a pas encore de paire : ajoute le fichier qui lui correspond dans l'autre colonne, ou remets les fichiers dans l'ordre avec ↑ ↓.",
+    addReferences: "+ Références",
+    addCandidates: "+ À corriger",
+    dropLeft: "ou dépose-les à gauche de la fenêtre",
+    dropRight: "ou dépose-les à droite de la fenêtre",
+    emptyTitle: "La référence et le doublage dans deux fichiers",
+    emptyHint:
+      "Un fichier par épisode de chaque côté : ils sont appariés dans l'ordre, la piste corrigée est ajoutée à la vidéo de référence.",
+    dropReferences: "Références",
+    dropReferencesHint: "La piste qui ne change jamais (souvent la VO). Ou dépose n'importe où sur la moitié gauche de la fenêtre.",
+    dropCandidates: "À corriger",
+    dropCandidatesHint:
+      "La piste à recaler (souvent la VF) : vidéos ou fichiers audio. Ou dépose sur la moitié droite de la fenêtre.",
+    analyzePairHint: "Analyse cette paire.",
+    exportPair: "Exporter cette paire",
+    status: {
+      toAnalyze: "À analyser",
+      pending: "En attente",
+      running: "Analyse...",
+      analyzed: "Analysée",
+      failed: "Échec",
+      exporting: "Export...",
+      exported: "Exportée",
+      exportFailed: "Échec de l'export",
+      cancelled: "Export annulé",
+      unpaired: "⚠ Sans paire",
+    },
   },
 
   editor: {
