@@ -738,7 +738,6 @@ export function PairsBatch({
                 return (
                   <PairRow
                     key={i}
-                    label={m.pairs.pairTitle(i + 1, basename(referenceFiles[i] ?? candidateFiles[i]))}
                     reference={{ name: basename(referenceFiles[i] ?? ""), path: referenceFiles[i], missing: m.pairs.noReference }}
                     candidate={{ name: basename(candidateFiles[i] ?? ""), path: candidateFiles[i], missing: m.pairs.noCandidate }}
                     referenceActions={

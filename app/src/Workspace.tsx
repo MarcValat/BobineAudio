@@ -17,6 +17,7 @@ export function ListRow({
   name,
   path,
   detail,
+  className = "",
   state,
   badge,
   badgeKind,
@@ -24,9 +25,12 @@ export function ListRow({
   onSelect,
   actions,
 }: {
-  name: string;
+  name: ReactNode;
+  /** On hover: the full path (a pair's two, one per line). */
   path: string;
   detail: ReactNode;
+  /** A look of its own (a pair's). */
+  className?: string;
   /** rowState's value, for the bar. */
   state: string;
   badge: string;
@@ -36,7 +40,7 @@ export function ListRow({
   actions?: ReactNode;
 }) {
   return (
-    <li className={`list-row list-row-state-${state}${selected ? " selected" : ""}`}>
+    <li className={`list-row list-row-state-${state}${selected ? " selected" : ""} ${className}`}>
       <button className="list-row-main" onClick={onSelect} aria-current={selected || undefined} title={path}>
         <span className="list-row-bar" />
         <span className="list-row-text">
@@ -103,12 +107,11 @@ export function MoveButtons({
   );
 }
 
-/** One pair of the pairs list: its reference file over its file to correct,
- * each with its own ↑ ↓ ✕ (they move within their own column), and a badge
- * for the pair. The whole row selects it; the files' buttons sit above that
- * (a button can't hold buttons). */
+/** One pair of the pairs list: a file row (ListRow, the same as a
+ * multitrack file's) whose two lines are its reference file and its file to
+ * correct; on hover, each file's own ↑ ↓ ✕ (they move within their own
+ * column) take the badge's place, one set per line. */
 export function PairRow({
-  label,
   reference,
   candidate,
   referenceActions,
@@ -119,8 +122,6 @@ export function PairRow({
   selected,
   onSelect,
 }: {
-  /** What the row button says to a screen reader ("Paire 2"). */
-  label: string;
   reference: { name: string; path?: string; missing: string };
   candidate: { name: string; path?: string; missing: string };
   referenceActions?: ReactNode;
@@ -132,28 +133,30 @@ export function PairRow({
   onSelect: () => void;
 }) {
   const t = useT();
-  const line = (kind: "ref" | "cand", file: { name: string; path?: string; missing: string }, actions?: ReactNode) => (
+  const line = (kind: "ref" | "cand", file: { name: string; path?: string; missing: string }) => (
     <>
       <span className={`pair-row-kind pair-row-kind-${kind}`}>{kind === "ref" ? t.pairs.refShort : t.pairs.candShort}</span>
-      <span className={`pair-row-name${file.path ? "" : " pair-row-missing"}`} title={file.path} onClick={onSelect}>
-        {file.path ? file.name : file.missing}
-      </span>
-      <span className="pair-row-actions">{file.path && actions}</span>
+      <span className={`pair-row-name${file.path ? "" : " pair-row-missing"}`}>{file.path ? file.name : file.missing}</span>
     </>
   );
   return (
-    <li className={`list-row pair-row list-row-state-${state}${selected ? " selected" : ""}`}>
-      <button className="list-row-main pair-row-select" onClick={onSelect} aria-current={selected || undefined} aria-label={label} />
-      <span className="pair-row-grid">
-        <span className="list-row-bar" />
-        {line("ref", reference, referenceActions)}
-        <span className="list-row-status pair-row-status">
-          <span className={`list-badge list-badge-${badgeKind}`}>{badge}</span>
-          {badgeKind === "running" && <span className="spinner spinner-small" aria-hidden="true" />}
+    <ListRow
+      className="pair-row"
+      name={line("ref", reference)}
+      detail={line("cand", candidate)}
+      path={[reference.path, candidate.path].filter(Boolean).join("\n")}
+      state={state}
+      badge={badge}
+      badgeKind={badgeKind}
+      selected={selected}
+      onSelect={onSelect}
+      actions={
+        <span className="pair-row-actions">
+          <span>{reference.path && referenceActions}</span>
+          <span>{candidate.path && candidateActions}</span>
         </span>
-        {line("cand", candidate, candidateActions)}
-      </span>
-    </li>
+      }
+    />
   );
 }
 

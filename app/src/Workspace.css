@@ -465,32 +465,26 @@
   flex: 1 0 100%;
 }
 
-/* A pair: the row is one button underneath, its two files over it, each
-   with its own ↑ ↓ ✕ (shown on hover, as a file row's). */
-.pair-row-select {
-  position: absolute;
-  inset: 0;
-  height: 100%;
-}
-
-.pair-row-grid {
-  position: relative;
-  display: grid;
-  grid-template-columns: 4px 3.2em minmax(0, 1fr) auto auto;
-  grid-template-rows: auto auto;
+/* A pair: a file row whose two lines are its two files, each led by
+   which one it is. */
+.pair-row .list-row-name,
+.pair-row .list-row-detail {
+  display: flex;
   align-items: center;
-  column-gap: 0.6em;
-  row-gap: 0.35em;
-  padding: 0.65em 0.8em;
-  /* Clicks go through to the row's button, but for the files' own. */
-  pointer-events: none;
+  gap: 0.6em;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text);
+  overflow-wrap: normal;
 }
 
-.pair-row-grid .list-row-bar {
-  grid-row: 1 / 3;
+.pair-row .list-row-detail {
+  font-weight: 400;
 }
 
+/* One width for both ("RÉF.", "CORR."), so the names line up. */
 .pair-row-kind {
+  flex: 0 0 42px;
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -502,54 +496,32 @@
 }
 
 .pair-row-kind-cand {
-  grid-column: 2;
   color: var(--drift);
 }
 
 .pair-row-name {
   min-width: 0;
-  font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  pointer-events: auto;
-}
-
-.pair-row-kind-ref + .pair-row-name {
-  font-weight: 600;
 }
 
 .pair-row-missing {
   color: var(--danger);
 }
 
+/* Each file's ↑ ↓ ✕ on its own line. */
 .pair-row-actions {
   display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pair-row-actions > span {
+  display: flex;
+  justify-content: flex-end;
   gap: 0.15em;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 120ms;
-}
-
-.pair-row:hover .pair-row-actions,
-.pair-row:has(:focus-visible) .pair-row-actions {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.pair-row-actions button {
-  padding: 0.05em 0.4em;
-}
-
-.pair-row-status {
-  grid-column: 5;
-  grid-row: 1 / 3;
-}
-
-/* The badge stays: the files' buttons have their own column. */
-.pair-row:hover .pair-row-status,
-.pair-row:has(:focus-visible) .pair-row-status {
-  visibility: visible;
+  min-height: 1.6em;
 }
 
 /* "+ Références" / "+ À corriger" under the list, each with its half of
