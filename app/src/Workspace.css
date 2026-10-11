@@ -66,8 +66,11 @@
   box-shadow: none;
 }
 
-.list-row-main:hover {
+/* Lit wherever the pointer is on the row: its own buttons (↑ ↓ ✕) and a
+   pair's file names sit above the row's button, not in it. */
+.list-row:not(.selected):hover .list-row-main {
   background: var(--surface-alt);
+  border-color: var(--accent);
 }
 
 .list-row.selected .list-row-main {
