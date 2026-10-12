@@ -26,13 +26,19 @@
   --surface-sunken: light-dark(#f6f7fc, #0e1220);
   --border: light-dark(rgba(20, 24, 60, 0.11), rgba(255, 255, 255, 0.08));
   --text: light-dark(#141729, #e8ebf5);
-  --text-muted: light-dark(rgba(20, 23, 41, 0.62), #9aa1b8);
+  --text-muted: light-dark(rgba(20, 23, 41, 0.66), #9aa1b8);
   /* Light: deep enough for 4.5:1 on white and on their own tints. */
   --danger: light-dark(#c42f41, #f47a87);
   --success: light-dark(#1a7f41, #4ade80);
   /* The two kinds of segment, in the charts, their legends and the waveforms. */
   --constant: light-dark(#3d5fe0, #5b8cff);
   --drift: light-dark(#d97a0b, #f59e0b);
+  /* The same colors for text: darker in the light theme, where small text
+     on a background tinted with its own color must keep 4.5:1. The fills,
+     borders and lines use the ones above. */
+  --accent-text: light-dark(#3354d3, #7aa2ff);
+  --success-text: light-dark(#126433, #4ade80);
+  --drift-text: light-dark(#874700, #f59e0b);
   --radius: 14px;
   /* The top bar's height (it's also the window's title bar): the settings
      drawer opens right under it. */
@@ -196,7 +202,7 @@ input {
 }
 
 .engine-status-ready {
-  color: var(--success);
+  color: var(--success-text);
   background: color-mix(in srgb, var(--success) 12%, transparent);
 }
 
@@ -289,7 +295,7 @@ input {
 }
 
 .pill-switch button.active {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .pill-switch button:focus-visible {
@@ -351,7 +357,7 @@ input {
 }
 
 .update-button {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .update-button-failed {
@@ -559,7 +565,7 @@ button:focus-visible {
 }
 
 .drop-zone-empty:hover:not(:disabled) {
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: color-mix(in srgb, var(--accent) 60%, transparent);
   background-color: color-mix(in srgb, var(--accent) 5%, transparent);
 }
@@ -713,7 +719,7 @@ button:focus-visible {
 .render-success {
   margin-top: 0.6em;
   font-size: 0.85em;
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .tracks-table-wrap {

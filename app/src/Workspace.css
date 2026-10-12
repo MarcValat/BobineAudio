@@ -152,7 +152,7 @@
 
 .list-row-issues {
   display: block;
-  color: var(--drift);
+  color: var(--drift-text);
 }
 
 /* Centered by the layout, not by a translate(-50%) (it could land on half a
@@ -232,13 +232,13 @@
 
 .list-badge-running,
 .list-badge-queued {
-  color: var(--accent);
+  color: var(--accent-text);
   background: color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
 .list-badge-analyzed,
 .list-badge-exported {
-  color: var(--success);
+  color: var(--success-text);
   background: color-mix(in srgb, var(--success) 14%, transparent);
 }
 
@@ -248,7 +248,7 @@
 }
 
 .list-badge-warning {
-  color: var(--drift);
+  color: var(--drift-text);
   background: color-mix(in srgb, var(--drift) 15%, transparent);
 }
 
@@ -287,7 +287,7 @@
   line-height: 16px;
   border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, transparent);
   background: color-mix(in srgb, var(--accent) 5%, transparent);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .file-list-add {
@@ -579,11 +579,11 @@
 }
 
 .pair-row-kind-ref {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .pair-row-kind-cand {
-  color: var(--drift);
+  color: var(--drift-text);
 }
 
 .pair-row-name {
@@ -624,7 +624,7 @@
 .pair-add button + button {
   border-color: color-mix(in srgb, var(--drift) 45%, transparent);
   background: color-mix(in srgb, var(--drift) 5%, transparent);
-  color: var(--drift);
+  color: var(--drift-text);
 }
 
 /* No file yet: what the mode does, its drop zone(s), and the two modes'
@@ -770,7 +770,7 @@
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--accent-text);
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
@@ -801,7 +801,7 @@
 }
 
 .pairs-empty-zones .drop-zone-empty + .drop-zone-empty:hover:not(:disabled) {
-  color: var(--drift);
+  color: var(--drift-text);
   border-color: color-mix(in srgb, var(--drift) 60%, transparent);
 }
 

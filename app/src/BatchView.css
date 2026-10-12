@@ -46,11 +46,11 @@
 }
 
 .batch-status-running {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .batch-status-done {
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .batch-status-error {
