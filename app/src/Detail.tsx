@@ -341,7 +341,7 @@ export function SubtitleChoiceDialog({
   const t = useT();
   return (
     <Dialog onClose={onClose} closeOnBackdrop className="batch-choice-panel" labelledBy="subs-title">
-      <DialogHeader id="subs-title" title={title} titleTooltip={titleTooltip} onClose={onClose} closeIcon />
+      <DialogHeader id="subs-title" title={title} titleTooltip={titleTooltip} onClose={onClose} />
       <div className="batch-choice-subs">
         <h3>
           {t.multi.subsToRetime} <InfoTip>{t.multi.subsToRetimeHint}</InfoTip>

@@ -314,33 +314,36 @@ export function MoveButtons({
   const t = useT();
   return (
     <>
-      <button
-        className="small-button icon-small-button"
-        onClick={() => onChange((f) => moved(f, index, index - 1))}
-        disabled={disabled || index === 0}
-        title={t.batch.moveUp}
-        aria-label={t.batch.moveUp}
-      >
-        <ArrowUpIcon />
-      </button>
-      <button
-        className="small-button icon-small-button"
-        onClick={() => onChange((f) => moved(f, index, index + 1))}
-        disabled={disabled || index === count - 1}
-        title={t.batch.moveDown}
-        aria-label={t.batch.moveDown}
-      >
-        <ArrowDownIcon />
-      </button>
-      <button
-        className="small-button icon-small-button"
-        onClick={() => onChange((f) => f.filter((_, i) => i !== index))}
-        disabled={disabled}
-        title={t.common.remove}
-        aria-label={t.common.remove}
-      >
-        <CloseIcon />
-      </button>
+      <Tooltip text={t.batch.moveUp}>
+        <button
+          className="small-button icon-small-button"
+          onClick={() => onChange((f) => moved(f, index, index - 1))}
+          disabled={disabled || index === 0}
+          aria-label={t.batch.moveUp}
+        >
+          <ArrowUpIcon />
+        </button>
+      </Tooltip>
+      <Tooltip text={t.batch.moveDown}>
+        <button
+          className="small-button icon-small-button"
+          onClick={() => onChange((f) => moved(f, index, index + 1))}
+          disabled={disabled || index === count - 1}
+          aria-label={t.batch.moveDown}
+        >
+          <ArrowDownIcon />
+        </button>
+      </Tooltip>
+      <Tooltip text={t.common.remove}>
+        <button
+          className="small-button icon-small-button"
+          onClick={() => onChange((f) => f.filter((_, i) => i !== index))}
+          disabled={disabled}
+          aria-label={t.common.remove}
+        >
+          <CloseIcon />
+        </button>
+      </Tooltip>
     </>
   );
 }

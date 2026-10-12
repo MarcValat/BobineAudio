@@ -1,14 +1,7 @@
 /* The settings drawer (see Options.tsx): its title row, then one setting per
    block -- its name, its control at full width, what it does underneath. */
-.options-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding-bottom: 4px;
-}
-
-.options-head h2 {
-  margin: 0 auto 0 0;
+/* The drawer's title, bigger than a dialog's. */
+.options-drawer .dialog-header h2 {
   font-size: 18px;
   font-weight: 700;
 }

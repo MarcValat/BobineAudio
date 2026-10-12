@@ -4,6 +4,7 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import { devParam, errorMessage } from "./util";
 import { DownloadIcon } from "./icons";
+import { Tooltip } from "./InfoTip";
 import { useT } from "./i18n";
 import { useCheckUpdates } from "./settings";
 
@@ -132,16 +133,17 @@ export function UpdateButton() {
 
   return (
     <div className="update-box" ref={boxRef}>
-      <button
-        className={`icon-button update-button${failed ? " update-button-failed" : ""}${busy ? " update-button-busy" : ""}`}
-        title={title}
-        aria-label={title}
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <DownloadIcon />
-        <span className="update-dot" aria-hidden="true" />
-      </button>
+      <Tooltip text={title}>
+        <button
+          className={`icon-button update-button${failed ? " update-button-failed" : ""}${busy ? " update-button-busy" : ""}`}
+          aria-label={title}
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+        >
+          <DownloadIcon />
+          <span className="update-dot" aria-hidden="true" />
+        </button>
+      </Tooltip>
       {open && (
         <div className="top-menu update-menu" role="dialog">
           <p className="update-menu-title">{failed ? t.update.failedHeading : t.update.availableHeading(update.version)}</p>

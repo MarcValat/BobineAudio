@@ -1,7 +1,7 @@
 import { useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { fetchClip, fetchCorrectedClip, fetchWaveform, type SegmentOut } from "./api";
 import { candidateSpansIn, planResult, silentRegions, skippedRegions } from "./resultPlan";
-import { InfoTip } from "./InfoTip";
+import { InfoTip, Tooltip } from "./InfoTip";
 import { Select } from "./Dropdown";
 import { MIN_VIEW_DURATION_S, panView, type TimeView, zoomView } from "./timeView";
 import { formatOffsetMs, formatTime, segmentOffsetLabel } from "./SegmentChart";
@@ -731,22 +731,16 @@ export function TrackPreview({
       <div className="preview-toolbar">
         <div className="waveform-zoom-controls">
           <span>{t.preview.zoom}</span>
-          <button
-            className="small-button zoom-button"
-            title={t.preview.zoomIn}
-            aria-label={t.preview.zoomIn}
-            onClick={() => zoomAt(0.5, previewStart)}
-          >
-            <PlusIcon />
-          </button>
-          <button
-            className="small-button zoom-button"
-            title={t.preview.zoomOut}
-            aria-label={t.preview.zoomOut}
-            onClick={() => zoomAt(2, previewStart)}
-          >
-            <MinusIcon />
-          </button>
+          <Tooltip text={t.preview.zoomIn}>
+            <button className="small-button zoom-button" aria-label={t.preview.zoomIn} onClick={() => zoomAt(0.5, previewStart)}>
+              <PlusIcon />
+            </button>
+          </Tooltip>
+          <Tooltip text={t.preview.zoomOut}>
+            <button className="small-button zoom-button" aria-label={t.preview.zoomOut} onClick={() => zoomAt(2, previewStart)}>
+              <MinusIcon />
+            </button>
+          </Tooltip>
           <button className="small-button" onClick={resetZoom}>
             {t.preview.wholeTrack}
           </button>

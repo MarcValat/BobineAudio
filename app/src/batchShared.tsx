@@ -4,6 +4,7 @@ import { cancelJob, type RenderResponse, type SegmentsResponse } from "./api";
 import { JobCancelled, runJob, type RunStatus } from "./jobs";
 import { pickFolder, planOutputPaths } from "./mediaDialog";
 import { FolderIcon } from "./icons";
+import { Tooltip } from "./InfoTip";
 import { errorMessage, loadSetting, saveSetting } from "./util";
 import { t, useT } from "./i18n";
 
@@ -190,14 +191,11 @@ export function RevealButton({ file }: { file: string | undefined }) {
   const t = useT();
   if (!file) return null;
   return (
-    <button
-      className="small-button icon-small-button"
-      title={t.batch.folderHint}
-      aria-label={t.batch.folderHint}
-      onClick={() => revealItemInDir(file)}
-    >
-      <FolderIcon />
-    </button>
+    <Tooltip text={t.batch.folderHint}>
+      <button className="small-button icon-small-button" aria-label={t.batch.folderHint} onClick={() => revealItemInDir(file)}>
+        <FolderIcon />
+      </button>
+    </Tooltip>
   );
 }
 

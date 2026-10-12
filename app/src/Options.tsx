@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { isTauri } from "@tauri-apps/api/core";
-import { InfoTip } from "./InfoTip";
+import { InfoTip, Tooltip } from "./InfoTip";
 import { PillSwitch } from "./PillSwitch";
 import { applyTheme, loadTheme, type ThemeChoice } from "./theme";
 import "./Options.css";
-import { CloseIcon, GearIcon } from "./icons";
-import { Dialog } from "./Dialog";
+import { GearIcon } from "./icons";
+import { Dialog, DialogHeader } from "./Dialog";
 import { Select } from "./Dropdown";
 import { useLanguageChoice, useT, type LanguageChoice } from "./i18n";
 import { clearCache, getCacheSize } from "./api";
@@ -51,15 +51,16 @@ export function OptionsButton() {
 
   return (
     <>
-      <button
-        className={`icon-button${open && !closing ? " icon-button-on" : ""}`}
-        title={t.options.title}
-        aria-label={t.options.title}
-        aria-expanded={open && !closing}
-        onClick={() => (open ? close() : setOpen(true))}
-      >
-        <GearIcon />
-      </button>
+      <Tooltip text={t.options.title}>
+        <button
+          className={`icon-button${open && !closing ? " icon-button-on" : ""}`}
+          aria-label={t.options.title}
+          aria-expanded={open && !closing}
+          onClick={() => (open ? close() : setOpen(true))}
+        >
+          <GearIcon />
+        </button>
+      </Tooltip>
       {open && <OptionsDrawer closing={closing} onClose={close} />}
     </>
   );
@@ -101,12 +102,7 @@ function OptionsDrawer({ closing, onClose }: { closing: boolean; onClose: () => 
 
   return (
     <Dialog onClose={onClose} closeOnBackdrop side closing={closing} className="options-drawer" labelledBy="options-title">
-      <div className="options-head">
-        <h2 id="options-title">{t.options.title}</h2>
-        <button className="icon-button" aria-label={t.common.close} title={t.common.close} onClick={onClose}>
-          <CloseIcon />
-        </button>
-      </div>
+      <DialogHeader id="options-title" title={t.options.title} onClose={onClose} />
 
       <Setting label={t.options.theme} hint={t.options.themeHint}>
         <PillSwitch

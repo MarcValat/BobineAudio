@@ -32,7 +32,7 @@ function LogDialog({ lines, onClose }: { lines: string[]; onClose: () => void })
   }, [lines]);
   return (
     <Dialog onClose={onClose} closeOnBackdrop className="log-dialog" labelledBy={id}>
-      <DialogHeader id={id} title={t.common.log(lines.length)} onClose={onClose} closeIcon />
+      <DialogHeader id={id} title={t.common.log(lines.length)} onClose={onClose} />
       <pre
         ref={logRef}
         className="log"
