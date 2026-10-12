@@ -254,6 +254,28 @@ fn window_state_flags() -> StateFlags {
     StateFlags::all() - StateFlags::DECORATIONS
 }
 
+/// Before the window first shows: on a screen with less room than its
+/// minimum size (tauri.conf.json) or its size (the default, or one saved on
+/// a bigger screen), e.g. a 1366x768 laptop at 125%, its minimum shrinks to
+/// the screen's free area (taskbar excluded) and it opens maximized, all of
+/// it on screen. The page then zooms out to fit there (uiScale.ts).
+fn fit_to_screen(window: &tauri::WebviewWindow) {
+    let (Ok(Some(monitor)), Ok(size)) = (window.current_monitor(), window.outer_size()) else {
+        return;
+    };
+    let area = monitor.work_area().size;
+    if size.width <= area.width && size.height <= area.height {
+        return;
+    }
+    let scale = monitor.scale_factor();
+    let min = tauri::LogicalSize::new(
+        f64::min(1024.0, area.width as f64 / scale),
+        f64::min(640.0, area.height as f64 / scale),
+    );
+    let _ = window.set_min_size(Some(min));
+    let _ = window.maximize();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -280,6 +302,7 @@ pub fn run() {
             let port = free_port();
             app.manage(EnginePort(port));
             if let Some(window) = app.get_webview_window("main") {
+                fit_to_screen(&window);
                 let _ = window.show();
             }
             let handle = app.handle().clone();
