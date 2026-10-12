@@ -259,7 +259,15 @@ fn window_state_flags() -> StateFlags {
 /// a bigger screen), e.g. a 1366x768 laptop at 125%, its minimum shrinks to
 /// the screen's free area (taskbar excluded) and it opens maximized, all of
 /// it on screen. The page then zooms out to fit there (uiScale.ts).
+///
+/// Not for a window restored maximized (window-state): it fills the screen
+/// already, and a new minimum size would take it out of maximized at that
+/// size -- the size it then got back once unmaximized, past the screen's
+/// edges, instead of the one it had before being maximized.
 fn fit_to_screen(window: &tauri::WebviewWindow) {
+    if window.is_maximized().unwrap_or(false) {
+        return;
+    }
     let (Ok(Some(monitor)), Ok(size)) = (window.current_monitor(), window.outer_size()) else {
         return;
     };
