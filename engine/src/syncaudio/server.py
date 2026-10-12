@@ -30,8 +30,8 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from syncaudio import analysis_cache, dsp, waveform_cache
-from syncaudio.cancellation import Cancelled
 from syncaudio.analysis_cache import ANALYSIS_SAMPLE_RATE
+from syncaudio.cancellation import Cancelled
 from syncaudio.ffmpeg_backend import (
     FFmpegError,
     extract_wav_clip,
@@ -51,9 +51,11 @@ from syncaudio.render import (
     export_codec_name,
     plan_corrections,
     plan_segmented_correction,
-    render as render_tracks,
     resolve_targets,
     track_key,
+)
+from syncaudio.render import (
+    render as render_tracks,
 )
 from syncaudio.segments import DEFAULT_HOP_S, DEFAULT_MARGIN_S, DEFAULT_WINDOW_S, Segment, detect_segments
 from syncaudio.subtitles import is_shiftable

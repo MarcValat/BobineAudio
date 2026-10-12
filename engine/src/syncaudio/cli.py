@@ -17,9 +17,11 @@ from syncaudio.render import (
     default_output_path,
     plan_corrections,
     plan_segmented_correction,
-    render as render_tracks,
     resolve_targets,
     track_key,
+)
+from syncaudio.render import (
+    render as render_tracks,
 )
 from syncaudio.segments import (
     DEFAULT_HOP_S,

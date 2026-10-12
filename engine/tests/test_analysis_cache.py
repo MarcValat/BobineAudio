@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 
 import syncaudio.analysis_cache as analysis_cache
-from syncaudio.analysis_cache import get_envelope
 from syncaudio import waveform_cache
+from syncaudio.analysis_cache import get_envelope
 from syncaudio.ffmpeg_backend import extract_peaks, resolve_ffmpeg
 from syncaudio.models import AudioTrackSpec
 

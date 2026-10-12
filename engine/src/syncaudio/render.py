@@ -9,14 +9,16 @@ from syncaudio.align import estimate_offset
 from syncaudio.analysis_cache import ANALYSIS_SAMPLE_RATE, get_envelope
 from syncaudio.ffmpeg_backend import (
     FFmpegError,
-    _run as _run_subprocess,
     _seek_args,
     probe_audio_streams,
     probe_duration,
-    probe_subtitle_codec,
     probe_stream_tags,
+    probe_subtitle_codec,
     probe_subtitle_count,
     resolve_ffmpeg,
+)
+from syncaudio.ffmpeg_backend import (
+    _run as _run_subprocess,
 )
 from syncaudio.i18n import tr
 from syncaudio.models import AudioStreamInfo, AudioTrackSpec

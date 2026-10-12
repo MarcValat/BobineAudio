@@ -145,7 +145,9 @@ def _segments_of(path: Path) -> list:
 def _run_score(manifest: dict) -> int:
     fixtures = manifest["fixtures"]
     dub_base = next(
-        f for f in fixtures if f.get("candidate", "dub") == "dub" and not f["breakpoints"] and f["stretch_factor"] is None
+        f
+        for f in fixtures
+        if f.get("candidate", "dub") == "dub" and not f["breakpoints"] and f["stretch_factor"] is None
     )
     base = _segments_of(FIXTURES / "generated" / dub_base["file"])
     print(f"base du doublage, mesuree sur {dub_base['file']} (les fixtures exact_* ont une base nulle) :")

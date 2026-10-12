@@ -34,8 +34,8 @@ from pathlib import Path
 
 import numpy as np
 
-from syncaudio.features import DEFAULT_HOP, DEFAULT_N_FFT, ENVELOPE_VERSION, extract_envelope
 from syncaudio import waveform_cache
+from syncaudio.features import DEFAULT_HOP, DEFAULT_N_FFT, ENVELOPE_VERSION, extract_envelope
 from syncaudio.ffmpeg_backend import (
     PEAKS_SAMPLE_RATE,
     _file_identity,
@@ -122,7 +122,7 @@ def _disk_load(key: _CacheKey, sample_rate: int) -> _Result | None:
     try:
         env = np.load(path, allow_pickle=False)
         os.utime(path)  # recently used: pruned last
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return None
     return env, sample_rate / DEFAULT_HOP
 
