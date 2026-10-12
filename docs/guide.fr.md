@@ -131,12 +131,13 @@ Les formes d'onde et l'écoute suivent tes modifications en direct : c'est le mo
 
 ## Exporter
 
-**Sortie**, en bas à gauche, choisit où écrire les exports :
+**Export**, en bas à gauche, résume les options d'export ; « Modifier… » les ouvre :
 
-- **à côté des originaux** (par défaut), avec le suffixe « .synced » : `Film.mkv` donne `Film.synced.mkv` ;
-- ou **un autre dossier** (« Choisir un dossier… »), où chaque export garde le nom de son original, sauf si ce nom y est déjà pris.
+- **Dossier de sortie** : **à côté des originaux** (par défaut), avec le suffixe « .synced » (`Film.mkv` donne `Film.synced.mkv`), ou **un autre dossier** (« Choisir un dossier… »), où chaque export garde le nom de son original, sauf si ce nom y est déjà pris.
+- **Codec audio** des pistes corrigées : **Auto** (comme la source, voir plus bas), ou Opus, AAC (lent à encoder), FLAC (sans perte), AC3 ou E-AC3 (5.1 au plus : une piste 7.1 est réduite).
+- **Nom des pistes corrigées** : **D'origine** (le nom de la piste source), **Automatique** (composé de sa langue, de son codec d'export et de ses canaux : « FR Opus 2.0 », « JP FLAC 2.0 ») ou **Personnalisé** (un nom par langue). Dans le détail d'un fichier, « Nom à l'export » montre le nom de chaque piste corrigée, et le change pour ce fichier seulement.
 
-Ce choix est retenu. Le fichier d'origine n'est jamais modifié.
+Ces options sont retenues. Le fichier d'origine n'est jamais modifié.
 
 « Exporter tout » écrit un fichier par épisode, un à la fois ; « Exporter ce fichier » n'écrit que celui affiché. « Annuler l'export » arrête celui en cours et ne lance pas les suivants : aucun fichier à moitié écrit ne reste sur le disque. Une fois un fichier écrit, l'icône de dossier dans son détail ouvre son dossier.
 
@@ -144,7 +145,7 @@ Le fichier exporté est un **MKV** qui contient :
 
 - la **vidéo**, copiée telle quelle (sans réencodage, donc sans perte) ;
 - la **piste de référence**, copiée telle quelle ;
-- chaque **piste corrigée**, réencodée dans son format d'origine et à son débit d'origine. Deux exceptions : l'AAC devient de l'Opus (l'encodeur AAC disponible est trop lent), et les formats sans équivalent (TrueHD, DTS…) deviennent du FLAC, sans perte ;
+- chaque **piste corrigée**, réencodée dans le codec choisi ; en **Auto**, dans son format d'origine et à son débit d'origine, à deux exceptions près : l'AAC devient de l'Opus (l'encodeur AAC disponible est lent), et les formats sans équivalent (TrueHD, DTS…) deviennent du FLAC, sans perte ;
 - les **sous-titres** (voir [Les sous-titres](#les-sous-titres)).
 
 Les autres pistes audio du fichier ne sont pas incluses.

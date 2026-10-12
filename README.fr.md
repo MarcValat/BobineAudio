@@ -36,7 +36,7 @@ Un doublage colle rarement à la vidéo à laquelle on l'ajoute : quelques image
 - 🎯 **Détecte les trois types de décalage** : constant, dérive progressive, sauts, chacun avec un score de confiance.
 - 👀 **Vérifier avant d'exporter** : formes d'onde de la référence, de la piste telle quelle et du résultat final, avec ce qui sera coupé ou comblé de silence surligné, et une écoute qui mélange les trois au choix.
 - ✏️ **Corriger à la main si besoin** : glisser un segment ou une frontière, couper, retirer une fausse détection, défaire / refaire, retirer d'un clic les segments peu fiables.
-- 📦 **Un export propre** : un nouveau MKV avec la vidéo, la piste de référence et les pistes corrigées ; les sous-titres texte (SRT, ASS) associés à une piste subissent les mêmes sauts et la même dérive. Le fichier d'origine n'est jamais modifié.
+- 📦 **Un export propre** : un nouveau MKV avec la vidéo, la piste de référence et les pistes corrigées, dans le codec et sous les noms choisis (« FR Opus 2.0 ») ; les sous-titres texte (SRT, ASS) associés à une piste subissent les mêmes sauts et la même dérive. Le fichier d'origine n'est jamais modifié.
 - 🗂️ **Une série entière en une passe** : des fichiers qui contiennent chacun les deux versions (pistes choisies par langue), ou des paires de fichiers où la piste corrigée vient d'un autre fichier (une vidéo, ou un simple fichier audio).
 - 🖱️ **Glisser-déposer** : des fichiers, ou tout un dossier (épisodes dans l'ordre des noms).
 - 🌗 **Confort** : français ou anglais, thème clair ou sombre, taille de l'interface réglable, analyses gardées sur le disque (rouvrir un fichier est immédiat), mises à jour automatiques.

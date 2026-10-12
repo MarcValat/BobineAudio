@@ -36,7 +36,7 @@ A dub rarely lines up with the video it's added to: a few frames of delay, an of
 - 🎯 **Detects all three kinds of desync**: constant offset, progressive drift, jumps, each with a confidence score.
 - 👀 **Check before exporting**: waveforms of the reference, the track as it is and the final result, with what will be cut or filled with silence highlighted, and listening that mixes any of the three.
 - ✏️ **Correct by hand if needed**: drag a segment or a boundary, split, remove a false detection, undo / redo, remove unreliable segments in one click.
-- 📦 **A clean export**: a new MKV with the video, the reference track and the corrected tracks; the text subtitles (SRT, ASS) that go with a track get the same jumps and drift. The original file is never changed.
+- 📦 **A clean export**: a new MKV with the video, the reference track and the corrected tracks, in the codec and under the names you pick ("FR Opus 2.0"); the text subtitles (SRT, ASS) that go with a track get the same jumps and drift. The original file is never changed.
 - 🗂️ **A whole series in one pass**: files that each hold both versions (tracks picked by language), or pairs of files where the corrected track comes from another file (a video, or a bare audio file).
 - 🖱️ **Drag and drop**: files, or a whole folder (episodes in name order).
 - 🌗 **Comfort**: English or French, light or dark theme, adjustable interface size, analyses kept on disk (reopening a file is instant), automatic updates.

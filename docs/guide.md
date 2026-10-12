@@ -131,12 +131,13 @@ The waveforms and the listening follow your changes live: it's the surest way to
 
 ## Exporting
 
-**Output**, at the bottom left, picks where the exports go:
+**Export**, at the bottom left, sums up the export options; "Change…" opens them:
 
-- **next to the originals** (the default), with the ".synced" suffix: `Film.mkv` gives `Film.synced.mkv`;
-- or **another folder** ("Choose a folder…"), where each export keeps its original's name, unless that name is already taken there.
+- **Output folder**: **next to the originals** (the default), with the ".synced" suffix (`Film.mkv` gives `Film.synced.mkv`), or **another folder** ("Choose a folder…"), where each export keeps its original's name, unless that name is already taken there.
+- **Audio codec** of the corrected tracks: **Auto** (as the source, see below), or Opus, AAC (slow to encode), FLAC (lossless), AC3 or E-AC3 (5.1 at most: a 7.1 track is mixed down).
+- **Corrected tracks' names**: **Original** (the source track's name), **Automatic** (made of its language, export codec and channels: "FR Opus 2.0", "JP FLAC 2.0"), or **Custom** (one name per language). In a file's detail, "Name in the export" shows each corrected track's name, and changes it for that file only.
 
-The choice is remembered. The original file is never changed.
+The options are remembered. The original file is never changed.
 
 "Export all" writes one file per episode, one at a time; "Export this file" writes only the one shown. "Cancel export" stops the one running and doesn't start the next ones: no half-written file is left on disk. Once a file is written, the folder icon in its detail opens its folder.
 
@@ -144,7 +145,7 @@ The exported file is an **MKV** holding:
 
 - the **video**, copied as is (not re-encoded, so no loss);
 - the **reference track**, copied as is;
-- each **corrected track**, re-encoded in its original format and bitrate. Two exceptions: AAC becomes Opus (the available AAC encoder is too slow), and formats with no encoder (TrueHD, DTS…) become lossless FLAC;
+- each **corrected track**, re-encoded in the codec picked; with **Auto**, in its original format and bitrate, with two exceptions: AAC becomes Opus (the available AAC encoder is slow), and formats with no encoder (TrueHD, DTS…) become lossless FLAC;
 - the **subtitles** (see [Subtitles](#subtitles)).
 
 The file's other audio tracks are left out.
