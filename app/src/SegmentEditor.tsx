@@ -433,6 +433,8 @@ export function SegmentEditor({
 
   const previewRef = useRef<TrackPreviewHandle>(null);
   const clipId = useId();
+  // Names the dialog for a screen reader (its title row).
+  const titleId = useId();
 
   useWheel(svgRef, (e) => {
     const t = timeFromClientX(e.clientX);
@@ -466,6 +468,7 @@ export function SegmentEditor({
   return (
     <Dialog
       fill
+      labelledBy={titleId}
       onClose={onClose}
       // Escape backs out of the "abandon changes?" question first.
       onEscape={() => (confirmingClose ? setConfirmingClose(false) : requestClose())}
@@ -473,6 +476,7 @@ export function SegmentEditor({
       className={`editor-panel${preview ? " editor-panel-wide" : ""}${narrow ? " editor-narrow" : ""}`}
     >
       <DialogHeader
+        id={titleId}
         titleTooltip={subtitle}
         title={
           <>
