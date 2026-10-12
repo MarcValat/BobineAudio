@@ -7,7 +7,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", "src-tauri", "node_modules"] },
+  { ignores: ["dist", "src-tauri", "node_modules", "e2e/report", "e2e/results"] },
   {
     files: ["src/**/*.{ts,tsx}"],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
@@ -18,7 +18,7 @@ export default tseslint.config(
     rules: { "react-hooks/rules-of-hooks": "error", "react-hooks/exhaustive-deps": "warn" },
   },
   {
-    files: ["e2e/**/*.mjs", "scripts/**/*.mjs", "*.js", "*.ts"],
+    files: ["e2e/**/*.ts", "scripts/**/*.mjs", "*.js", "*.ts"],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
