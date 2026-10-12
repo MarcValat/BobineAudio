@@ -62,7 +62,7 @@ export function OptionsButton() {
 }
 
 /** How long the drawer takes to slide out (Dialog.css's dialog-slide-out). */
-const CLOSE_MS = 180;
+const CLOSE_MS = 220;
 
 /** One setting: its name with what it does in a "?" tip (as everywhere in
  * the suite), its control, and `note`, a fact worth seeing at once. */
