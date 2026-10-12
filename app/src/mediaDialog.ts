@@ -7,8 +7,28 @@ import { t } from "./i18n";
 // can come from (batch mode): anything ffmpeg reads is fine, these are the
 // usual ones -- and what a dropped folder's files are picked by.
 export const MEDIA_EXTENSIONS = [
-  "mkv", "mp4", "m4v", "mov", "avi", "webm", "ts", "m2ts",
-  "mka", "wav", "flac", "aac", "ac3", "eac3", "dts", "thd", "mlp", "mp3", "m4a", "opus", "ogg", "wma",
+  "mkv",
+  "mp4",
+  "m4v",
+  "mov",
+  "avi",
+  "webm",
+  "ts",
+  "m2ts",
+  "mka",
+  "wav",
+  "flac",
+  "aac",
+  "ac3",
+  "eac3",
+  "dts",
+  "thd",
+  "mlp",
+  "mp3",
+  "m4a",
+  "opus",
+  "ogg",
+  "wma",
 ];
 const mediaFilters = () => [
   { name: t().files.mediaFilter, extensions: MEDIA_EXTENSIONS },
@@ -36,7 +56,7 @@ export async function pickMediaFiles(multiple: boolean, title?: string): Promise
   if (!selected) return null;
   const files = Array.isArray(selected) ? selected : [selected];
   if (files.length > 0) rememberFolder(files[0]);
-  return multiple ? files : files[0] ?? null;
+  return multiple ? files : (files[0] ?? null);
 }
 
 /** The system's folder picker, starting at `defaultPath` when given. */
@@ -62,9 +82,7 @@ function joinPath(dir: string, name: string): string {
 
 /** The same file or folder: on Windows, whatever the case and slash direction. */
 function samePath(a: string, b: string): boolean {
-  const norm = WINDOWS
-    ? (p: string) => p.replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase()
-    : (p: string) => p.replace(/\/+$/, "");
+  const norm = WINDOWS ? (p: string) => p.replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase() : (p: string) => p.replace(/\/+$/, "");
   return norm(a) === norm(b);
 }
 

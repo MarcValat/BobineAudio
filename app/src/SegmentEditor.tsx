@@ -428,9 +428,7 @@ export function SegmentEditor({
   // The segment "Retirer" would leave in place of the hovered one and its neighbour.
   const removalGhost =
     removalPreview !== null && removalPreview < segmentsPreview.length && segmentsPreview.length > 1
-      ? toSegments(mergeSegment(state, removalPreview))[
-          removalPreview < segmentsPreview.length - 1 ? removalPreview : removalPreview - 1
-        ]
+      ? toSegments(mergeSegment(state, removalPreview))[removalPreview < segmentsPreview.length - 1 ? removalPreview : removalPreview - 1]
       : null;
 
   const previewRef = useRef<TrackPreviewHandle>(null);
@@ -474,10 +472,10 @@ export function SegmentEditor({
       panelRef={panelRef}
       className={`editor-panel${preview ? " editor-panel-wide" : ""}${narrow ? " editor-narrow" : ""}`}
     >
-        <DialogHeader
-          titleTooltip={subtitle}
-          title={
-            <>
+      <DialogHeader
+        titleTooltip={subtitle}
+        title={
+          <>
             {t.editor.title}{" "}
             <InfoTip>
               <ul>
@@ -493,41 +491,41 @@ export function SegmentEditor({
               </ul>
             </InfoTip>
             {subtitle && <span className="editor-subtitle">{subtitle}</span>}
-            </>
-          }
-        >
-          {/* Too narrow for the chart and the preview side by side: one at a time. */}
-          {narrow && (
-            <PillSwitch
-              className="view-switch"
-              label={t.common.view}
-              options={[
-                ["segments", t.common.segments],
-                ["listen", t.common.listen],
-              ]}
-              value={editorView}
-              onChange={setEditorView}
-            />
-          )}
-          {/* What the lines mean, then the question when closing would lose
+          </>
+        }
+      >
+        {/* Too narrow for the chart and the preview side by side: one at a time. */}
+        {narrow && (
+          <PillSwitch
+            className="view-switch"
+            label={t.common.view}
+            options={[
+              ["segments", t.common.segments],
+              ["listen", t.common.listen],
+            ]}
+            value={editorView}
+            onChange={setEditorView}
+          />
+        )}
+        {/* What the lines mean, then the question when closing would lose
               edits (Annuler or Escape). */}
-          <SegmentLegend unreliable={state.confidences.some((c) => c < LOW_CONFIDENCE_THRESHOLD)} />
-          {confirmingClose && (
-            <div className="editor-confirm-close" role="alertdialog">
-              <span>{t.editor.abandonQuestion}</span>
-              <button className="small-button export-cancel" onClick={onClose}>
-                {t.editor.abandon}
-              </button>
-              <button className="small-button" onClick={() => setConfirmingClose(false)}>
-                {t.editor.keepEditing}
-              </button>
-            </div>
-          )}
-        </DialogHeader>
+        <SegmentLegend unreliable={state.confidences.some((c) => c < LOW_CONFIDENCE_THRESHOLD)} />
+        {confirmingClose && (
+          <div className="editor-confirm-close" role="alertdialog">
+            <span>{t.editor.abandonQuestion}</span>
+            <button className="small-button export-cancel" onClick={onClose}>
+              {t.editor.abandon}
+            </button>
+            <button className="small-button" onClick={() => setConfirmingClose(false)}>
+              {t.editor.keepEditing}
+            </button>
+          </div>
+        )}
+      </DialogHeader>
 
-        <div className="editor-columns">
-          <div className={narrow && editorView !== "segments" ? "editor-primary view-hidden" : "editor-primary"}>
-            <div className="editor-chart-box" ref={chartBoxRef}>
+      <div className="editor-columns">
+        <div className={narrow && editorView !== "segments" ? "editor-primary view-hidden" : "editor-primary"}>
+          <div className="editor-chart-box" ref={chartBoxRef}>
             <svg
               ref={svgRef}
               className={`editor-chart${preview ? " editor-chart-listenable" : ""}${dragging ? " editor-chart-dragging" : ""}`}
@@ -563,83 +561,83 @@ export function SegmentEditor({
                 ))}
 
                 <g clipPath={`url(#${clipId})`}>
-                {segmentsPreview.map((seg, i) => {
-                  const [yStart, yEnd] = drawnOffsets(seg).map(y);
-                  const isDragged = dragging?.kind === "segment" && dragging.index === i;
-                  return (
-                    <g key={i}>
-                      <line
-                        x1={x(seg.start_s)}
-                        y1={yStart}
-                        x2={x(seg.end_s)}
-                        y2={yEnd}
-                        className={`segment-line ${seg.is_drift ? "drift" : "constant"}${
-                          seg.confidence < LOW_CONFIDENCE_THRESHOLD ? " low-confidence" : ""
-                        }${removalPreview === i ? " removal-target" : ""}`}
-                      />
-                      {/* A wide invisible stroke on top: the visible line is too thin to grab. */}
-                      <line
-                        x1={x(seg.start_s)}
-                        y1={yStart}
-                        x2={x(seg.end_s)}
-                        y2={yEnd}
-                        className="segment-hit"
-                        onPointerDown={(e) =>
-                          startDrag(e, {
-                            kind: "segment",
-                            index: i,
-                            grabOffset: offsetFromClientY(e.clientY),
-                            offsetStart: seg.offset_start,
-                            offsetEnd: seg.offset_end,
-                          })
-                        }
-                      />
-                      <text
-                        x={labelX(seg)}
-                        y={yStart + (yEnd - yStart) * ((labelX(seg) - x(seg.start_s)) / (x(seg.end_s) - x(seg.start_s) || 1)) - 10}
-                        className={isDragged ? "segment-label dragged" : "segment-label"}
-                        textAnchor="middle"
-                      >
-                        {segmentOffsetLabel(seg)}
-                        {seg.confidence < LOW_CONFIDENCE_THRESHOLD ? " ⚠" : ""}
-                      </text>
-                    </g>
-                  );
-                })}
+                  {segmentsPreview.map((seg, i) => {
+                    const [yStart, yEnd] = drawnOffsets(seg).map(y);
+                    const isDragged = dragging?.kind === "segment" && dragging.index === i;
+                    return (
+                      <g key={i}>
+                        <line
+                          x1={x(seg.start_s)}
+                          y1={yStart}
+                          x2={x(seg.end_s)}
+                          y2={yEnd}
+                          className={`segment-line ${seg.is_drift ? "drift" : "constant"}${
+                            seg.confidence < LOW_CONFIDENCE_THRESHOLD ? " low-confidence" : ""
+                          }${removalPreview === i ? " removal-target" : ""}`}
+                        />
+                        {/* A wide invisible stroke on top: the visible line is too thin to grab. */}
+                        <line
+                          x1={x(seg.start_s)}
+                          y1={yStart}
+                          x2={x(seg.end_s)}
+                          y2={yEnd}
+                          className="segment-hit"
+                          onPointerDown={(e) =>
+                            startDrag(e, {
+                              kind: "segment",
+                              index: i,
+                              grabOffset: offsetFromClientY(e.clientY),
+                              offsetStart: seg.offset_start,
+                              offsetEnd: seg.offset_end,
+                            })
+                          }
+                        />
+                        <text
+                          x={labelX(seg)}
+                          y={yStart + (yEnd - yStart) * ((labelX(seg) - x(seg.start_s)) / (x(seg.end_s) - x(seg.start_s) || 1)) - 10}
+                          className={isDragged ? "segment-label dragged" : "segment-label"}
+                          textAnchor="middle"
+                        >
+                          {segmentOffsetLabel(seg)}
+                          {seg.confidence < LOW_CONFIDENCE_THRESHOLD ? " ⚠" : ""}
+                        </text>
+                      </g>
+                    );
+                  })}
 
-                {/* "Retirer" hovered: what the neighbour would become once stretched over the removed segment. */}
-                {removalGhost && (
-                  <line
-                    x1={x(removalGhost.start_s)}
-                    y1={y(drawnOffsets(removalGhost)[0])}
-                    x2={x(removalGhost.end_s)}
-                    y2={y(drawnOffsets(removalGhost)[1])}
-                    className="segment-line removal-ghost"
-                  />
-                )}
+                  {/* "Retirer" hovered: what the neighbour would become once stretched over the removed segment. */}
+                  {removalGhost && (
+                    <line
+                      x1={x(removalGhost.start_s)}
+                      y1={y(drawnOffsets(removalGhost)[0])}
+                      x2={x(removalGhost.end_s)}
+                      y2={y(drawnOffsets(removalGhost)[1])}
+                      className="segment-line removal-ghost"
+                    />
+                  )}
 
-                {/* What the render does at each jump: cut extra content, or fill missing content with silence. */}
-                {segmentsPreview.slice(1).map((seg, k) => {
-                  const label = describeJump(seg.offset_start - segmentsPreview[k].offset_end);
-                  return (
-                    label && (
-                      <text key={k} x={x(seg.start_s) + 6} y={PLOT_H - 6} className="jump-label">
-                        {label}
-                      </text>
-                    )
-                  );
-                })}
+                  {/* What the render does at each jump: cut extra content, or fill missing content with silence. */}
+                  {segmentsPreview.slice(1).map((seg, k) => {
+                    const label = describeJump(seg.offset_start - segmentsPreview[k].offset_end);
+                    return (
+                      label && (
+                        <text key={k} x={x(seg.start_s) + 6} y={PLOT_H - 6} className="jump-label">
+                          {label}
+                        </text>
+                      )
+                    );
+                  })}
 
-                {preview && cursor !== null && inView(x(cursor)) && (
-                  <line
-                    x1={0}
-                    y1={0}
-                    x2={0}
-                    y2={PLOT_H}
-                    className={`playback-cursor${cursorGlide ? " glide" : ""}`}
-                    style={{ transform: `translateX(${x(cursor)}px)` }}
-                  />
-                )}
+                  {preview && cursor !== null && inView(x(cursor)) && (
+                    <line
+                      x1={0}
+                      y1={0}
+                      x2={0}
+                      y2={PLOT_H}
+                      className={`playback-cursor${cursorGlide ? " glide" : ""}`}
+                      style={{ transform: `translateX(${x(cursor)}px)` }}
+                    />
+                  )}
                 </g>
 
                 {/* Draggable handles on every *internal* boundary only -- the
@@ -656,164 +654,160 @@ export function SegmentEditor({
                 })}
               </g>
             </svg>
-            </div>
           </div>
-
-          {preview && (
-            <div className={narrow && editorView !== "listen" ? "editor-preview view-hidden" : "editor-preview"}>
-              <TrackPreview
-                referenceFilePath={preview.referenceFilePath}
-                candidateFilePath={preview.candidateFilePath}
-                referenceIndex={preview.referenceIndex}
-                trackIndex={preview.trackIndex}
-                segments={segmentsPreview}
-                referenceStartTime={preview.referenceStartTime ?? 0}
-                trackStartTime={preview.trackStartTime ?? 0}
-                controller={previewRef}
-                onCursorChange={(t, isPlaying) => {
-                  setCursor(t);
-                  setPlaying(isPlaying);
-                }}
-                view={view}
-                onViewChange={setView}
-              />
-            </div>
-          )}
         </div>
 
-        {/* Under both, across the editor (as the mockup): the segments' values. */}
-        <div className="editor-table-wrap list-scroll">
-          <table className="editor-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>
-                  {t.editor.start} <span className="th-unit">(s)</span>
-                </th>
-                <th>
-                  {t.editor.end} <span className="th-unit">(s)</span>
-                </th>
-                <th title={t.editor.offsetStartHint}>
-                  {t.editor.offsetStart} <span className="th-unit">(ms)</span>
-                </th>
-                <th title={t.editor.offsetEndHint}>
-                  {t.editor.offsetEnd} <span className="th-unit">(ms)</span>
-                </th>
-                <th>{t.editor.confidence}</th>
-                <th>{t.editor.actions}</th>
+        {preview && (
+          <div className={narrow && editorView !== "listen" ? "editor-preview view-hidden" : "editor-preview"}>
+            <TrackPreview
+              referenceFilePath={preview.referenceFilePath}
+              candidateFilePath={preview.candidateFilePath}
+              referenceIndex={preview.referenceIndex}
+              trackIndex={preview.trackIndex}
+              segments={segmentsPreview}
+              referenceStartTime={preview.referenceStartTime ?? 0}
+              trackStartTime={preview.trackStartTime ?? 0}
+              controller={previewRef}
+              onCursorChange={(t, isPlaying) => {
+                setCursor(t);
+                setPlaying(isPlaying);
+              }}
+              view={view}
+              onViewChange={setView}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Under both, across the editor (as the mockup): the segments' values. */}
+      <div className="editor-table-wrap list-scroll">
+        <table className="editor-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>
+                {t.editor.start} <span className="th-unit">(s)</span>
+              </th>
+              <th>
+                {t.editor.end} <span className="th-unit">(s)</span>
+              </th>
+              <th title={t.editor.offsetStartHint}>
+                {t.editor.offsetStart} <span className="th-unit">(ms)</span>
+              </th>
+              <th title={t.editor.offsetEndHint}>
+                {t.editor.offsetEnd} <span className="th-unit">(ms)</span>
+              </th>
+              <th>{t.editor.confidence}</th>
+              <th>{t.editor.actions}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {segmentsPreview.map((seg, i) => (
+              <tr key={i} className={seg.confidence < LOW_CONFIDENCE_THRESHOLD ? "editor-row-low-confidence" : undefined}>
+                <td>{i + 1}</td>
+                <td>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={cellValue(`start-${i}`, secondsText(seg.start_s))}
+                    disabled={i === 0}
+                    onChange={(e) => handleCellChange(`start-${i}`, e.target.value, (n) => updateTime(i, n))}
+                    onBlur={() => handleCellBlur(`start-${i}`)}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={cellValue(`end-${i}`, secondsText(seg.end_s))}
+                    disabled={i === segmentsPreview.length - 1}
+                    onChange={(e) => handleCellChange(`end-${i}`, e.target.value, (n) => updateTime(i + 1, n))}
+                    onBlur={() => handleCellBlur(`end-${i}`)}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={cellValue(`offsetStart-${i}`, msText(seg.offset_start))}
+                    onChange={(e) => handleCellChange(`offsetStart-${i}`, e.target.value, (n) => updateOffset("start", i, n / 1000))}
+                    onBlur={() => handleCellBlur(`offsetStart-${i}`)}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={cellValue(`offsetEnd-${i}`, msText(seg.offset_end))}
+                    onChange={(e) => handleCellChange(`offsetEnd-${i}`, e.target.value, (n) => updateOffset("end", i, n / 1000))}
+                    onBlur={() => handleCellBlur(`offsetEnd-${i}`)}
+                  />
+                </td>
+                <td className="editor-confidence-cell" title={t.editor.confidenceHint}>
+                  <ConfidenceGauge value={seg.confidence} />
+                </td>
+                <td>
+                  <button
+                    className="small-button"
+                    disabled={segmentsPreview.length < 2}
+                    title={
+                      segmentsPreview.length < 2
+                        ? t.editor.onlySegment
+                        : t.editor.removeHint(i + 1, i < segmentsPreview.length - 1 ? i + 2 : i)
+                    }
+                    onMouseEnter={() => setRemovalPreview(i)}
+                    onMouseLeave={() => setRemovalPreview(null)}
+                    onFocus={() => setRemovalPreview(i)}
+                    onBlur={() => setRemovalPreview(null)}
+                    onClick={() => {
+                      setRemovalPreview(null);
+                      applyEdit((s) => mergeSegment(s, i));
+                    }}
+                  >
+                    {t.common.remove}
+                  </button>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {segmentsPreview.map((seg, i) => (
-                <tr key={i} className={seg.confidence < LOW_CONFIDENCE_THRESHOLD ? "editor-row-low-confidence" : undefined}>
-                  <td>{i + 1}</td>
-                  <td>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={cellValue(`start-${i}`, secondsText(seg.start_s))}
-                      disabled={i === 0}
-                      onChange={(e) => handleCellChange(`start-${i}`, e.target.value, (n) => updateTime(i, n))}
-                      onBlur={() => handleCellBlur(`start-${i}`)}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={cellValue(`end-${i}`, secondsText(seg.end_s))}
-                      disabled={i === segmentsPreview.length - 1}
-                      onChange={(e) => handleCellChange(`end-${i}`, e.target.value, (n) => updateTime(i + 1, n))}
-                      onBlur={() => handleCellBlur(`end-${i}`)}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={cellValue(`offsetStart-${i}`, msText(seg.offset_start))}
-                      onChange={(e) => handleCellChange(`offsetStart-${i}`, e.target.value, (n) => updateOffset("start", i, n / 1000))}
-                      onBlur={() => handleCellBlur(`offsetStart-${i}`)}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={cellValue(`offsetEnd-${i}`, msText(seg.offset_end))}
-                      onChange={(e) => handleCellChange(`offsetEnd-${i}`, e.target.value, (n) => updateOffset("end", i, n / 1000))}
-                      onBlur={() => handleCellBlur(`offsetEnd-${i}`)}
-                    />
-                  </td>
-                  <td className="editor-confidence-cell" title={t.editor.confidenceHint}>
-                    <ConfidenceGauge value={seg.confidence} />
-                  </td>
-                  <td>
-                    <button
-                      className="small-button"
-                      disabled={segmentsPreview.length < 2}
-                      title={
-                        segmentsPreview.length < 2
-                          ? t.editor.onlySegment
-                          : t.editor.removeHint(i + 1, i < segmentsPreview.length - 1 ? i + 2 : i)
-                      }
-                      onMouseEnter={() => setRemovalPreview(i)}
-                      onMouseLeave={() => setRemovalPreview(null)}
-                      onFocus={() => setRemovalPreview(i)}
-                      onBlur={() => setRemovalPreview(null)}
-                      onClick={() => {
-                        setRemovalPreview(null);
-                        applyEdit((s) => mergeSegment(s, i));
-                      }}
-                    >
-                      {t.common.remove}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-        <div className="editor-actions">
-          <div className="editor-history">
-            <button className="with-icon" onClick={undo} disabled={past.length === 0} title="Ctrl+Z">
-              <UndoIcon />
-              {t.editor.undo}
-            </button>
-            <button className="with-icon" onClick={redo} disabled={future.length === 0} title="Ctrl+Y">
-              <RedoEditIcon />
-              {t.editor.redo}
-            </button>
-            <button
-              onClick={reset}
-              disabled={!dirty}
-              title={t.editor.resetHint}
-            >
-              {t.editor.reset}
-            </button>
-          </div>
-          <button
-            disabled={!state.confidences.some((c) => c < LOW_CONFIDENCE_THRESHOLD)}
-            title={t.editor.removeUnreliableHint}
-            onClick={() => applyEdit(ignoreLowConfidenceSegments)}
-          >
-            {t.editor.removeUnreliable}
+      <div className="editor-actions">
+        <div className="editor-history">
+          <button className="with-icon" onClick={undo} disabled={past.length === 0} title="Ctrl+Z">
+            <UndoIcon />
+            {t.editor.undo}
           </button>
-          {/* Asks first when edits would be lost (in the header). */}
-          <button onClick={requestClose} title={t.editor.cancelHint}>
-            {t.common.cancel}
+          <button className="with-icon" onClick={redo} disabled={future.length === 0} title="Ctrl+Y">
+            <RedoEditIcon />
+            {t.editor.redo}
           </button>
-          <button
-            className="primary-button"
-            onClick={() => {
-              onSave(segmentsPreview);
-              onClose();
-            }}
-          >
-            {t.editor.save}
+          <button onClick={reset} disabled={!dirty} title={t.editor.resetHint}>
+            {t.editor.reset}
           </button>
         </div>
+        <button
+          disabled={!state.confidences.some((c) => c < LOW_CONFIDENCE_THRESHOLD)}
+          title={t.editor.removeUnreliableHint}
+          onClick={() => applyEdit(ignoreLowConfidenceSegments)}
+        >
+          {t.editor.removeUnreliable}
+        </button>
+        {/* Asks first when edits would be lost (in the header). */}
+        <button onClick={requestClose} title={t.editor.cancelHint}>
+          {t.common.cancel}
+        </button>
+        <button
+          className="primary-button"
+          onClick={() => {
+            onSave(segmentsPreview);
+            onClose();
+          }}
+        >
+          {t.editor.save}
+        </button>
+      </div>
     </Dialog>
   );
 }

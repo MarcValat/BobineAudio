@@ -49,7 +49,9 @@
   /* Inter (bundled, see main.tsx) for the whole Bobine suite: a system
      stack read as Segoe UI on Windows but as whatever the desktop picks on
      Linux. The rest is only a fallback. */
-  --font-sans: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --font-sans:
+    "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji";
   --font-mono: ui-monospace, "Cascadia Code", "Segoe UI Mono", Consolas, "SF Mono", Menlo, monospace;
 
   font-family: var(--font-sans);
@@ -466,7 +468,10 @@ button {
   font-family: inherit;
   color: var(--text);
   background-color: var(--surface);
-  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s,
+    color 0.15s;
 }
 
 button {
@@ -977,7 +982,11 @@ input {
 
 /* The sliding pill: tinted with the gradient, its option in full text. */
 .pill-switch-pill {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent-strong) 32%, var(--surface)), color-mix(in srgb, var(--accent-2) 26%, var(--surface)));
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent-strong) 32%, var(--surface)),
+    color-mix(in srgb, var(--accent-2) 26%, var(--surface))
+  );
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 

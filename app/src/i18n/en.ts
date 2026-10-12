@@ -74,8 +74,7 @@ export const en: Messages = {
     uiScaleHint: "Makes the whole interface bigger or smaller: text, buttons and waveforms.",
     uiScaleLimited: (percent: number) => `Reduced to ${percent}%: the screen has no room for more.`,
     subtitles: "Default subtitles",
-    subtitlesHint:
-      "The subtitles retimed with a corrected audio track unless picked otherwise: the starting setting of both modes.",
+    subtitlesHint: "The subtitles retimed with a corrected audio track unless picked otherwise: the starting setting of both modes.",
     updates: "Updates",
     checkUpdates: "Check at startup",
     updatesHint: "At launch, the app asks GitHub whether a new version exists; nothing is installed without your consent.",
@@ -157,8 +156,7 @@ export const en: Messages = {
     forced: "forced subtitles",
     full: "full subtitles",
     titled: (title) => `titled “${title}”`,
-    unshiftable:
-      "Image subtitles (PGS, VobSub): they can't be retimed segment by segment, only text subtitles (SRT, ASS) can.",
+    unshiftable: "Image subtitles (PGS, VobSub): they can't be retimed segment by segment, only text subtitles (SRT, ASS) can.",
     takenElsewhere: "Already retimed with another audio track",
   },
 
@@ -174,7 +172,6 @@ export const en: Messages = {
     drifts: (n) => `${n} drift${n === 1 ? "" : "s"}`,
     unreliableCount: (n) => `${n} unreliable`,
   },
-
 
   batch: {
     multiMode: "Multitrack files",
@@ -230,8 +227,7 @@ export const en: Messages = {
     withTrack: (track) => `With ${track}:`,
     reference: "Reference:",
     toCorrect: "To correct:",
-    hint:
-      "Each file already holds the reference and the tracks to correct. Tracks are picked for every file, by number, language or track name: a file missing a track to correct is flagged ⚠, a file where the reference doesn't name exactly one track goes “(auto)”, and its tracks can be ticked by hand in its detail. The chosen subtitles (text only: SRT, ASS) are retimed with their language's audio track; the others are kept as they are.",
+    hint: "Each file already holds the reference and the tracks to correct. Tracks are picked for every file, by number, language or track name: a file missing a track to correct is flagged ⚠, a file where the reference doesn't name exactly one track goes “(auto)”, and its tracks can be ticked by hand in its detail. The chosen subtitles (text only: SRT, ASS) are retimed with their language's audio track; the others are kept as they are.",
     files: "Files",
     file: "File",
     addHint: "Add files that each hold the reference and the tracks to correct",
@@ -293,8 +289,7 @@ export const en: Messages = {
     fileLanguage: (language) => `From the file (${language ?? "none"})`,
     languageHint:
       "Language given to the corrected track in the exported file, when a pair corrects only one. “From the file” keeps its own; handy for a track that has none (a .wav, for instance). Several corrected tracks each keep their own.",
-    hint:
-      "Tracks offered from the first file of each column, then applied to every pair. “Check all tracks” shows each file's. The chosen subtitles of the file to correct (text only: SRT, ASS) are imported and retimed with its audio track.",
+    hint: "Tracks offered from the first file of each column, then applied to every pair. “Check all tracks” shows each file's. The chosen subtitles of the file to correct (text only: SRT, ASS) are imported and retimed with its audio track.",
     pairs: "Pairs",
     pairsHint:
       "One row = one pair: the reference (track never changed, e.g. the original version) and the file whose track is resynchronized and brought in (e.g. a dub). Files are paired in order: ↑ ↓ to fix a column's order.",
@@ -316,8 +311,7 @@ export const en: Messages = {
     candShort: "Corr.",
     noCandidate: "— no file to correct",
     noReference: "— no reference file",
-    unpairedDetail:
-      "This file has no pair yet: add its matching file in the other column, or put the files back in order with ↑ ↓.",
+    unpairedDetail: "This file has no pair yet: add its matching file in the other column, or put the files back in order with ↑ ↓.",
     addReferences: "+ References",
     addCandidates: "+ To correct",
     dropLeft: "or drop them on the window's left",

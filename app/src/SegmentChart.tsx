@@ -103,9 +103,7 @@ export function segmentOffsetLabel(seg: SegmentOut): string {
 /** "3 segments · 2 sauts · 1 peu fiable", for a track's analysis header. */
 export function describeSegments(segments: SegmentOut[]): string {
   const m = t().chart;
-  const jumps = segments
-    .slice(1)
-    .filter((seg, i) => Math.abs(seg.offset_start - segments[i].offset_end) >= JUMP_MIN_S).length;
+  const jumps = segments.slice(1).filter((seg, i) => Math.abs(seg.offset_start - segments[i].offset_end) >= JUMP_MIN_S).length;
   const drifts = segments.filter((seg) => seg.is_drift).length;
   const unreliable = segments.filter((seg) => seg.confidence < LOW_CONFIDENCE_THRESHOLD).length;
   const parts = [m.segments(segments.length)];
@@ -201,14 +199,19 @@ export function SegmentChart({ segments, fill = false }: { segments: SegmentOut[
   return (
     <div className={fill ? "segment-chart segment-chart-fill" : "segment-chart"}>
       <div className="segment-chart-box" style={fill ? undefined : { height }}>
-      {/* The plot's own box, inside the axes' margins; the labels drawn
+        {/* The plot's own box, inside the axes' margins; the labels drawn
           past its edges (overflow visible). */}
-      <svg
-        className="segment-chart-plot"
-        style={{ top: MARGIN.top, left: MARGIN.left, width: `calc(100% - ${MARGIN.left + MARGIN.right}px)`, height: `calc(100% - ${MARGIN.top + MARGIN.bottom}px)` }}
-        role="img"
-        aria-label={tr.chart.ariaLabel}
-      >
+        <svg
+          className="segment-chart-plot"
+          style={{
+            top: MARGIN.top,
+            left: MARGIN.left,
+            width: `calc(100% - ${MARGIN.left + MARGIN.right}px)`,
+            height: `calc(100% - ${MARGIN.top + MARGIN.bottom}px)`,
+          }}
+          role="img"
+          aria-label={tr.chart.ariaLabel}
+        >
           {/* offset scale, with the zero line standing out */}
           {offsetTicks(minOffset, maxOffset, 3).map((v) => (
             <g key={v}>
@@ -255,7 +258,7 @@ export function SegmentChart({ segments, fill = false }: { segments: SegmentOut[
               </g>
             );
           })}
-      </svg>
+        </svg>
       </div>
       <div className="segment-chart-footer">
         <SegmentLegend unreliable={segments.some((seg) => seg.confidence < LOW_CONFIDENCE_THRESHOLD)} />

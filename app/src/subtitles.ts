@@ -15,9 +15,7 @@ export const SUBTITLE_MODES: SubtitleMode[] = ["forced", "all", "none"];
  * retimed segment by segment. */
 export function subtitlesFor(subtitles: SubtitleInfo[], language: string | null, mode: SubtitleMode = "forced"): number[] {
   if (mode === "none" || !language) return [];
-  return subtitles
-    .filter((s) => s.shiftable && s.language === language && (mode === "all" || s.forced))
-    .map((s) => s.index);
+  return subtitles.filter((s) => s.shiftable && s.language === language && (mode === "all" || s.forced)).map((s) => s.index);
 }
 
 /** "@4 fre forcés « Français (forcé) »". */

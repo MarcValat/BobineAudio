@@ -18,9 +18,7 @@ interface PendingUpdate {
   install(): Promise<void>;
 }
 type DownloadEvent =
-  | { event: "Started"; data: { contentLength?: number } }
-  | { event: "Progress"; data: { chunkLength: number } }
-  | { event: "Finished" };
+  { event: "Started"; data: { contentLength?: number } } | { event: "Progress"; data: { chunkLength: number } } | { event: "Finished" };
 
 /** Dev only (see devParam): `?update=1` shows a pretend update. */
 function devUpdate(): PendingUpdate | null {
@@ -130,11 +128,7 @@ export function UpdateButton() {
   const busy = phase === "downloading" || phase === "ready";
   const failed = phase === "error" || phase === "failed";
   const title =
-    phase === "downloading"
-      ? t.update.downloadingTitle(percent)
-      : failed
-        ? t.update.failedTitle
-        : t.update.availableTitle(update.version);
+    phase === "downloading" ? t.update.downloadingTitle(percent) : failed ? t.update.failedTitle : t.update.availableTitle(update.version);
 
   return (
     <div className="update-box" ref={boxRef}>
@@ -150,9 +144,7 @@ export function UpdateButton() {
       </button>
       {open && (
         <div className="top-menu update-menu" role="dialog">
-          <p className="update-menu-title">
-            {failed ? t.update.failedHeading : t.update.availableHeading(update.version)}
-          </p>
+          <p className="update-menu-title">{failed ? t.update.failedHeading : t.update.availableHeading(update.version)}</p>
           {phase === "available" && (
             <>
               <p className="update-menu-note">{t.update.restartNote}</p>

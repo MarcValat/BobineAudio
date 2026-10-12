@@ -125,7 +125,11 @@ export interface RunLabels {
 /** A row's badge from its analyses (a file's corrected tracks, a pair's)
  * and its export: what's running first, then what went wrong, then how far
  * it got. Null while none has run: the mode says what's missing. */
-export function runBadge(statuses: (RunStatus | undefined)[], exportStatus: RunStatus | undefined, l: RunLabels): [string, BadgeKind] | null {
+export function runBadge(
+  statuses: (RunStatus | undefined)[],
+  exportStatus: RunStatus | undefined,
+  l: RunLabels,
+): [string, BadgeKind] | null {
   if (exportStatus === "running") return [l.exporting, "running"];
   if (statuses.includes("running")) return [l.running, "running"];
   if (statuses.includes("pending")) return [l.pending, "queued"];

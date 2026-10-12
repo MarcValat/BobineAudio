@@ -29,7 +29,9 @@
   fill: color-mix(in srgb, var(--accent) 14%, transparent);
   stroke: color-mix(in srgb, var(--accent) 38%, transparent);
   stroke-width: 1;
-  transition: fill 0.15s, stroke 0.15s;
+  transition:
+    fill 0.15s,
+    stroke 0.15s;
 }
 
 .info-tip-mark {

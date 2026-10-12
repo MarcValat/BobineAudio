@@ -131,7 +131,12 @@ export function DetailHeader({
       </div>
       {onReanalyze && (
         <Tooltip text={t.batch.reanalyzeOneHint}>
-          <button className="icon-small-button detail-icon-button" disabled={disabled} onClick={onReanalyze} aria-label={t.batch.reanalyzeOne}>
+          <button
+            className="icon-small-button detail-icon-button"
+            disabled={disabled}
+            onClick={onReanalyze}
+            aria-label={t.batch.reanalyzeOne}
+          >
             <RedoIcon />
           </button>
         </Tooltip>
@@ -152,12 +157,7 @@ export function DetailHeader({
         </button>
       )}
       {done > 0 && (
-        <button
-          className={next === "export" ? "primary-button" : ""}
-          disabled={disabled}
-          title={blockedTitle}
-          onClick={onExport}
-        >
+        <button className={next === "export" ? "primary-button" : ""} disabled={disabled} title={blockedTitle} onClick={onExport}>
           {exportLabel}
         </button>
       )}

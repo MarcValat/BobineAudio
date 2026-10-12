@@ -636,8 +636,7 @@ export function TrackPreview({
     const rounded = Math.round(t * 10) / 10;
     const ctx = audioCtxRef.current;
     const wasPlaying = playbackStartRef.current !== null && ctx !== null;
-    const withinLoadedClip =
-      loadedClipStart !== null && t >= loadedClipStart && t <= loadedClipStart + PREVIEW_DURATION_S;
+    const withinLoadedClip = loadedClipStart !== null && t >= loadedClipStart && t <= loadedClipStart + PREVIEW_DURATION_S;
 
     setPreviewStart(rounded);
 
@@ -732,10 +731,20 @@ export function TrackPreview({
       <div className="preview-toolbar">
         <div className="waveform-zoom-controls">
           <span>{t.preview.zoom}</span>
-          <button className="small-button zoom-button" title={t.preview.zoomIn} aria-label={t.preview.zoomIn} onClick={() => zoomAt(0.5, previewStart)}>
+          <button
+            className="small-button zoom-button"
+            title={t.preview.zoomIn}
+            aria-label={t.preview.zoomIn}
+            onClick={() => zoomAt(0.5, previewStart)}
+          >
             <PlusIcon />
           </button>
-          <button className="small-button zoom-button" title={t.preview.zoomOut} aria-label={t.preview.zoomOut} onClick={() => zoomAt(2, previewStart)}>
+          <button
+            className="small-button zoom-button"
+            title={t.preview.zoomOut}
+            aria-label={t.preview.zoomOut}
+            onClick={() => zoomAt(2, previewStart)}
+          >
             <MinusIcon />
           </button>
           <button className="small-button" onClick={resetZoom}>

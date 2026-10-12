@@ -11,11 +11,7 @@ import { t } from "./i18n";
  * finishing sooner. Renders are lighter, but kept sequential too, for the
  * same predictable one-at-a-time progress and to avoid writing several
  * large output files to disk at once. */
-export function runJob<T>(
-  jobId: Promise<string>,
-  onLog: (message: string) => void,
-  onStart?: (id: string) => void,
-): Promise<T> {
+export function runJob<T>(jobId: Promise<string>, onLog: (message: string) => void, onStart?: (id: string) => void): Promise<T> {
   return new Promise((resolve, reject) => {
     jobId
       .then((id) => {

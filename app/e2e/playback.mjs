@@ -67,7 +67,8 @@ async function scenario(name, fn, { url = `batchFiles=${encodeURIComponent(A)}`,
   const page = await ctx.newPage();
   const problems = [];
   page.on("response", async (r) => {
-    if (r.status() >= 400) problems.push(`HTTP ${r.status()} ${r.url().split("?")[0].split("/").pop()} ${(await r.text().catch(() => "")).slice(0, 160)}`);
+    if (r.status() >= 400)
+      problems.push(`HTTP ${r.status()} ${r.url().split("?")[0].split("/").pop()} ${(await r.text().catch(() => "")).slice(0, 160)}`);
   });
   page.on("pageerror", (e) => problems.push("pageerror " + e.message));
   page.on("console", (m) => m.type() === "error" && !/favicon/.test(m.text()) && problems.push("console " + m.text().slice(0, 200)));
@@ -84,7 +85,11 @@ async function scenario(name, fn, { url = `batchFiles=${encodeURIComponent(A)}`,
       // holds the gradient with several).
       const analyze = page.locator(".detail-header button", { hasText: /^Analyser$/ });
       await analyze.waitFor({ timeout: 120000 });
-      await page.waitForFunction(() => [...document.querySelectorAll(".detail-header button")].some((b) => b.textContent === "Analyser" && !b.disabled), null, { timeout: 120000 });
+      await page.waitForFunction(
+        () => [...document.querySelectorAll(".detail-header button")].some((b) => b.textContent === "Analyser" && !b.disabled),
+        null,
+        { timeout: 120000 },
+      );
       await analyze.click();
       await page.getByRole("button", { name: /Modifier les segments/ }).waitFor({ timeout: 300000 });
       await page.locator(`${scope} .waveform-svg`).first().waitFor({ timeout: 60000 });
@@ -162,7 +167,11 @@ await scenario("Space toggles, rapid presses never stack", async (t) => {
 
 await scenario("clicking Écouter repeatedly while it loads", async (t) => {
   await t.analyzed();
-  for (let i = 0; i < 5; i++) await t.page.locator(`${D} .preview-play`).click({ force: true, timeout: 1000 }).catch(() => {});
+  for (let i = 0; i < 5; i++)
+    await t.page
+      .locator(`${D} .preview-play`)
+      .click({ force: true, timeout: 1000 })
+      .catch(() => {});
   await t.page.waitForTimeout(3000);
   t.check((await t.maxActive()) <= 3, `max simultaneous sources ${await t.maxActive()}`);
 });
@@ -352,7 +361,6 @@ await scenario(
   { url: `batchRef=${encodeURIComponent(A)}&batchCand=${encodeURIComponent(A)}` },
 );
 
-
 await scenario("reference and result clips last as long (positive offset)", async (t) => {
   await t.analyzed();
   for (const pos of [0, 700, 1555]) {
@@ -438,7 +446,12 @@ await scenario("resize the window while playing", async (t) => {
   await t.analyzed();
   await t.play(D);
   await t.playing(D);
-  for (const [w, h] of [[1100, 700], [1024, 640], [1600, 950], [1440, 900]]) {
+  for (const [w, h] of [
+    [1100, 700],
+    [1024, 640],
+    [1600, 950],
+    [1440, 900],
+  ]) {
     await t.page.setViewportSize({ width: w, height: h });
     await t.page.waitForTimeout(250);
   }

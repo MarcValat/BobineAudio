@@ -25,10 +25,7 @@ export function SubtitleChecks({
       {subtitles.map((s) => {
         const elsewhere = taken.includes(s.index);
         return (
-          <label
-            key={s.index}
-            title={!s.shiftable ? t.subtitles.unshiftable : elsewhere ? t.subtitles.takenElsewhere : subtitleDetails(s)}
-          >
+          <label key={s.index} title={!s.shiftable ? t.subtitles.unshiftable : elsewhere ? t.subtitles.takenElsewhere : subtitleDetails(s)}>
             <input
               type="checkbox"
               checked={chosen.includes(s.index)}

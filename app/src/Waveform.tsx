@@ -62,7 +62,6 @@ export function useMarkerGlide(glide: boolean, ...layout: number[]): boolean {
 // In viewBox units, about as many pixels at the waveform's usual size.
 const MIN_HIGHLIGHT_W = 3;
 
-
 /** Exported for WaveformNavigator.tsx's mini overview waveform -- same peak
  * data, just drawn over the whole-track axis instead of the current
  * [viewStart, viewStart+viewDuration] window. */

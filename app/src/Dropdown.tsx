@@ -55,9 +55,12 @@ export function Dropdown({
       setClosing(false);
     }, CLOSE_MS);
   }
-  useEffect(() => () => {
-    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    },
+    [],
+  );
 
   // Placed under its button, or above when it doesn't fit below; measured
   // hidden first.
@@ -160,11 +163,7 @@ export function Dropdown({
             aria-label={label}
             aria-multiselectable={multi || undefined}
             onKeyDown={onListKey}
-            style={
-              place
-                ? { left: place.left, top: place.top, minWidth: place.minWidth }
-                : { left: 0, top: 0, visibility: "hidden" }
-            }
+            style={place ? { left: place.left, top: place.top, minWidth: place.minWidth } : { left: 0, top: 0, visibility: "hidden" }}
           >
             {children(close)}
           </div>,
@@ -236,7 +235,12 @@ export function Select<T extends string>({
 }) {
   const picked = options.find((o) => o.value === value);
   return (
-    <Dropdown label={label} shown={picked?.short ?? picked?.label ?? placeholder} disabled={disabled || options.length === 0} className={className}>
+    <Dropdown
+      label={label}
+      shown={picked?.short ?? picked?.label ?? placeholder}
+      disabled={disabled || options.length === 0}
+      className={className}
+    >
       {(close) =>
         options.map((o) => (
           <DropdownOption

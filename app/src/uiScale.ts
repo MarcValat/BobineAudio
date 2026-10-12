@@ -65,10 +65,7 @@ export async function applyUiScale(): Promise<void> {
   } catch {
     // no monitor known: the chosen size as is
   }
-  const min = new LogicalSize(
-    Math.min(MIN_LAYOUT.width * zoom, room.width),
-    Math.min(MIN_LAYOUT.height * zoom, room.height),
-  );
+  const min = new LogicalSize(Math.min(MIN_LAYOUT.width * zoom, room.width), Math.min(MIN_LAYOUT.height * zoom, room.height));
   await Promise.all([
     getCurrentWebview()
       .setZoom(zoom)

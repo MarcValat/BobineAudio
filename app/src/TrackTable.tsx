@@ -52,7 +52,13 @@ export function TrackTable({
             {showChannels && <td>{tr.channels ?? "?"}</td>}
             {picking && (
               <td className="track-pick">
-                <input type="radio" name={radioName} checked={reference === tr.index} disabled={disabled} onChange={() => onReference(tr.index)} />
+                <input
+                  type="radio"
+                  name={radioName}
+                  checked={reference === tr.index}
+                  disabled={disabled}
+                  onChange={() => onReference(tr.index)}
+                />
               </td>
             )}
             {picking && (

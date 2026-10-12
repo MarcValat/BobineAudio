@@ -695,7 +695,9 @@
 
 .mode-card.on {
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent), 0 10px 30px color-mix(in srgb, var(--accent-strong) 12%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent),
+    0 10px 30px color-mix(in srgb, var(--accent-strong) 12%, transparent);
 }
 
 .mode-card-title {
@@ -915,4 +917,3 @@
 .list-collapsed .list-row:has(:focus-visible) .list-row-status {
   visibility: visible;
 }
-

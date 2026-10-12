@@ -81,7 +81,9 @@
   height: 16px;
   border-radius: 50%;
   background: var(--text-muted);
-  transition: left 150ms, background-color 150ms;
+  transition:
+    left 150ms,
+    background-color 150ms;
 }
 
 .switch:checked {

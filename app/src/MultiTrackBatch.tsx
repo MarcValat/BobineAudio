@@ -15,7 +15,19 @@ import {
 } from "./batchShared";
 import { InfoTip } from "./InfoTip";
 import { Select } from "./Dropdown";
-import { EmptyWorkspace, ListRow, FoldButton, ModeCards, RemoveAllButton, useListKeys, MoveButtons, runBadge, useProbes, type BadgeKind, type BatchMode } from "./Workspace";
+import {
+  EmptyWorkspace,
+  ListRow,
+  FoldButton,
+  ModeCards,
+  RemoveAllButton,
+  useListKeys,
+  MoveButtons,
+  runBadge,
+  useProbes,
+  type BadgeKind,
+  type BatchMode,
+} from "./Workspace";
 import {
   DetailChart,
   DetailExport,
@@ -283,9 +295,8 @@ export function MultiTrackBatch({
       for (const target of targets) {
         updateTarget(path, target.index, { status: "running" });
         try {
-          const result = await runJob<SegmentsResponse>(
-            startSegmentsJob(path, reference.index, path, target.index),
-            (message) => updateTarget(path, target.index, (t) => ({ log: [...t.log, message] })),
+          const result = await runJob<SegmentsResponse>(startSegmentsJob(path, reference.index, path, target.index), (message) =>
+            updateTarget(path, target.index, (t) => ({ log: [...t.log, message] })),
           );
           updateTarget(path, target.index, { status: "done", result });
           preloadWaveforms(path, reference.index, path, target.index);
@@ -308,7 +319,10 @@ export function MultiTrackBatch({
           input: path,
           start: (outputPath: string) => {
             const done = doneTargets(path);
-            const subs = subsOf(path, done.map(([track]) => track));
+            const subs = subsOf(
+              path,
+              done.map(([track]) => track),
+            );
             return startSegmentedRenderJob(
               path,
               runOf(path)!.referenceIndex,
@@ -418,266 +432,273 @@ export function MultiTrackBatch({
         </EmptyWorkspace>
       ) : (
         <>
-        <div className="batch-config panel">
-          <span className="config-field">
-            {m.multi.reference}
-            <TrackFilterPicker
-              label={m.common.reference}
-              options={options}
-              value={referenceKey ? [referenceKey] : []}
-              onChange={([key]) => setReferenceKey(key)}
-              single
-              disabled={busy}
-            />
-          </span>
-          <span className="config-field">
-            {m.multi.toCorrect}
-            <TrackFilterPicker label={m.common.toCorrect} options={options} value={targetKeys} onChange={setTargetKeys} disabled={busy} />
-          </span>
-          <span className="config-field">
-            {m.common.labelled(m.batch.subtitles)}
-            <Select
-              label={m.batch.subtitles}
-              value={subsMode}
-              options={SUBTITLE_MODES.map((mode) => ({ value: mode, label: m.subtitles.modes[mode], short: m.subtitles.shortModes[mode] }))}
-              onChange={setSubsMode}
-              disabled={busy}
-            />
-          </span>
-          <InfoTip>{m.multi.hint}</InfoTip>
-        </div>
-
-        <div className={`workspace${collapsed ? " list-collapsed" : ""}`}>
-          <section className="panel file-list">
-            <div className="file-list-header">
-              <h2>{m.multi.filesCount(files.length)}</h2>
-              <RemoveAllButton
-                results={Object.values(runs).some((run) => Object.values(run.targets).some((t) => t.status === "done"))}
+          <div className="batch-config panel">
+            <span className="config-field">
+              {m.multi.reference}
+              <TrackFilterPicker
+                label={m.common.reference}
+                options={options}
+                value={referenceKey ? [referenceKey] : []}
+                onChange={([key]) => setReferenceKey(key)}
+                single
                 disabled={busy}
-                onRemove={() => {
-                  setFiles([]);
-                  setChoices({});
-                  setRuns({});
-                  setShownTracks({});
-                  // Picked again from the next files added.
-                  setReferenceKey("");
-                  setTargetKeys([]);
-                }}
               />
-              <FoldButton collapsed={collapsed} />
-            </div>
-
-            <ul className="file-list-rows list-scroll">
-              {files.map((path, i) => {
-                const probed = probes[path];
-                const res = resolutions[path];
-                const run = runOf(path);
-                const [badge, badgeKind] = rowBadge(path);
-                return (
-                  <ListRow
-                    key={path}
-                    name={basename(path)}
-                    path={path}
-                    selected={path === selected}
-                    onSelect={() => setSelected(path)}
-                    state={rowState(
-                      res?.reference ? res.targets.map((t) => run?.targets[t.index]) : [],
-                      run?.exportStatus,
-                      !!(res?.issues.length || probed?.error),
-                    )}
-                    badge={badge}
-                    badgeKind={badgeKind}
-                    detail={
-                      <>
-                        {!probed && m.multi.readingTracks}
-                        {probed?.error && <span className="error">{probed.error}</span>}
-                        {res && tracksSummary(path, res)}
-                        {res?.manual && <span className="list-row-manual">{m.multi.manual}</span>}
-                        {res?.auto && <span className="list-row-manual">{m.multi.auto}</span>}
-                        {res && res.issues.length > 0 && <span className="list-row-issues">⚠ {res.issues.join(", ")}</span>}
-                      </>
-                    }
-                    actions={<MoveButtons count={files.length} index={i} disabled={busy} onChange={(update) => setFiles(update)} />}
-                  />
-                );
-              })}
-            </ul>
-            {/* Adding more: a click picks files, or they're dropped on the window. */}
-            <button
-              className="file-list-add"
-              disabled={busy}
-              title={m.multi.addHint}
-              onClick={async () => {
-                const picked = await pickMediaFiles(true);
-                if (picked) addPaths(picked);
-              }}
-            >
-              <span>{m.multi.addMore}</span>
-              <span>{m.multi.dropMore}</span>
-            </button>
-          </section>
-
-          {detailPath && (
-            <section className="panel file-detail">
-              <DetailHeader
-                title={basename(detailPath)}
-                titleTooltip={detailPath}
-                meta={
-                  detailProbe?.tracks
-                    ? m.multi.meta(detailProbe.tracks.length, detailProbe.subtitles.length)
-                    : !detailProbe?.error && m.multi.readingTracks
-                }
-                onReanalyze={
-                  shownTrack && (shownRun?.status === "done" || shownRun?.status === "error")
-                    ? () => reanalyzeTrack(detailPath, shownTrack)
-                    : undefined
-                }
-                onEdit={shownTrack && shownResult ? () => setEditing({ path: detailPath, track: shownTrack.index }) : undefined}
-                editDisabled={queue.exporting}
-                missing={detailMissing}
-                analyzing={detailAnalyzing}
-                done={detailDone}
-                exported={detailRun?.exportStatus === "done"}
-                primary={files.length === 1}
-                disabled={busy || blocked}
-                analyzeDisabled={!detailRes?.reference}
-                blockedTitle={blocked ? m.batch.otherModeBusy : undefined}
-                analyzeTitle={m.multi.analyzeFileHint}
-                exportLabel={m.multi.exportFile}
-                onAnalyze={() => handleAnalyze(false, detailPath)}
-                onExport={() => handleExport(detailPath)}
+            </span>
+            <span className="config-field">
+              {m.multi.toCorrect}
+              <TrackFilterPicker label={m.common.toCorrect} options={options} value={targetKeys} onChange={setTargetKeys} disabled={busy} />
+            </span>
+            <span className="config-field">
+              {m.common.labelled(m.batch.subtitles)}
+              <Select
+                label={m.batch.subtitles}
+                value={subsMode}
+                options={SUBTITLE_MODES.map((mode) => ({
+                  value: mode,
+                  label: m.subtitles.modes[mode],
+                  short: m.subtitles.shortModes[mode],
+                }))}
+                onChange={setSubsMode}
+                disabled={busy}
               />
+            </span>
+            <InfoTip>{m.multi.hint}</InfoTip>
+          </div>
 
-              {detailProbe?.error && <p className="error">{detailProbe.error}</p>}
-              {detailRes && detailProbe?.tracks && (
-                <div className="detail-body" ref={view.ref}>
-                  {shownTrack && (
-                    <DetailTabs
-                      tracks={detailRes.targets.map((t) => [String(t.index), trackName(t)] as const)}
-                      value={String(shownTrack.index)}
-                      onChange={(index) => setShownTracks((c) => ({ ...c, [detailPath]: Number(index) }))}
-                      view={view.compact && shownResult ? { value: view.view, onChange: view.setView } : undefined}
-                    />
-                  )}
+          <div className={`workspace${collapsed ? " list-collapsed" : ""}`}>
+            <section className="panel file-list">
+              <div className="file-list-header">
+                <h2>{m.multi.filesCount(files.length)}</h2>
+                <RemoveAllButton
+                  results={Object.values(runs).some((run) => Object.values(run.targets).some((t) => t.status === "done"))}
+                  disabled={busy}
+                  onRemove={() => {
+                    setFiles([]);
+                    setChoices({});
+                    setRuns({});
+                    setShownTracks({});
+                    // Picked again from the next files added.
+                    setReferenceKey("");
+                    setTargetKeys([]);
+                  }}
+                />
+                <FoldButton collapsed={collapsed} />
+              </div>
 
-                  <div className={view.topClass(!!shownResult)}>
-                    <div className="detail-tracks">
-                      <TracksHeading
-                        hint={m.multi.tracksHint}
-                        auto={detailRes.auto ? m.multi.autoHint : undefined}
-                        reset={
-                          detailRes.manual
-                            ? {
-                                label: m.multi.byLanguage,
-                                title: m.multi.byLanguageHint,
-                                disabled: busy,
-                                onClick: () =>
-                                  setChoices((c) => {
-                                    const next = { ...c };
-                                    delete next[detailPath];
-                                    return next;
-                                  }),
-                              }
-                            : undefined
-                        }
-                      />
-                      <div className="tracks-table-wrap list-scroll detail-tracks-table">
-                        <TrackTable
-                          className="batch-tracks-table"
-                          tracks={detailProbe.tracks}
-                          radioName={`reference-${detailPath}`}
-                          reference={detailRes.reference?.index ?? null}
-                          targets={detailRes.targets.map((t) => t.index)}
-                          disabled={busy}
-                          onReference={(index) =>
-                            editChoice(detailPath, (c) => ({ ...c, reference: index, targets: c.targets.filter((i) => i !== index) }))
-                          }
-                          onToggleTarget={(index) => editChoice(detailPath, (c) => ({ ...c, targets: toggled(c.targets, index) }))}
-                        />
-                      </div>
-                      {detailRes.issues.length > 0 && <span className="list-row-issues">⚠ {detailRes.issues.join(", ")}</span>}
-                      {detailProbe.subtitles.length > 0 && detailRes.targets.length > 0 && (
-                        <RetimedSubs
-                          subtitles={detailProbe.subtitles}
-                          assigned={subsOf(detailPath, detailRes.targets)}
-                          disabled={busy}
-                          onChange={() => setSubsEditing(detailPath)}
-                        />
+              <ul className="file-list-rows list-scroll">
+                {files.map((path, i) => {
+                  const probed = probes[path];
+                  const res = resolutions[path];
+                  const run = runOf(path);
+                  const [badge, badgeKind] = rowBadge(path);
+                  return (
+                    <ListRow
+                      key={path}
+                      name={basename(path)}
+                      path={path}
+                      selected={path === selected}
+                      onSelect={() => setSelected(path)}
+                      state={rowState(
+                        res?.reference ? res.targets.map((t) => run?.targets[t.index]) : [],
+                        run?.exportStatus,
+                        !!(res?.issues.length || probed?.error),
                       )}
-                    </div>
-
-                    <DetailChart
-                      summary={
+                      badge={badge}
+                      badgeKind={badgeKind}
+                      detail={
                         <>
-                          {detailReference && shownTrack && m.multi.againstReference(trackName(detailReference))}
-                          {shownResult && ` · ${describeSegments(shownResult.segments)}`}
+                          {!probed && m.multi.readingTracks}
+                          {probed?.error && <span className="error">{probed.error}</span>}
+                          {res && tracksSummary(path, res)}
+                          {res?.manual && <span className="list-row-manual">{m.multi.manual}</span>}
+                          {res?.auto && <span className="list-row-manual">{m.multi.auto}</span>}
+                          {res && res.issues.length > 0 && <span className="list-row-issues">⚠ {res.issues.join(", ")}</span>}
                         </>
                       }
-                      result={shownResult}
-                      run={shownRun}
-                      fill={view.compact}
-                      noTrack={detailRes.targets.length === 0 ? m.multi.noTarget : null}
+                      actions={<MoveButtons count={files.length} index={i} disabled={busy} onChange={(update) => setFiles(update)} />}
                     />
-                  </div>
+                  );
+                })}
+              </ul>
+              {/* Adding more: a click picks files, or they're dropped on the window. */}
+              <button
+                className="file-list-add"
+                disabled={busy}
+                title={m.multi.addHint}
+                onClick={async () => {
+                  const picked = await pickMediaFiles(true);
+                  if (picked) addPaths(picked);
+                }}
+              >
+                <span>{m.multi.addMore}</span>
+                <span>{m.multi.dropMore}</span>
+              </button>
+            </section>
 
-                  {/* Hidden rather than unmounted on the other tab, so playback
+            {detailPath && (
+              <section className="panel file-detail">
+                <DetailHeader
+                  title={basename(detailPath)}
+                  titleTooltip={detailPath}
+                  meta={
+                    detailProbe?.tracks
+                      ? m.multi.meta(detailProbe.tracks.length, detailProbe.subtitles.length)
+                      : !detailProbe?.error && m.multi.readingTracks
+                  }
+                  onReanalyze={
+                    shownTrack && (shownRun?.status === "done" || shownRun?.status === "error")
+                      ? () => reanalyzeTrack(detailPath, shownTrack)
+                      : undefined
+                  }
+                  onEdit={shownTrack && shownResult ? () => setEditing({ path: detailPath, track: shownTrack.index }) : undefined}
+                  editDisabled={queue.exporting}
+                  missing={detailMissing}
+                  analyzing={detailAnalyzing}
+                  done={detailDone}
+                  exported={detailRun?.exportStatus === "done"}
+                  primary={files.length === 1}
+                  disabled={busy || blocked}
+                  analyzeDisabled={!detailRes?.reference}
+                  blockedTitle={blocked ? m.batch.otherModeBusy : undefined}
+                  analyzeTitle={m.multi.analyzeFileHint}
+                  exportLabel={m.multi.exportFile}
+                  onAnalyze={() => handleAnalyze(false, detailPath)}
+                  onExport={() => handleExport(detailPath)}
+                />
+
+                {detailProbe?.error && <p className="error">{detailProbe.error}</p>}
+                {detailRes && detailProbe?.tracks && (
+                  <div className="detail-body" ref={view.ref}>
+                    {shownTrack && (
+                      <DetailTabs
+                        tracks={detailRes.targets.map((t) => [String(t.index), trackName(t)] as const)}
+                        value={String(shownTrack.index)}
+                        onChange={(index) => setShownTracks((c) => ({ ...c, [detailPath]: Number(index) }))}
+                        view={view.compact && shownResult ? { value: view.view, onChange: view.setView } : undefined}
+                      />
+                    )}
+
+                    <div className={view.topClass(!!shownResult)}>
+                      <div className="detail-tracks">
+                        <TracksHeading
+                          hint={m.multi.tracksHint}
+                          auto={detailRes.auto ? m.multi.autoHint : undefined}
+                          reset={
+                            detailRes.manual
+                              ? {
+                                  label: m.multi.byLanguage,
+                                  title: m.multi.byLanguageHint,
+                                  disabled: busy,
+                                  onClick: () =>
+                                    setChoices((c) => {
+                                      const next = { ...c };
+                                      delete next[detailPath];
+                                      return next;
+                                    }),
+                                }
+                              : undefined
+                          }
+                        />
+                        <div className="tracks-table-wrap list-scroll detail-tracks-table">
+                          <TrackTable
+                            className="batch-tracks-table"
+                            tracks={detailProbe.tracks}
+                            radioName={`reference-${detailPath}`}
+                            reference={detailRes.reference?.index ?? null}
+                            targets={detailRes.targets.map((t) => t.index)}
+                            disabled={busy}
+                            onReference={(index) =>
+                              editChoice(detailPath, (c) => ({ ...c, reference: index, targets: c.targets.filter((i) => i !== index) }))
+                            }
+                            onToggleTarget={(index) => editChoice(detailPath, (c) => ({ ...c, targets: toggled(c.targets, index) }))}
+                          />
+                        </div>
+                        {detailRes.issues.length > 0 && <span className="list-row-issues">⚠ {detailRes.issues.join(", ")}</span>}
+                        {detailProbe.subtitles.length > 0 && detailRes.targets.length > 0 && (
+                          <RetimedSubs
+                            subtitles={detailProbe.subtitles}
+                            assigned={subsOf(detailPath, detailRes.targets)}
+                            disabled={busy}
+                            onChange={() => setSubsEditing(detailPath)}
+                          />
+                        )}
+                      </div>
+
+                      <DetailChart
+                        summary={
+                          <>
+                            {detailReference && shownTrack && m.multi.againstReference(trackName(detailReference))}
+                            {shownResult && ` · ${describeSegments(shownResult.segments)}`}
+                          </>
+                        }
+                        result={shownResult}
+                        run={shownRun}
+                        fill={view.compact}
+                        noTrack={detailRes.targets.length === 0 ? m.multi.noTarget : null}
+                      />
+                    </div>
+
+                    {/* Hidden rather than unmounted on the other tab, so playback
                       and zoom survive switching. Not while this track is being
                       edited: the editor has its own preview, and two playing at
                       once would overlap. */}
-                  {shownTrack && shownResult && detailReference && !(editing?.path === detailPath && editing.track === shownTrack.index) && (
-                    <div className={view.listenClass()}>
-                      <TrackPreview
-                        active={!hidden}
-                        key={`${detailPath}|${shownTrack.index}`}
-                        referenceFilePath={detailPath}
-                        candidateFilePath={detailPath}
-                        referenceIndex={detailRun!.referenceIndex}
-                        trackIndex={shownTrack.index}
-                        segments={shownResult.segments}
-                        referenceStartTime={detailReference.start_time ?? 0}
-                        trackStartTime={shownTrack.start_time}
-                        extraControls={<LogPanel lines={shownRun?.log ?? []} />}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
+                    {shownTrack &&
+                      shownResult &&
+                      detailReference &&
+                      !(editing?.path === detailPath && editing.track === shownTrack.index) && (
+                        <div className={view.listenClass()}>
+                          <TrackPreview
+                            active={!hidden}
+                            key={`${detailPath}|${shownTrack.index}`}
+                            referenceFilePath={detailPath}
+                            candidateFilePath={detailPath}
+                            referenceIndex={detailRun!.referenceIndex}
+                            trackIndex={shownTrack.index}
+                            segments={shownResult.segments}
+                            referenceStartTime={detailReference.start_time ?? 0}
+                            trackStartTime={shownTrack.start_time}
+                            extraControls={<LogPanel lines={shownRun?.log ?? []} />}
+                          />
+                        </div>
+                      )}
+                  </div>
+                )}
 
-              <DetailExport entry={detailRun} />
-            </section>
-          )}
-        </div>
+                <DetailExport entry={detailRun} />
+              </section>
+            )}
+          </div>
 
-        <BatchFooter
-          outputDir={outputDir}
-          onOutputDirChange={onOutputDirChange}
-          busy={busy}
-          blocked={blocked}
-          progress={
-            <>
-              {m.multi.progressFiles(files.length)}
-              {m.multi.progressAnalyzed(analyzedCount, allTargets.length)}
-              {exportedCount > 0 && m.multi.progressExported(exportedCount)}
-              {flaggedCount > 0 && m.multi.progressFlagged(flaggedCount)}
-            </>
-          }
-          analyzeButton={
-            <AnalyzeButton
-              analyzing={analyzing}
-              missing={missingCount}
-              analyzed={analyzedCount}
-              unit="track"
-              primary={listNext === "analyze"}
-              disabled={!analyzable || busy || blocked}
-              blocked={blocked}
-              onAnalyze={(all) => handleAnalyze(all)}
-            />
-          }
-          queue={queue}
-          canExport={analyzedCount > 0}
-          exportNext={listNext === "export"}
-          onExport={() => handleExport()}
-        />
+          <BatchFooter
+            outputDir={outputDir}
+            onOutputDirChange={onOutputDirChange}
+            busy={busy}
+            blocked={blocked}
+            progress={
+              <>
+                {m.multi.progressFiles(files.length)}
+                {m.multi.progressAnalyzed(analyzedCount, allTargets.length)}
+                {exportedCount > 0 && m.multi.progressExported(exportedCount)}
+                {flaggedCount > 0 && m.multi.progressFlagged(flaggedCount)}
+              </>
+            }
+            analyzeButton={
+              <AnalyzeButton
+                analyzing={analyzing}
+                missing={missingCount}
+                analyzed={analyzedCount}
+                unit="track"
+                primary={listNext === "analyze"}
+                disabled={!analyzable || busy || blocked}
+                blocked={blocked}
+                onAnalyze={(all) => handleAnalyze(all)}
+              />
+            }
+            queue={queue}
+            canExport={analyzedCount > 0}
+            exportNext={listNext === "export"}
+            onExport={() => handleExport()}
+          />
         </>
       )}
 
@@ -716,8 +737,7 @@ export function MultiTrackBatch({
             candidateFilePath: editing.path,
             referenceIndex: runOf(editing.path)!.referenceIndex,
             trackIndex: editing.track,
-            referenceStartTime: probes[editing.path]?.tracks?.find((t) => t.index === runOf(editing.path)!.referenceIndex)
-              ?.start_time,
+            referenceStartTime: probes[editing.path]?.tracks?.find((t) => t.index === runOf(editing.path)!.referenceIndex)?.start_time,
             trackStartTime: probes[editing.path]?.tracks?.find((t) => t.index === editing.track)?.start_time,
           }}
         />

@@ -1,11 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  probe,
-  startSegmentsJob,
-  startCrossFileSegmentedRenderJob,
-  type SegmentsResponse,
-  type TrackInfo,
-} from "./api";
+import { probe, startSegmentsJob, startCrossFileSegmentedRenderJob, type SegmentsResponse, type TrackInfo } from "./api";
 import { runJob } from "./jobs";
 import { LanguageSelect } from "./languages";
 import {
@@ -22,7 +16,19 @@ import {
 import { InfoTip } from "./InfoTip";
 import { Select } from "./Dropdown";
 import { ALL_TRACKS, defaultPick, keyName, matchesAny, matchesKey, trackOptions, TrackFilterPicker, type TrackKey } from "./TrackFilter";
-import { EmptyWorkspace, FoldButton, ModeCards, RemoveAllButton, useListKeys, MoveButtons, PairRow, runBadge, useProbes, type BadgeKind, type BatchMode } from "./Workspace";
+import {
+  EmptyWorkspace,
+  FoldButton,
+  ModeCards,
+  RemoveAllButton,
+  useListKeys,
+  MoveButtons,
+  PairRow,
+  runBadge,
+  useProbes,
+  type BadgeKind,
+  type BatchMode,
+} from "./Workspace";
 import {
   DetailChart,
   DetailExport,
@@ -47,7 +53,6 @@ import { Dialog, DialogHeader } from "./Dialog";
 import { TrackTable } from "./TrackTable";
 import { useT } from "./i18n";
 import { useListCollapsed, useSubtitleDefault } from "./settings";
-
 
 /** "S01E01 VO.mkv" -> "S01E01 VO": a pair named after its reference. */
 const stem = (name: string) => name.replace(/\.[^.]+$/, "");
@@ -98,12 +103,23 @@ function PairTrackTable({
         <td>{tr.codec ?? "?"}</td>
         <td className="track-pick">
           {side === "ref" && (
-            <input type="radio" name="pair-reference" checked={reference === tr.index} disabled={disabled} onChange={() => onReference(tr.index)} />
+            <input
+              type="radio"
+              name="pair-reference"
+              checked={reference === tr.index}
+              disabled={disabled}
+              onChange={() => onReference(tr.index)}
+            />
           )}
         </td>
         <td className="track-pick">
           {side === "cand" && (
-            <input type="checkbox" checked={candidates.includes(tr.index)} disabled={disabled} onChange={() => onToggleCandidate(tr.index)} />
+            <input
+              type="checkbox"
+              checked={candidates.includes(tr.index)}
+              disabled={disabled}
+              onChange={() => onToggleCandidate(tr.index)}
+            />
           )}
         </td>
       </tr>
@@ -135,7 +151,15 @@ function PairTrackTable({
  * reference/candidate index for the whole batch. Fetched fresh each time
  * the modal opens rather than kept live -- this is a manual spot-check,
  * not something that needs to track file-list edits in real time. */
-function AllTracksModal({ referenceFiles, candidateFiles, onClose }: { referenceFiles: string[]; candidateFiles: string[]; onClose: () => void }) {
+function AllTracksModal({
+  referenceFiles,
+  candidateFiles,
+  onClose,
+}: {
+  referenceFiles: string[];
+  candidateFiles: string[];
+  onClose: () => void;
+}) {
   const m = useT();
   const [entries, setEntries] = useState<Record<string, { tracks: TrackInfo[] | null; error: string | null }>>({});
   const [loading, setLoading] = useState(true);
@@ -447,9 +471,8 @@ export function PairsBatch({
     for (const { key, reference, referenceTrack, candidate, track } of plan) {
       updateRun(key, { status: "running" });
       try {
-        const result = await runJob<SegmentsResponse>(
-          startSegmentsJob(reference, referenceTrack, candidate, track),
-          (message) => updateRun(key, (a) => ({ log: [...a.log, message] })),
+        const result = await runJob<SegmentsResponse>(startSegmentsJob(reference, referenceTrack, candidate, track), (message) =>
+          updateRun(key, (a) => ({ log: [...a.log, message] })),
         );
         updateRun(key, { status: "done", result });
         preloadWaveforms(reference, referenceTrack, candidate, track);
@@ -582,9 +605,10 @@ export function PairsBatch({
   const detailExport = exportOf(selected);
   const detailKey = shownTrack !== undefined ? trackKey(selected, shownTrack) : "";
   const candidateInfo = (index: number) => (detailCandidate ? probes[detailCandidate]?.tracks?.find((t) => t.index === index) : undefined);
-  const detailReferenceTrack = detailReference ? probes[detailReference]?.tracks?.find((t) => t.index === detailTracks.reference) : undefined;
+  const detailReferenceTrack = detailReference
+    ? probes[detailReference]?.tracks?.find((t) => t.index === detailTracks.reference)
+    : undefined;
   const shownTrackInfo = shownTrack !== undefined ? candidateInfo(shownTrack) : undefined;
-
 
   // The top bar's choices: what the files of each column offer.
   const referenceOptions = trackOptions(referenceFiles.flatMap((f) => (probes[f]?.tracks ? [probes[f].tracks!] : [])));
@@ -595,10 +619,18 @@ export function PairsBatch({
       {rowCount === 0 ? (
         <EmptyWorkspace title={m.pairs.emptyTitle} hint={m.pairs.emptyHint}>
           <div className="pairs-empty-zones">
-            <DropZone title={m.pairs.dropReferences} disabled={dropBlocked !== null} onClick={addFiles(setReferenceFiles, m.pairs.pickReferences)}>
+            <DropZone
+              title={m.pairs.dropReferences}
+              disabled={dropBlocked !== null}
+              onClick={addFiles(setReferenceFiles, m.pairs.pickReferences)}
+            >
               {m.pairs.dropReferencesHint}
             </DropZone>
-            <DropZone title={m.pairs.dropCandidates} disabled={dropBlocked !== null} onClick={addFiles(setCandidateFiles, m.pairs.pickCandidates)}>
+            <DropZone
+              title={m.pairs.dropCandidates}
+              disabled={dropBlocked !== null}
+              onClick={addFiles(setCandidateFiles, m.pairs.pickCandidates)}
+            >
               {m.pairs.dropCandidatesHint}
             </DropZone>
           </div>
@@ -606,48 +638,58 @@ export function PairsBatch({
         </EmptyWorkspace>
       ) : (
         <>
-        <div className="batch-config panel">
-          <span className="config-field">
-            {m.multi.reference}
-            <TrackFilterPicker
-              label={m.common.reference}
-              options={referenceOptions}
-              value={referenceKey ? [referenceKey] : []}
-              onChange={([key]) => setReferenceKey(key)}
-              single
-              disabled={busy}
-            />
-          </span>
-          <span className="config-field">
-            {m.multi.toCorrect}
-            <TrackFilterPicker label={m.common.toCorrect} options={candidateOptions} value={candidateKeys} onChange={setCandidateKeys} disabled={busy} />
-          </span>
-          <span className="config-field">
-            {m.pairs.language}
-            <LanguageSelect
-              label={m.pairs.language}
-              value={candidateLanguage}
-              onChange={setCandidateLanguage}
-              extra={firstCandidate?.map((t) => t.language) ?? []}
-              emptyLabel={m.pairs.fileLanguage(
-                pairCount > 0 ? (firstCandidate?.find((t) => t.index === tracksOf(0).candidates[0])?.language ?? null) : null,
-              )}
-              disabled={busy}
-            />
-            <InfoTip>{m.pairs.languageHint}</InfoTip>
-          </span>
-          <span className="config-field">
-            {m.common.labelled(m.batch.subtitles)}
-            <Select
-              label={m.batch.subtitles}
-              value={subsMode}
-              options={SUBTITLE_MODES.map((mode) => ({ value: mode, label: m.subtitles.modes[mode], short: m.subtitles.shortModes[mode] }))}
-              onChange={setSubsMode}
-              disabled={busy}
-            />
-          </span>
-          <InfoTip>{m.pairs.hint}</InfoTip>
-        </div>
+          <div className="batch-config panel">
+            <span className="config-field">
+              {m.multi.reference}
+              <TrackFilterPicker
+                label={m.common.reference}
+                options={referenceOptions}
+                value={referenceKey ? [referenceKey] : []}
+                onChange={([key]) => setReferenceKey(key)}
+                single
+                disabled={busy}
+              />
+            </span>
+            <span className="config-field">
+              {m.multi.toCorrect}
+              <TrackFilterPicker
+                label={m.common.toCorrect}
+                options={candidateOptions}
+                value={candidateKeys}
+                onChange={setCandidateKeys}
+                disabled={busy}
+              />
+            </span>
+            <span className="config-field">
+              {m.pairs.language}
+              <LanguageSelect
+                label={m.pairs.language}
+                value={candidateLanguage}
+                onChange={setCandidateLanguage}
+                extra={firstCandidate?.map((t) => t.language) ?? []}
+                emptyLabel={m.pairs.fileLanguage(
+                  pairCount > 0 ? (firstCandidate?.find((t) => t.index === tracksOf(0).candidates[0])?.language ?? null) : null,
+                )}
+                disabled={busy}
+              />
+              <InfoTip>{m.pairs.languageHint}</InfoTip>
+            </span>
+            <span className="config-field">
+              {m.common.labelled(m.batch.subtitles)}
+              <Select
+                label={m.batch.subtitles}
+                value={subsMode}
+                options={SUBTITLE_MODES.map((mode) => ({
+                  value: mode,
+                  label: m.subtitles.modes[mode],
+                  short: m.subtitles.shortModes[mode],
+                }))}
+                onChange={setSubsMode}
+                disabled={busy}
+              />
+            </span>
+            <InfoTip>{m.pairs.hint}</InfoTip>
+          </div>
 
           <div className={`workspace workspace-pairs${collapsed ? " list-collapsed" : ""}`}>
             <section className="panel file-list">
@@ -685,12 +727,26 @@ export function PairsBatch({
                       reference={{ name: basename(referenceFiles[i] ?? ""), path: referenceFiles[i], missing: m.pairs.noReference }}
                       candidate={{ name: basename(candidateFiles[i] ?? ""), path: candidateFiles[i], missing: m.pairs.noCandidate }}
                       referenceActions={
-                        <MoveButtons count={referenceFiles.length} index={i} disabled={busy} onChange={(update) => setReferenceFiles(update)} />
+                        <MoveButtons
+                          count={referenceFiles.length}
+                          index={i}
+                          disabled={busy}
+                          onChange={(update) => setReferenceFiles(update)}
+                        />
                       }
                       candidateActions={
-                        <MoveButtons count={candidateFiles.length} index={i} disabled={busy} onChange={(update) => setCandidateFiles(update)} />
+                        <MoveButtons
+                          count={candidateFiles.length}
+                          index={i}
+                          disabled={busy}
+                          onChange={(update) => setCandidateFiles(update)}
+                        />
                       }
-                      state={rowState(i < pairCount ? runsOf(i) : [], exportOf(i)?.exportStatus, i >= pairCount || unreadable(i).length > 0)}
+                      state={rowState(
+                        i < pairCount ? runsOf(i) : [],
+                        exportOf(i)?.exportStatus,
+                        i >= pairCount || unreadable(i).length > 0,
+                      )}
                       badge={badge}
                       badgeKind={badgeKind}
                       selected={i === selected}
@@ -791,10 +847,14 @@ export function PairsBatch({
                           candidates={detailTracks.candidates}
                           disabled={busy}
                           onReference={(index) => editPairTracks(selected, (t) => ({ ...t, reference: index }))}
-                          onToggleCandidate={(index) => editPairTracks(selected, (t) => ({ ...t, candidates: toggled(t.candidates, index) }))}
+                          onToggleCandidate={(index) =>
+                            editPairTracks(selected, (t) => ({ ...t, candidates: toggled(t.candidates, index) }))
+                          }
                         />
                       </div>
-                      {detailPicked && detailPicked.issues.length > 0 && <span className="list-row-issues">⚠ {detailPicked.issues.join(", ")}</span>}
+                      {detailPicked && detailPicked.issues.length > 0 && (
+                        <span className="list-row-issues">⚠ {detailPicked.issues.join(", ")}</span>
+                      )}
                       {(probes[detailCandidate!]?.subtitles.length ?? 0) > 0 && detailTracks.candidates.length > 0 && (
                         <RetimedSubs
                           subtitles={probes[detailCandidate!]!.subtitles}
@@ -837,36 +897,36 @@ export function PairsBatch({
             </section>
           </div>
 
-        <BatchFooter
-          outputDir={outputDir}
-          onOutputDirChange={onOutputDirChange}
-          busy={busy}
-          blocked={blocked}
-          progress={
-            <>
-              {m.pairs.progressPairs(pairCount)}
-              {m.pairs.progressAnalyzed(analyzedCount, pairCount)}
-              {exportedCount > 0 && m.pairs.progressExported(exportedCount)}
-              {rowCount > pairCount && m.pairs.progressUnpaired(rowCount - pairCount)}
-            </>
-          }
-          analyzeButton={
-            <AnalyzeButton
-              analyzing={analyzing}
-              missing={pairCount - analyzedCount}
-              analyzed={analyzedCount}
-              unit="pair"
-              primary={listNext === "analyze"}
-              disabled={pairCount === 0 || busy || blocked}
-              blocked={blocked}
-              onAnalyze={(all) => handleAnalyze(all)}
-            />
-          }
-          queue={queue}
-          canExport={canExport}
-          exportNext={listNext === "export"}
-          onExport={() => handleExport()}
-        />
+          <BatchFooter
+            outputDir={outputDir}
+            onOutputDirChange={onOutputDirChange}
+            busy={busy}
+            blocked={blocked}
+            progress={
+              <>
+                {m.pairs.progressPairs(pairCount)}
+                {m.pairs.progressAnalyzed(analyzedCount, pairCount)}
+                {exportedCount > 0 && m.pairs.progressExported(exportedCount)}
+                {rowCount > pairCount && m.pairs.progressUnpaired(rowCount - pairCount)}
+              </>
+            }
+            analyzeButton={
+              <AnalyzeButton
+                analyzing={analyzing}
+                missing={pairCount - analyzedCount}
+                analyzed={analyzedCount}
+                unit="pair"
+                primary={listNext === "analyze"}
+                disabled={pairCount === 0 || busy || blocked}
+                blocked={blocked}
+                onAnalyze={(all) => handleAnalyze(all)}
+              />
+            }
+            queue={queue}
+            canExport={canExport}
+            exportNext={listNext === "export"}
+            onExport={() => handleExport()}
+          />
         </>
       )}
 
@@ -878,11 +938,23 @@ export function PairsBatch({
         <SubtitleChoiceDialog
           title={m.multi.subsOf(basename(candidateFiles[subsEditing]))}
           titleTooltip={candidateFiles[subsEditing]}
-          tracks={tracksOf(subsEditing).candidates.map((t) => [t, trackLabel(t, probes[candidateFiles[subsEditing]]?.tracks?.find((tr) => tr.index === t))] as const)}
+          tracks={tracksOf(subsEditing).candidates.map(
+            (t) =>
+              [
+                t,
+                trackLabel(
+                  t,
+                  probes[candidateFiles[subsEditing]]?.tracks?.find((tr) => tr.index === t),
+                ),
+              ] as const,
+          )}
           subtitles={probes[candidateFiles[subsEditing]]?.subtitles ?? []}
           assigned={subsOf(subsEditing)}
           onToggle={(track, sub) =>
-            editPairTracks(subsEditing, (t) => ({ ...t, subtitles: { ...t.subtitles, [track]: toggled(subsOf(subsEditing)[track] ?? [], sub) } }))
+            editPairTracks(subsEditing, (t) => ({
+              ...t,
+              subtitles: { ...t.subtitles, [track]: toggled(subsOf(subsEditing)[track] ?? [], sub) },
+            }))
           }
           onClose={() => setSubsEditing(null)}
         />

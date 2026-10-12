@@ -21,7 +21,11 @@ export function WindowControls() {
     const win = getCurrentWindow();
     let stop: (() => void) | undefined;
     let gone = false;
-    const update = () => win.isMaximized().then((m) => !gone && setMaximized(m), () => {});
+    const update = () =>
+      win.isMaximized().then(
+        (m) => !gone && setMaximized(m),
+        () => {},
+      );
     update();
     win.onResized(update).then((unlisten) => (gone ? unlisten() : (stop = unlisten)));
     return () => {
@@ -46,7 +50,12 @@ export function WindowControls() {
           ),
           onClick: () => win?.toggleMaximize(),
         }
-      : { label: t.window.maximize, kind: "maximize", icon: <rect x="1.5" y="1.5" width="9" height="9" />, onClick: () => win?.toggleMaximize() },
+      : {
+          label: t.window.maximize,
+          kind: "maximize",
+          icon: <rect x="1.5" y="1.5" width="9" height="9" />,
+          onClick: () => win?.toggleMaximize(),
+        },
     { label: t.window.close, kind: "close", icon: <path d="M2 2l8 8M10 2l-8 8" />, onClick: () => win?.close() },
   ];
   return (

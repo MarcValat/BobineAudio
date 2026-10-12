@@ -161,11 +161,7 @@ export interface AnalysisRun {
  * rows): something running, waiting,
  * failed or flagged, exported, every analysis done, or nothing done yet. A
  * row holds one analysis (a pair) or several (a file's corrected tracks). */
-export function rowState(
-  analyses: (AnalysisRun | undefined)[],
-  exportStatus: RunStatus | undefined,
-  problem: boolean,
-): string {
+export function rowState(analyses: (AnalysisRun | undefined)[], exportStatus: RunStatus | undefined, problem: boolean): string {
   const statuses = analyses.map((a) => a?.status);
   if (statuses.includes("running") || exportStatus === "running") return "running";
   if (statuses.includes("pending")) return "queued";
@@ -229,7 +225,10 @@ export function useExportQueue(outputDir: string | null) {
     try {
       let outputs: string[];
       try {
-        outputs = await planOutputPaths(tasks.map((t) => t.input), outputDir);
+        outputs = await planOutputPaths(
+          tasks.map((t) => t.input),
+          outputDir,
+        );
       } catch (err) {
         const message = errorMessage(err);
         for (const t of tasks) t.update(() => ({ exportStatus: "error", exportError: message }));

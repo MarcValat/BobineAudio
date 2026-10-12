@@ -42,9 +42,12 @@ export function OptionsButton() {
       setClosing(false);
     }, CLOSE_MS);
   }
-  useEffect(() => () => {
-    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    },
+    [],
+  );
 
   return (
     <>
@@ -67,22 +70,8 @@ const CLOSE_MS = 220;
 
 /** One setting: its name with what it does in a "?" tip (as everywhere in
  * the suite), its control, and `note`, a fact worth seeing at once. */
-function Setting({
-  label,
-  hint,
-  note,
-  children,
-}: {
-  label: ReactNode;
-  hint?: ReactNode;
-  note?: ReactNode;
-  children?: ReactNode;
-}) {
-  const name = (
-    <span className="setting-name">
-      {label}
-    </span>
-  );
+function Setting({ label, hint, note, children }: { label: ReactNode; hint?: ReactNode; note?: ReactNode; children?: ReactNode }) {
+  const name = <span className="setting-name">{label}</span>;
   return (
     <div className="setting">
       <span className="setting-title">

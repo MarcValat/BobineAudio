@@ -75,8 +75,7 @@ export const fr = {
     uiScaleHint: "Agrandit ou réduit toute l'interface : textes, boutons et formes d'onde.",
     uiScaleLimited: (percent: number) => `Réduite à ${percent} % : l'écran n'a pas la place pour plus.`,
     subtitles: "Sous-titres par défaut",
-    subtitlesHint:
-      "Les sous-titres recalés avec une piste audio corrigée, sauf choix contraire : réglage de départ des deux modes.",
+    subtitlesHint: "Les sous-titres recalés avec une piste audio corrigée, sauf choix contraire : réglage de départ des deux modes.",
     updates: "Mises à jour",
     checkUpdates: "Vérifier au démarrage",
     updatesHint: "Au lancement, l'application demande à GitHub si une nouvelle version existe ; rien n'est installé sans ton accord.",
@@ -90,14 +89,12 @@ export const fr = {
   },
 
   update: {
-    downloadingTitle: (percent: number | null) =>
-      `Téléchargement de la mise à jour${percent !== null ? ` : ${percent} %` : "..."}`,
+    downloadingTitle: (percent: number | null) => `Téléchargement de la mise à jour${percent !== null ? ` : ${percent} %` : "..."}`,
     failedTitle: "La mise à jour a échoué",
     availableTitle: (version: string) => `Mise à jour disponible : v${version}`,
     failedHeading: "Échec de la mise à jour",
     availableHeading: (version: string) => `Bobine Audio v${version} est disponible`,
-    restartNote:
-      "L'application redémarre une fois la mise à jour téléchargée : une analyse ou un export en cours sera interrompu.",
+    restartNote: "L'application redémarre une fois la mise à jour téléchargée : une analyse ou un export en cours sera interrompu.",
     install: "Installer et redémarrer",
     downloading: (percent: number | null) => `Téléchargement... ${percent !== null ? `${percent} %` : ""}`,
     installing: "Installation, redémarrage...",
@@ -179,7 +176,6 @@ export const fr = {
     unreliableCount: (n: number) => `${n} peu fiable${n > 1 ? "s" : ""}`,
   },
 
-
   batch: {
     multiMode: "Fichiers multipistes",
     pairsMode: "Paires de fichiers",
@@ -234,8 +230,7 @@ export const fr = {
     withTrack: (track: string) => `Avec ${track} :`,
     reference: "Référence :",
     toCorrect: "À corriger :",
-    hint:
-      "Chaque fichier contient déjà la référence et les pistes à corriger. Les pistes sont choisies pour tous les fichiers, par numéro, langue ou nom de piste : un fichier où une piste à corriger manque est signalé ⚠, un fichier où la référence ne désigne pas une seule piste passe en « (auto) », et ses pistes peuvent être cochées à la main dans son détail. Les sous-titres choisis (texte seulement : SRT, ASS) sont recalés avec la piste audio de leur langue ; les autres sont gardés tels quels.",
+    hint: "Chaque fichier contient déjà la référence et les pistes à corriger. Les pistes sont choisies pour tous les fichiers, par numéro, langue ou nom de piste : un fichier où une piste à corriger manque est signalé ⚠, un fichier où la référence ne désigne pas une seule piste passe en « (auto) », et ses pistes peuvent être cochées à la main dans son détail. Les sous-titres choisis (texte seulement : SRT, ASS) sont recalés avec la piste audio de leur langue ; les autres sont gardés tels quels.",
     files: "Fichiers",
     file: "Fichier",
     addHint: "Ajouter des fichiers qui contiennent chacun la référence et les pistes à corriger",
@@ -249,16 +244,14 @@ export const fr = {
     byLanguage: "Par langue",
     byLanguageHint: "Revenir au choix par langue",
     progressFiles: (n: number) => `${n} fichier${n > 1 ? "s" : ""}`,
-    progressAnalyzed: (done: number, total: number) =>
-      ` · ${done}/${total} piste${total > 1 ? "s" : ""} analysée${done > 1 ? "s" : ""}`,
+    progressAnalyzed: (done: number, total: number) => ` · ${done}/${total} piste${total > 1 ? "s" : ""} analysée${done > 1 ? "s" : ""}`,
     progressExported: (n: number) => ` · ${n} exporté${n > 1 ? "s" : ""}`,
     progressFlagged: (n: number) => ` · ⚠ ${n} à vérifier`,
     filesCount: (n: number) => `Fichiers · ${n}`,
     addMore: "+ Ajouter des vidéos",
     dropMore: "ou glisse-les, ou un dossier, sur la fenêtre",
     pickFile: "Choisis un fichier dans la liste.",
-    meta: (audio: number, subs: number) =>
-      `${audio} piste${audio > 1 ? "s" : ""} audio · ${subs} sous-titre${subs > 1 ? "s" : ""}`,
+    meta: (audio: number, subs: number) => `${audio} piste${audio > 1 ? "s" : ""} audio · ${subs} sous-titre${subs > 1 ? "s" : ""}`,
     shownTrack: "Piste corrigée affichée",
     againstReference: (reference: string) => `contre la référence ${reference}`,
     noTarget: "Aucune piste à corriger pour ce fichier : coche-en dans le tableau des pistes.",
@@ -299,8 +292,7 @@ export const fr = {
     fileLanguage: (language: string | null) => `Du fichier (${language ?? "aucune"})`,
     languageHint:
       "Langue attribuée à la piste corrigée dans le fichier exporté, quand une paire n'en corrige qu'une. « Du fichier » garde la sienne ; utile pour une piste qui n'en a pas (un .wav, par exemple). Plusieurs pistes corrigées gardent chacune la leur.",
-    hint:
-      "Pistes proposées d'après le 1er fichier de chaque colonne, puis appliquées à toutes les paires. « Vérifier toutes les pistes » montre celles de chaque fichier. Les sous-titres choisis du fichier à corriger (texte seulement : SRT, ASS) sont importés et recalés avec sa piste audio.",
+    hint: "Pistes proposées d'après le 1er fichier de chaque colonne, puis appliquées à toutes les paires. « Vérifier toutes les pistes » montre celles de chaque fichier. Les sous-titres choisis du fichier à corriger (texte seulement : SRT, ASS) sont importés et recalés avec sa piste audio.",
     pairs: "Paires",
     pairsHint:
       "Une ligne = une paire : la référence (piste jamais modifiée, ex. VO) et le fichier dont la piste est resynchronisée puis intégrée (ex. VF). Les fichiers sont appariés dans l'ordre : ↑ ↓ pour corriger l'ordre d'une colonne.",
@@ -308,7 +300,8 @@ export const fr = {
     addCandidateHint: "Ajouter des fichiers dont la piste est à resynchroniser (ex. VF), un par épisode",
     pickReferences: "Fichiers de référence",
     pickCandidates: "À corriger : vidéos ou fichiers audio",
-    empty: "À gauche de la fenêtre, les fichiers de référence ; à droite, ceux à corriger, un par épisode : ils sont appariés dans l'ordre.",
+    empty:
+      "À gauche de la fenêtre, les fichiers de référence ; à droite, ceux à corriger, un par épisode : ils sont appariés dans l'ordre.",
     unpaired: "⚠ Sans paire",
     progressPairs: (n: number) => `${n} paire${n > 1 ? "s" : ""}`,
     progressAnalyzed: (done: number, total: number) => ` · ${done}/${total} analysée${done > 1 ? "s" : ""}`,
@@ -334,8 +327,7 @@ export const fr = {
     dropReferences: "Références",
     dropReferencesHint: "La piste qui ne change jamais (souvent la VO). Ou dépose n'importe où sur la moitié gauche de la fenêtre.",
     dropCandidates: "À corriger",
-    dropCandidatesHint:
-      "La piste à recaler (souvent la VF) : vidéos ou fichiers audio. Ou dépose sur la moitié droite de la fenêtre.",
+    dropCandidatesHint: "La piste à recaler (souvent la VF) : vidéos ou fichiers audio. Ou dépose sur la moitié droite de la fenêtre.",
     analyzePairHint: "Analyse cette paire.",
     exportPair: "Exporter cette paire",
     noTarget: "Aucune piste à corriger pour cette paire : coche-en dans le tableau des pistes.",
@@ -366,7 +358,8 @@ export const fr = {
       split: "Double-clique sur le graphe pour couper un segment à cet endroit.",
       wheel: "Molette : zoomer ou dézoomer, en même temps que les formes d'onde.",
       unreliable: "Un segment en pointillés (⚠) est peu fiable : à vérifier à l'écoute.",
-      remove: "« Retirer » supprime un segment (une fausse détection, par exemple) : son voisin s'étend sur sa durée, avec son propre décalage.",
+      remove:
+        "« Retirer » supprime un segment (une fausse détection, par exemple) : son voisin s'étend sur sa durée, avec son propre décalage.",
       undo: "Ctrl+Z / Ctrl+Y : défaire / refaire.",
       seek: "Clique sur le graphe pour placer la lecture à cet endroit, ou glisse pour déplacer la position ; clic molette et glisser pour se déplacer dans la piste.",
       sign: "Décalage : + = la piste est en retard sur la référence, − = en avance.",
@@ -394,8 +387,7 @@ export const fr = {
     reset: "Réinitialiser",
     resetHint: "Revient aux segments tels qu'à l'ouverture de l'éditeur.",
     removeUnreliable: "Retirer les segments peu fiables",
-    removeUnreliableHint:
-      "Retire chaque segment peu fiable (⚠), comme « Retirer » sur chacun : son voisin s'étend sur sa durée.",
+    removeUnreliableHint: "Retire chaque segment peu fiable (⚠), comme « Retirer » sur chacun : son voisin s'étend sur sa durée.",
     save: "Enregistrer",
   },
 

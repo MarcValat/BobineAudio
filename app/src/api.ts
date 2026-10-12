@@ -339,10 +339,7 @@ export async function startCrossFileSegmentedRenderJob(
 }
 
 export type JobEvent<TResult> =
-  | { type: "log"; message: string }
-  | { type: "done"; result: TResult }
-  | { type: "error"; message: string }
-  | { type: "cancelled" };
+  { type: "log"; message: string } | { type: "done"; result: TResult } | { type: "error"; message: string } | { type: "cancelled" };
 
 /** Stop a running job (an export started too early...): the engine kills
  * its ffmpeg run, removes a half-written file, and the job's WebSocket
@@ -360,10 +357,7 @@ export async function cancelJob(jobId: string): Promise<void> {
  * this, the caller's UI would stay stuck in "in progress" forever with no
  * way to know something went wrong.
  */
-export async function connectJobWS<TResult>(
-  jobId: string,
-  onEvent: (event: JobEvent<TResult>) => void,
-): Promise<() => void> {
+export async function connectJobWS<TResult>(jobId: string, onEvent: (event: JobEvent<TResult>) => void): Promise<() => void> {
   const ws = new WebSocket(`${(await getEngineUrl()).replace("http", "ws")}/jobs/${jobId}/ws`);
   let settled = false;
 
