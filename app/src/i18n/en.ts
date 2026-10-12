@@ -170,6 +170,39 @@ export const en: Messages = {
     unreliableCount: (n) => `${n} unreliable`,
   },
 
+  exportOptions: {
+    label: "Export:",
+    edit: "Change…",
+    editHint: "Output folder, audio codec and the corrected tracks' names",
+    title: "Export options",
+    folder: "Output folder",
+    folderHint:
+      "In another folder than the original's, an export keeps the original's name (unless it's already taken there); next to the original, it gets the “.synced” suffix.",
+    codec: "Audio codec",
+    codecHint:
+      "The corrected tracks' codec. “Auto” keeps the source's when it can: AAC becomes Opus (the AAC encoder is slow), TrueHD and DTS lossless FLAC. AC3 and E-AC3 go up to 5.1.",
+    codecs: {
+      auto: "Auto (as the source)",
+      opus: "Opus",
+      aac: "AAC (slow)",
+      flac: "FLAC (lossless)",
+      ac3: "AC3",
+      eac3: "E-AC3",
+    },
+    codecShort: { auto: "source codec", opus: "Opus", aac: "AAC", flac: "FLAC", ac3: "AC3", eac3: "E-AC3" },
+    naming: "Corrected tracks' names",
+    namingHint:
+      "“Original” keeps the source track's name, “Automatic” makes one of its language, export codec and channels. Each name can still be changed file by file, in its detail.",
+    namings: { source: "Original", auto: "Automatic", custom: "Custom" },
+    namingShort: { source: "original names", auto: "automatic names", custom: "custom names" },
+    example: (name) => `For instance “${name}”.`,
+    customFor: (language) => `${language}:`,
+    customEmpty: "original name",
+    trackNames: "Name in the export",
+    trackNamesHint: "Each corrected track's name in the exported file, per the export options; changing it here only applies to this file.",
+    noName: "no name",
+  },
+
   batch: {
     multiMode: "Multitrack files",
     pairsMode: "File pairs",

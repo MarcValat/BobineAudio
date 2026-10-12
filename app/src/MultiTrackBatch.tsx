@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { startSegmentedRenderJob, startSegmentsJob, type SegmentsResponse, type TrackInfo } from "./api";
 import { runJob } from "./jobs";
 import { prefetchNow } from "./prefetch";
+import { ExportNames, exportTitle, useExportOptions } from "./exportOptions";
 import { ALL_TRACKS, defaultPick, keyName, matchesAny, matchesKey, trackOptions, TrackFilterPicker, type TrackKey } from "./TrackFilter";
 import {
   AnalyzeButton,
@@ -158,6 +159,10 @@ export function MultiTrackBatch({
   const [shownTracks, setShownTracks] = useState<Record<string, number>>({});
   const view = useDetailView();
   const collapsed = useListCollapsed();
+  // How corrected tracks are exported (codec, names), and the names typed
+  // in a file's detail for its own tracks (by "path|track index").
+  const exportOptions = useExportOptions();
+  const [titleOverrides, setTitleOverrides] = useState<Record<string, string>>({});
   const busy = analyzing || queue.exporting;
   useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
 
@@ -329,7 +334,13 @@ export function MultiTrackBatch({
             return startSegmentedRenderJob(
               path,
               runOf(path)!.referenceIndex,
-              done.map(([track, t]) => ({ trackIndex: track.index, segments: t.result!.segments, subtitles: subs[track.index] ?? [] })),
+              done.map(([track, t]) => ({
+                trackIndex: track.index,
+                segments: t.result!.segments,
+                subtitles: subs[track.index] ?? [],
+                title: titleOf(path, track),
+                codec: exportOptions.codec === "auto" ? null : exportOptions.codec,
+              })),
               outputPath,
             );
           },
@@ -337,6 +348,22 @@ export function MultiTrackBatch({
         })),
     );
   }
+
+  /** A corrected track's name in `path`'s export (undefined: its source's). */
+  const titleOf = (path: string, track: TrackInfo, own = true) =>
+    exportTitle({
+      track,
+      language: track.language,
+      options: exportOptions,
+      override: own ? titleOverrides[`${path}|${track.index}`] : undefined,
+    });
+  // The tracks to correct's languages (a custom name each), and the first
+  // one's automatic name (for the export options to show).
+  const targetTracks = files.flatMap((f) => resolutions[f]?.targets ?? []);
+  const targetLanguages = [...new Set(targetTracks.map((t) => t.language))];
+  const nameExample = targetTracks[0]
+    ? (exportTitle({ track: targetTracks[0], language: targetTracks[0].language, options: { ...exportOptions, naming: "auto" } }) ?? null)
+    : null;
 
   // Counted over the tracks to correct as picked now, analyzed or not.
   const allTargets = files.flatMap((f) => resolutions[f]?.targets.map((t) => runOf(f)?.targets[t.index]) ?? []);
@@ -467,6 +494,7 @@ export function MultiTrackBatch({
                     setChoices({});
                     setRuns({});
                     setShownTracks({});
+                    setTitleOverrides({});
                     // Picked again from the next files added.
                     setReferenceKey("");
                     setTargetKeys([]);
@@ -612,6 +640,18 @@ export function MultiTrackBatch({
                             onChange={() => setSubsEditing(detailPath)}
                           />
                         )}
+                        {detailRes.targets.length > 0 && (
+                          <ExportNames
+                            rows={detailRes.targets.map((track) => ({
+                              index: track.index,
+                              label: trackName(track.index, track),
+                              value: titleOverrides[`${detailPath}|${track.index}`] ?? "",
+                              shown: titleOf(detailPath, track, false) ?? track.title ?? null,
+                            }))}
+                            disabled={busy}
+                            onChange={(index, value) => setTitleOverrides((c) => ({ ...c, [`${detailPath}|${index}`]: value }))}
+                          />
+                        )}
                       </div>
 
                       <DetailChart
@@ -660,6 +700,9 @@ export function MultiTrackBatch({
           </div>
 
           <BatchFooter
+            exportOptions={exportOptions}
+            languages={targetLanguages}
+            example={nameExample}
             outputDir={outputDir}
             onOutputDirChange={onOutputDirChange}
             busy={busy}

@@ -456,6 +456,34 @@
   overflow-wrap: normal;
 }
 
+/* Under the tracks: each corrected track's name in the export. */
+.detail-names {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.detail-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-name-row span {
+  flex: 0 0 auto;
+  min-width: 4em;
+}
+
+/* 24px, as the small buttons. */
+.detail-name-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 1px 7px;
+  font-size: 12px;
+}
+
 .detail-subs {
   display: flex;
   align-items: center;

@@ -173,6 +173,40 @@ export const fr = {
     unreliableCount: (n: number) => `${n} peu fiable${n > 1 ? "s" : ""}`,
   },
 
+  exportOptions: {
+    label: "Export :",
+    edit: "Modifier…",
+    editHint: "Dossier de sortie, codec audio et nom des pistes corrigées",
+    title: "Options d'export",
+    folder: "Dossier de sortie",
+    folderHint:
+      "Dans un autre dossier que celui de l'original, un export garde le nom de l'original (sauf s'il y est déjà pris) ; à côté de l'original, il prend le suffixe « .synced ».",
+    codec: "Codec audio",
+    codecHint:
+      "Le codec des pistes corrigées. « Auto » garde celui de la source quand c'est possible : l'AAC devient de l'Opus (l'encodeur AAC est lent), le TrueHD et le DTS du FLAC sans perte. L'AC3 et l'E-AC3 vont jusqu'au 5.1.",
+    codecs: {
+      auto: "Auto (comme la source)",
+      opus: "Opus",
+      aac: "AAC (lent)",
+      flac: "FLAC (sans perte)",
+      ac3: "AC3",
+      eac3: "E-AC3",
+    },
+    codecShort: { auto: "codec d'origine", opus: "Opus", aac: "AAC", flac: "FLAC", ac3: "AC3", eac3: "E-AC3" },
+    naming: "Nom des pistes corrigées",
+    namingHint:
+      "« D'origine » garde le nom de la piste source, « Automatique » le compose de sa langue, de son codec d'export et de ses canaux. Chaque nom reste modifiable fichier par fichier, dans son détail.",
+    namings: { source: "D'origine", auto: "Automatique", custom: "Personnalisé" },
+    namingShort: { source: "noms d'origine", auto: "noms automatiques", custom: "noms personnalisés" },
+    example: (name: string) => `Par exemple « ${name} ».`,
+    customFor: (language: string) => `${language} :`,
+    customEmpty: "nom d'origine",
+    trackNames: "Nom à l'export",
+    trackNamesHint:
+      "Le nom de chaque piste corrigée dans le fichier exporté, selon les options d'export ; le changer ici ne vaut que pour ce fichier.",
+    noName: "sans nom",
+  },
+
   batch: {
     multiMode: "Fichiers multipistes",
     pairsMode: "Paires de fichiers",

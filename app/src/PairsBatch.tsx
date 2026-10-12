@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { startSegmentsJob, startCrossFileSegmentedRenderJob, type SegmentsResponse, type TrackInfo } from "./api";
 import { runJob } from "./jobs";
+import { ExportNames, exportTitle, useExportOptions } from "./exportOptions";
 import { LanguageSelect } from "./languages";
 import {
   AnalyzeButton,
@@ -279,6 +280,10 @@ export function PairsBatch({
   const probes = useProbes(useMemo(() => [...referenceFiles, ...candidateFiles], [referenceFiles, candidateFiles]));
   const view = useDetailView();
   const collapsed = useListCollapsed();
+  // How corrected tracks are exported (codec, names), and the names typed
+  // in a pair's detail for its own tracks (by its files and track index).
+  const exportOptions = useExportOptions();
+  const [titleOverrides, setTitleOverrides] = useState<Record<string, string>>({});
 
   // The picks start out from the first pair's files (see defaultPick). Only
   // while none is set, so a pick of the user's is never overridden.
@@ -457,7 +462,29 @@ export function PairsBatch({
     setAnalyzing(false);
   }
 
+  /** Row `i`'s corrected track `index` as exported: its info, and its
+   * language ("Langue ajoutée" for a pair's only corrected track). */
+  function exportedTrack(i: number, index: number): { track: TrackInfo | undefined; language: string | null } {
+    const track = probes[candidateFiles[i]]?.tracks?.find((t) => t.index === index);
+    const added = tracksOf(i).candidates.length === 1 ? candidateLanguage || null : null;
+    return { track, language: added ?? track?.language ?? null };
+  }
+  /** Row `i`'s corrected track's name in its export (undefined: its source's). */
+  function titleOf(i: number, index: number, own = true): string | undefined {
+    const { track, language } = exportedTrack(i, index);
+    if (!track) return undefined;
+    return exportTitle({ track, language, options: exportOptions, override: own ? titleOverrides[`${filesKey(i)}|${index}`] : undefined });
+  }
+
   const pairRows = Array.from({ length: pairCount }, (_, i) => i);
+  // The corrected tracks' languages (a custom name each), and the first
+  // one's automatic name (for the export options to show).
+  const exported = pairRows.flatMap((i) => tracksOf(i).candidates.map((index) => exportedTrack(i, index)));
+  const targetLanguages = [...new Set(exported.map((e) => e.language))];
+  const firstExported = exported.find((e) => e.track);
+  const nameExample = firstExported?.track
+    ? (exportTitle({ track: firstExported.track, language: firstExported.language, options: { ...exportOptions, naming: "auto" } }) ?? null)
+    : null;
   const analyzedCount = pairRows.filter(pairDone).length;
   const exportedCount = pairRows.filter((i) => exportOf(i)?.exportStatus === "done").length;
   const canExport = pairRows.some((i) => doneTracks(i).length > 0);
@@ -507,6 +534,8 @@ export function PairsBatch({
                   segments: analyses[trackKey(i, track)].result!.segments,
                   language,
                   subtitles: subtitles[track] ?? [],
+                  title: titleOf(i, track),
+                  codec: exportOptions.codec === "auto" ? null : exportOptions.codec,
                 })),
                 outputPath,
               );
@@ -659,6 +688,7 @@ export function PairsBatch({
                     setReferenceKey("");
                     setCandidateKeys([]);
                     setShownTracks({});
+                    setTitleOverrides({});
                   }}
                 />
                 <FoldButton collapsed={collapsed} />
@@ -808,6 +838,18 @@ export function PairsBatch({
                           onChange={() => setSubsEditing(selected)}
                         />
                       )}
+                      {detailTracks.candidates.length > 0 && (
+                        <ExportNames
+                          rows={detailTracks.candidates.map((index) => ({
+                            index,
+                            label: trackName(index, candidateInfo(index)),
+                            value: titleOverrides[`${filesKey(selected)}|${index}`] ?? "",
+                            shown: titleOf(selected, index, false) ?? candidateInfo(index)?.title ?? null,
+                          }))}
+                          disabled={busy}
+                          onChange={(index, value) => setTitleOverrides((c) => ({ ...c, [`${filesKey(selected)}|${index}`]: value }))}
+                        />
+                      )}
                     </div>
                     <DetailChart
                       summary={detailResult && describeSegments(detailResult.segments)}
@@ -843,6 +885,9 @@ export function PairsBatch({
           </div>
 
           <BatchFooter
+            exportOptions={exportOptions}
+            languages={targetLanguages}
+            example={nameExample}
             outputDir={outputDir}
             onOutputDirChange={onOutputDirChange}
             busy={busy}

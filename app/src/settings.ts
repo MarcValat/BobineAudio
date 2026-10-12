@@ -72,3 +72,44 @@ export function saveListCollapsed(collapsed: boolean): void {
 export function useListCollapsed(): boolean {
   return useSyncExternalStore(subscribe, loadListCollapsed);
 }
+
+/** The codec corrected tracks are exported in: "auto" matches each one's
+ * source (AAC -> Opus, DTS/TrueHD -> FLAC, see the engine's render.py). */
+export type ExportCodec = "auto" | "opus" | "aac" | "flac" | "ac3" | "eac3";
+export const EXPORT_CODECS: ExportCodec[] = ["auto", "opus", "aac", "flac", "ac3", "eac3"];
+
+/** How a corrected track is named in the export: its source's name, one
+ * made of its properties ("FR Opus 2.0"), or one typed in per language. */
+export type TrackNaming = "source" | "auto" | "custom";
+export const TRACK_NAMINGS: TrackNaming[] = ["source", "auto", "custom"];
+
+const EXPORT_CODEC_KEY = "syncaudio.exportCodec";
+const TRACK_NAMING_KEY = "syncaudio.trackNaming";
+
+export function loadExportCodec(): ExportCodec {
+  const saved = loadSetting(EXPORT_CODEC_KEY) as ExportCodec | null;
+  return saved && EXPORT_CODECS.includes(saved) ? saved : "auto";
+}
+
+export function saveExportCodec(codec: ExportCodec): void {
+  saveSetting(EXPORT_CODEC_KEY, codec === "auto" ? null : codec);
+  changed();
+}
+
+export function useExportCodec(): ExportCodec {
+  return useSyncExternalStore(subscribe, loadExportCodec);
+}
+
+export function loadTrackNaming(): TrackNaming {
+  const saved = loadSetting(TRACK_NAMING_KEY) as TrackNaming | null;
+  return saved && TRACK_NAMINGS.includes(saved) ? saved : "source";
+}
+
+export function saveTrackNaming(naming: TrackNaming): void {
+  saveSetting(TRACK_NAMING_KEY, naming === "source" ? null : naming);
+  changed();
+}
+
+export function useTrackNaming(): TrackNaming {
+  return useSyncExternalStore(subscribe, loadTrackNaming);
+}

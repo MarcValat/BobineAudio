@@ -12,6 +12,43 @@ export function languageLabel(code: string | null): string {
   return name ? `${name} (${code})` : code;
 }
 
+// How releases usually tag a language in a track's name ("FR Opus 2.0",
+// "JP AAC 2.0"): mostly the country's two letters, not ISO 639-1's.
+const SHORT_LANGUAGES: Record<string, string> = {
+  fre: "FR",
+  fra: "FR",
+  eng: "EN",
+  jpn: "JP",
+  ger: "DE",
+  deu: "DE",
+  spa: "ES",
+  ita: "IT",
+  por: "PT",
+  dut: "NL",
+  nld: "NL",
+  rus: "RU",
+  pol: "PL",
+  kor: "KR",
+  chi: "CN",
+  zho: "CN",
+  ara: "AR",
+  swe: "SE",
+  nor: "NO",
+  dan: "DK",
+  fin: "FI",
+  tur: "TR",
+  heb: "IL",
+  hin: "IN",
+  tha: "TH",
+  vie: "VN",
+};
+
+/** "FR" for "fre": a language as a track's name shows it (the code in
+ * capitals for one not among the usual ones). */
+export function shortLanguage(code: string | null): string | null {
+  return code ? (SHORT_LANGUAGES[code] ?? code.toUpperCase()) : null;
+}
+
 /** A language picker: the ones the files at hand use (`extra`), plus the
  * usual ones unless `onlyExtra` -- to pick among what's there, not to tag
  * a track with a new one. `emptyLabel` names the "" choice (keep the

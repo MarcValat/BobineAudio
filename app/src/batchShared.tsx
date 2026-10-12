@@ -2,7 +2,8 @@ import { useRef, useState, type ReactNode } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { cancelJob, type RenderResponse, type SegmentsResponse } from "./api";
 import { JobCancelled, runJob, type RunStatus } from "./jobs";
-import { pickFolder, planOutputPaths } from "./mediaDialog";
+import { planOutputPaths } from "./mediaDialog";
+import { ExportChooser, type ExportOptions } from "./exportOptions";
 import { FolderIcon } from "./icons";
 import { Select } from "./Dropdown";
 import { SUBTITLE_MODES, type SubtitleMode } from "./subtitles";
@@ -115,43 +116,6 @@ const OUTPUT_DIR_KEY = "syncaudio.batchOutputDir";
 /** The folder batch exports go to (null: next to each original), kept for the next session. */
 export const loadOutputDir = (): string | null => loadSetting(OUTPUT_DIR_KEY);
 export const saveOutputDir = (dir: string | null): void => saveSetting(OUTPUT_DIR_KEY, dir);
-
-/** "Sortie : à côté des originaux / <dossier>", with the buttons to change it. */
-function OutputChooser({
-  outputDir,
-  onChange,
-  disabled,
-}: {
-  outputDir: string | null;
-  onChange: (dir: string | null) => void;
-  disabled: boolean;
-}) {
-  const t = useT();
-  return (
-    <div className="batch-output">
-      <span className="batch-output-label">{t.batch.output}</span>
-      <span className={outputDir ? "batch-output-dir batch-output-path" : "batch-output-dir"} title={outputDir ?? undefined}>
-        {outputDir ?? t.batch.nextToOriginals}
-      </span>
-      <button
-        className="small-button"
-        disabled={disabled}
-        title={t.batch.chooseFolderHint}
-        onClick={async () => {
-          const dir = await pickFolder(outputDir);
-          if (dir) onChange(dir);
-        }}
-      >
-        {t.batch.chooseFolder}
-      </button>
-      {outputDir && (
-        <button className="small-button" disabled={disabled} onClick={() => onChange(null)} title={t.batch.backNextToOriginalsHint}>
-          {t.batch.backNextToOriginals}
-        </button>
-      )}
-    </div>
-  );
-}
 
 /** One analysis, as both batch modes keep it (a corrected track of a file, a pair). */
 export interface AnalysisRun {
@@ -286,9 +250,17 @@ export function BatchFooter({
   canExport,
   exportNext,
   onExport,
+  exportOptions,
+  languages,
+  example,
 }: {
   outputDir: string | null;
   onOutputDirChange: (dir: string | null) => void;
+  /** The export options, the languages of the tracks to correct (a custom
+   * name each) and one track's automatic name (see ExportChooser). */
+  exportOptions: ExportOptions;
+  languages: (string | null)[];
+  example: string | null;
   busy: boolean;
   blocked: boolean;
   progress: ReactNode;
@@ -301,7 +273,14 @@ export function BatchFooter({
   const t = useT();
   return (
     <div className="batch-footer panel">
-      <OutputChooser outputDir={outputDir} onChange={onOutputDirChange} disabled={busy} />
+      <ExportChooser
+        outputDir={outputDir}
+        onOutputDirChange={onOutputDirChange}
+        options={exportOptions}
+        languages={languages}
+        example={example}
+        disabled={busy}
+      />
       <span className="batch-progress">{progress}</span>
       {analyzeButton}
       {queue.exporting ? (

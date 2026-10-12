@@ -11,6 +11,9 @@ export interface TrackInfo {
   title?: string | null;
   channels: number | null;
   sample_rate: number | null;
+  // The codec it's exported in once corrected, when no other is asked
+  // ("Opus" for an AAC source): the automatic track names.
+  export_codec: string;
   // Container-level presentation delay (e.g. from mkvtoolnix's --sync), if
   // any -- display-only, see the engine's probe_stream_start_time docstring
   // for why detection/render intentionally ignore it.
@@ -262,6 +265,10 @@ interface TrackSegments {
   /** Subtitle tracks of the same file timed on this audio: retimed with it,
    * segment by segment. */
   subtitles?: number[];
+  /** The corrected track's name in the export instead of its source's. */
+  title?: string | null;
+  /** Its export codec instead of the one matching its source. */
+  codec?: "opus" | "aac" | "flac" | "ac3" | "eac3" | null;
 }
 
 /**
@@ -291,6 +298,8 @@ export async function startSegmentedRenderJob(
         track: { path: inputPath, index: t.trackIndex },
         segments: t.segments,
         language: t.language ?? null,
+        title: t.title ?? null,
+        codec: t.codec ?? null,
       })),
       subs: tracks.flatMap((t) =>
         (t.subtitles ?? []).map((index) => ({
@@ -337,6 +346,8 @@ export async function startCrossFileSegmentedRenderJob(
         track: { path: candidatePath, index: t.trackIndex },
         segments: t.segments,
         language: t.language ?? null,
+        title: t.title ?? null,
+        codec: t.codec ?? null,
       })),
       // The candidate file's own subtitles timed on each audio, imported and
       // retimed along with it.

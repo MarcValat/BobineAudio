@@ -217,6 +217,52 @@ td > input[type="checkbox"] {
   flex: 0 0 auto;
 }
 
+/* "· Opus · noms automatiques": what the export options say, after the folder. */
+.batch-output-format {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+/* The export options (exportOptions.tsx): the folder, the codec, the names. */
+.export-options-panel {
+  max-width: 520px;
+}
+
+.export-options-folder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.export-options-folder .batch-output-dir {
+  flex: 1 1 100%;
+  max-width: none;
+}
+
+/* A custom name per language: its name, then the field. */
+.export-options-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9em;
+}
+
+.export-options-name span {
+  flex: 0 0 auto;
+  min-width: 9em;
+}
+
+.export-options-name input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .batch-footer {
   flex-wrap: wrap;
 }
