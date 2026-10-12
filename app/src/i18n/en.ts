@@ -70,6 +70,9 @@ export const en: Messages = {
     language: "Language",
     systemLanguage: "System",
     languageHint: "“System” follows your system's language: French if it's in French, English otherwise.",
+    uiScale: "Interface size",
+    uiScaleHint: "Makes the whole interface bigger or smaller: text, buttons and waveforms.",
+    uiScaleLimited: (percent: number) => `Reduced to ${percent}%: the screen has no room for more.`,
     subtitles: "Default subtitles",
     subtitlesHint:
       "The subtitles retimed with a corrected audio track unless picked otherwise: the starting setting of both modes.",

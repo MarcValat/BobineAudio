@@ -12,6 +12,7 @@ import { useLanguageChoice, useT, type LanguageChoice } from "./i18n";
 import { clearCache, getCacheSize } from "./api";
 import { saveCheckUpdates, saveSubtitleDefault, useCheckUpdates, useSubtitleDefault } from "./settings";
 import { SUBTITLE_MODES } from "./subtitles";
+import { UI_SCALES, loadUiScale, saveUiScale, useEffectiveUiScale, type UiScale } from "./uiScale";
 import { errorMessage } from "./util";
 
 const THEMES: ThemeChoice[] = ["system", "light", "dark"];
@@ -100,6 +101,8 @@ function OptionsDrawer({ closing, onClose }: { closing: boolean; onClose: () => 
   const [language, setLanguage] = useLanguageChoice();
   const subtitleDefault = useSubtitleDefault();
   const checkUpdates = useCheckUpdates();
+  const [uiScale, setUiScale] = useState<UiScale>(loadUiScale);
+  const effectiveScale = useEffectiveUiScale();
   const version = useAppVersion();
 
   function chooseTheme(choice: ThemeChoice) {
@@ -137,6 +140,23 @@ function OptionsDrawer({ closing, onClose }: { closing: boolean; onClose: () => 
             { value: "en", label: "English" },
           ]}
           onChange={(choice: LanguageChoice) => setLanguage(choice)}
+        />
+      </Setting>
+
+      <Setting
+        label={t.options.uiScale}
+        hint={t.options.uiScaleHint}
+        note={effectiveScale < uiScale && t.options.uiScaleLimited(effectiveScale)}
+      >
+        <PillSwitch
+          className="pill-switch-wide"
+          label={t.options.uiScale}
+          options={UI_SCALES.map((value) => [value, `${value} %`] as const)}
+          value={uiScale}
+          onChange={(choice) => {
+            setUiScale(choice);
+            saveUiScale(choice);
+          }}
         />
       </Setting>
 

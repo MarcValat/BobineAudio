@@ -4,6 +4,7 @@ import App from "./App";
 import { LanguageProvider } from "./i18n";
 import { applyTheme, loadTheme } from "./theme";
 import { engineReady } from "./engine";
+import { startUiScale } from "./uiScale";
 // Inter, bundled: the same text on Windows and Linux, no network needed.
 import "@fontsource-variable/inter";
 import "@fontsource-variable/inter/wght-italic.css";
@@ -23,10 +24,16 @@ if (!import.meta.env.DEV) {
   window.addEventListener("contextmenu", (e) => e.preventDefault());
 }
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <LanguageProvider>
-      <App />
-    </LanguageProvider>
-  </React.StrictMode>,
-);
+// The interface at its size before the first render, so it never shows at
+// another one first.
+startUiScale()
+  .catch(() => {})
+  .finally(() =>
+    ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+      <React.StrictMode>
+        <LanguageProvider>
+          <App />
+        </LanguageProvider>
+      </React.StrictMode>,
+    ),
+  );

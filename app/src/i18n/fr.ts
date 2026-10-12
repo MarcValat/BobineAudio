@@ -71,6 +71,9 @@ export const fr = {
     language: "Langue",
     systemLanguage: "Système",
     languageHint: "« Système » suit la langue de ton système : français s'il est en français, anglais sinon.",
+    uiScale: "Taille de l'interface",
+    uiScaleHint: "Agrandit ou réduit toute l'interface : textes, boutons et formes d'onde.",
+    uiScaleLimited: (percent: number) => `Réduite à ${percent} % : l'écran n'a pas la place pour plus.`,
     subtitles: "Sous-titres par défaut",
     subtitlesHint:
       "Les sous-titres recalés avec une piste audio corrigée, sauf choix contraire : réglage de départ des deux modes.",
