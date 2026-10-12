@@ -32,12 +32,12 @@ export function matchesKey(track: TrackInfo, key: TrackKey): boolean {
 /** Whether `track` is one of those `keys` name (any of them). */
 export const matchesAny = (track: TrackInfo, keys: TrackKey[]) => keys.some((key) => matchesKey(track, key));
 
-/** What `key` names, short: "@2", "fre", "« Français »" -- for "aucune piste …". */
+/** What `key` names, short: "@2", "fre", "« Français »" (in the language's quotes) -- for "aucune piste …". */
 export function keyName(key: TrackKey): string {
   const [kind, value] = split(key);
   if (kind === "all") return t().picker.all;
   if (kind === "index") return `@${value}`;
-  if (kind === "name") return `« ${value} »`;
+  if (kind === "name") return t().tracks.titled(value);
   return value;
 }
 
