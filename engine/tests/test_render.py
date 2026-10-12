@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import subprocess
 import io
 import wave
@@ -17,8 +18,9 @@ from syncaudio.ffmpeg_backend import (
     probe_stream_tags,
     resolve_ffmpeg,
 )
-from syncaudio.models import AudioTrackSpec
+from syncaudio.models import AudioStreamInfo, AudioTrackSpec
 from syncaudio.render import (
+    export_codec_name,
     SegmentedTrackCorrection,
     TrackCorrection,
     _stretch_filter,
@@ -966,3 +968,29 @@ def test_render_segmented_with_retimed_native_subs_keeps_attachments(
     starts = _extract_srt_start_times(output_path)
     assert len(starts) == 1
     assert abs(starts[0] - (cue_start_s - offset_s)) < 0.3
+
+
+def test_render_segmented_names_the_corrected_track_as_asked(
+    segmented_cross_file_fixture: tuple[Path, Path, float, float],
+) -> None:
+    ref_mkv, donor_mkv, _, _ = segmented_cross_file_fixture
+    seg_corr = plan_segmented_correction(_spec(ref_mkv, 0), _spec(donor_mkv, 0))
+    output_path = str(ref_mkv.with_name("named.synced.mkv"))
+    render(
+        str(ref_mkv),
+        reference_index=0,
+        corrections=[],
+        output_path=output_path,
+        segmented_corrections=[dataclasses.replace(seg_corr, title="FR Opus 2.0")],
+    )
+    assert probe_stream_tags(output_path, "Audio")[1] == {"language": "fre", "title": "FR Opus 2.0"}
+
+
+def test_export_codec_name_follows_the_encoder_used() -> None:
+    def stream(codec: str) -> AudioStreamInfo:
+        return AudioStreamInfo(index=0, codec=codec, language=None)
+
+    assert export_codec_name(stream("aac (LC)")) == "Opus"
+    assert export_codec_name(stream("truehd")) == "FLAC"
+    assert export_codec_name(stream("ac3")) == "AC3"
+    assert export_codec_name(None) == "FLAC"

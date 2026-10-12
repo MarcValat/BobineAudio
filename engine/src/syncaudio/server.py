@@ -47,6 +47,7 @@ from syncaudio.render import (
     check_import_track,
     corrected_clip,
     default_output_path,
+    export_codec_name,
     plan_corrections,
     plan_segmented_correction,
     render as render_tracks,
@@ -235,6 +236,9 @@ class TrackInfo(BaseModel):
     title: str | None = None
     channels: int | None
     sample_rate: int | None
+    # The codec it's exported in once corrected ("Opus" for an AAC source):
+    # the GUI's automatic track names.
+    export_codec: str
     # Container-level presentation delay (e.g. from mkvtoolnix's --sync), if
     # any -- display-only: every extraction works on the track's own
     # timeline with this delay excluded (see ffmpeg_backend._seek_args), so
@@ -273,6 +277,7 @@ def probe(path: str) -> ProbeResponse:
                 title=s.title,
                 channels=s.channels,
                 sample_rate=s.sample_rate,
+                export_codec=export_codec_name(s),
                 start_time=probe_stream_start_time(path, s.index),
             )
             for s in streams
@@ -497,6 +502,8 @@ class SegmentOverride(BaseModel):
     # Language to tag the corrected track with instead of its own -- for a
     # track that has none (a bare .wav, .flac...) or a wrong one.
     language: str | None = None
+    # The corrected track's name in the export instead of its source's ("" for none).
+    title: str | None = None
 
 
 class RenderRequest(BaseModel):
@@ -583,7 +590,10 @@ def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> Rend
                     )
                     seg_corrections.append(
                         SegmentedTrackCorrection(
-                            track=spec, language=language, segments=[s.to_segment() for s in override.segments]
+                            track=spec,
+                            language=language,
+                            segments=[s.to_segment() for s in override.segments],
+                            title=override.title,
                         )
                     )
                 else:
