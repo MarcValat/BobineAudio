@@ -8,6 +8,7 @@ import { formatOffsetMs, formatTime, segmentOffsetLabel } from "./SegmentChart";
 import { Waveform, type HighlightRegion } from "./Waveform";
 import { WaveformNavigator } from "./WaveformNavigator";
 import { errorMessage, inFront, shortcutKey } from "./util";
+import { peakRange, resamplePeaks, type FullPeaks, type PeaksData } from "./peaks";
 import { MinusIcon, PlusIcon } from "./icons";
 import { useT } from "./i18n";
 
@@ -59,79 +60,6 @@ function offsetAt(segments: SegmentOut[], t: number): number {
     }
   }
   return 0;
-}
-
-interface PeaksData {
-  min: number[];
-  max: number[];
-  dataStart: number;
-  dataEnd: number;
-}
-
-interface FullPeaks {
-  min: number[];
-  max: number[];
-}
-
-/** Min/max of the whole-track peaks over time range [t0, t1). */
-function peakRange(full: FullPeaks, fullDuration: number, t0: number, t1: number): [number, number] | null {
-  const n = full.min.length;
-  if (n === 0 || fullDuration <= 0 || t1 <= t0) return null;
-  const bucket = fullDuration / n;
-  const lo = Math.max(0, Math.min(n - 1, Math.floor(t0 / bucket)));
-  const hi = Math.max(lo + 1, Math.min(n, Math.ceil(t1 / bucket)));
-  let mn = full.min[lo];
-  let mx = full.max[lo];
-  for (let j = lo; j < hi; j++) {
-    if (full.min[j] < mn) mn = full.min[j];
-    if (full.max[j] > mx) mx = full.max[j];
-  }
-  return [mn, mx];
-}
-
-/**
- * Derives a `outBuckets`-wide view [viewStart, viewEnd) from a pre-fetched
- * whole-track peaks array (spanning [0, full duration]) -- min-of-mins /
- * max-of-maxes over the source buckets each output bucket covers, which is
- * exact (no precision lost beyond what the original server-side bucketing
- * already introduced). This is what makes zoom/pan instant: no network call,
- * just re-slicing data already in memory. Below the source's own
- * resolution (zoomed in tighter than FULL_TRACK_BUCKETS can resolve), output
- * buckets start repeating the same one or two source buckets -- a known,
- * accepted trade-off (see FULL_TRACK_BUCKETS/MIN_VIEW_DURATION_S) rather
- * than falling back to a live fetch.
- */
-function resamplePeaks(full: FullPeaks, fullDuration: number, viewStart: number, viewEnd: number, outBuckets: number): PeaksData {
-  const n = full.min.length;
-  if (n === 0 || fullDuration <= 0) return { min: [], max: [], dataStart: viewStart, dataEnd: viewStart };
-
-  const srcBucketDur = fullDuration / n;
-  const clampedStart = Math.max(0, viewStart);
-  const clampedEnd = Math.min(fullDuration, viewEnd);
-  if (clampedEnd <= clampedStart) return { min: [], max: [], dataStart: viewStart, dataEnd: viewStart };
-
-  const startIdx = Math.max(0, Math.floor(clampedStart / srcBucketDur));
-  const endIdx = Math.min(n, Math.ceil(clampedEnd / srcBucketDur));
-  const sliceLen = endIdx - startIdx;
-  if (sliceLen <= 0) return { min: [], max: [], dataStart: viewStart, dataEnd: viewStart };
-
-  const outMin = new Array<number>(outBuckets);
-  const outMax = new Array<number>(outBuckets);
-  for (let i = 0; i < outBuckets; i++) {
-    const a = startIdx + Math.floor((i / outBuckets) * sliceLen);
-    const b = startIdx + Math.floor(((i + 1) / outBuckets) * sliceLen);
-    const lo = Math.min(a, n - 1);
-    const hi = Math.max(lo + 1, Math.min(b, n));
-    let mn = full.min[lo];
-    let mx = full.max[lo];
-    for (let j = lo; j < hi; j++) {
-      if (full.min[j] < mn) mn = full.min[j];
-      if (full.max[j] > mx) mx = full.max[j];
-    }
-    outMin[i] = mn;
-    outMax[i] = mx;
-  }
-  return { min: outMin, max: outMax, dataStart: startIdx * srcBucketDur, dataEnd: endIdx * srcBucketDur };
 }
 
 /** Fetches+decodes a clip into a ready-to-schedule AudioBuffer. Decoding
@@ -792,76 +720,60 @@ export function TrackPreview({
 
       {viewDuration !== null && viewData && (
         <div className="waveforms">
-          <Waveform
-            viewStart={viewStart}
-            viewDuration={viewDuration}
-            peaksMin={viewData.refPeaks.min}
-            peaksMax={viewData.refPeaks.max}
-            dataStart={viewData.refPeaks.dataStart}
-            dataEnd={viewData.refPeaks.dataEnd}
-            cursor={displayCursor}
-            cursorGlide={!markerMoving}
-            onSeek={handleWaveformSeek}
-            onScrub={setScrubTime}
-            onScrubEnd={endScrub}
-            onPan={pan}
-            onZoom={zoomAt}
-            label={t.preview.reference}
-            className="waveform-reference"
-          />
-          <Waveform
-            viewStart={viewStart}
-            viewDuration={viewDuration}
-            peaksMin={viewData.candPeaks.min}
-            peaksMax={viewData.candPeaks.max}
-            dataStart={viewData.candPeaks.dataStart}
-            dataEnd={viewData.candPeaks.dataEnd}
-            cursor={displayCursor}
-            cursorGlide={!markerMoving}
-            onSeek={handleWaveformSeek}
-            onScrub={setScrubTime}
-            onScrubEnd={endScrub}
-            onPan={pan}
-            onZoom={zoomAt}
-            highlights={removedHighlight}
-            label={t.preview.candidate}
-            labelExtra={
-              removedHighlight.length > 0 && (
-                <span>
-                  <span className="waveform-legend-swatch removed" /> {t.preview.willBeRemoved}
-                </span>
-              )
-            }
-            className="waveform-candidate"
-          />
-          <Waveform
-            viewStart={viewStart}
-            viewDuration={viewDuration}
-            peaksMin={viewData.finalPeaks.min}
-            peaksMax={viewData.finalPeaks.max}
-            dataStart={viewData.finalPeaks.dataStart}
-            dataEnd={viewData.finalPeaks.dataEnd}
-            cursor={displayCursor}
-            cursorGlide={!markerMoving}
-            onSeek={handleWaveformSeek}
-            onScrub={setScrubTime}
-            onScrubEnd={endScrub}
-            onPan={pan}
-            onZoom={zoomAt}
-            highlights={addedHighlight}
-            label={t.preview.result}
-            labelExtra={
-              <>
-                {addedHighlight.length > 0 && (
+          {/* The reference, the track as is (what's removed in red), the
+              result (what's added in green, the offset at the position):
+              one time scale, one position. */}
+          {(
+            [
+              [t.preview.reference, "waveform-reference", viewData.refPeaks, undefined, null],
+              [
+                t.preview.candidate,
+                "waveform-candidate",
+                viewData.candPeaks,
+                removedHighlight,
+                removedHighlight.length > 0 && (
                   <span>
-                    <span className="waveform-legend-swatch added" /> {t.preview.willBeAdded}
+                    <span className="waveform-legend-swatch removed" /> {t.preview.willBeRemoved}
                   </span>
-                )}
-                {offsetHere}
-              </>
-            }
-            className="waveform-final"
-          />
+                ),
+              ],
+              [
+                t.preview.result,
+                "waveform-final",
+                viewData.finalPeaks,
+                addedHighlight,
+                <>
+                  {addedHighlight.length > 0 && (
+                    <span>
+                      <span className="waveform-legend-swatch added" /> {t.preview.willBeAdded}
+                    </span>
+                  )}
+                  {offsetHere}
+                </>,
+              ],
+            ] as const
+          ).map(([label, className, peaks, highlights, labelExtra]) => (
+            <Waveform
+              key={className}
+              viewStart={viewStart}
+              viewDuration={viewDuration}
+              peaksMin={peaks.min}
+              peaksMax={peaks.max}
+              dataStart={peaks.dataStart}
+              dataEnd={peaks.dataEnd}
+              cursor={displayCursor}
+              cursorGlide={!markerMoving}
+              onSeek={handleWaveformSeek}
+              onScrub={setScrubTime}
+              onScrubEnd={endScrub}
+              onPan={pan}
+              onZoom={zoomAt}
+              highlights={highlights}
+              label={label}
+              labelExtra={labelExtra}
+              className={className}
+            />
+          ))}
         </div>
       )}
 
@@ -899,48 +811,26 @@ export function TrackPreview({
             a line of its own when the row is too narrow. */}
         <span className="preview-hear">
           <span className="preview-listen-label">{t.preview.hear}</span>
-          <label>
-            <input
-              type="checkbox"
-              checked={!refMuted}
-              onChange={() =>
-                setRefMuted((m) => {
-                  const next = !m;
-                  if (refGainRef.current) refGainRef.current.gain.value = next ? 0 : 1;
-                  return next;
-                })
-              }
-            />
-            {t.preview.reference}
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={!candOriginalMuted}
-              onChange={() =>
-                setCandOriginalMuted((m) => {
-                  const next = !m;
-                  if (candOriginalGainRef.current) candOriginalGainRef.current.gain.value = next ? 0 : 1;
-                  return next;
-                })
-              }
-            />
-            {t.preview.hearCandidate}
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={!candMuted}
-              onChange={() =>
-                setCandMuted((m) => {
-                  const next = !m;
-                  if (candGainRef.current) candGainRef.current.gain.value = next ? 0 : 1;
-                  return next;
-                })
-              }
-            />
-            {t.preview.hearResult}
-          </label>
+          {(
+            [
+              [t.preview.reference, refMuted, setRefMuted, refGainRef],
+              [t.preview.hearCandidate, candOriginalMuted, setCandOriginalMuted, candOriginalGainRef],
+              [t.preview.hearResult, candMuted, setCandMuted, candGainRef],
+            ] as const
+          ).map(([label, muted, setMuted, gain]) => (
+            <label key={label}>
+              <input
+                type="checkbox"
+                checked={!muted}
+                onChange={() => {
+                  // At once on what plays, and for the next clip.
+                  if (gain.current) gain.current.gain.value = muted ? 1 : 0;
+                  setMuted(!muted);
+                }}
+              />
+              {label}
+            </label>
+          ))}
         </span>
       </div>
       {error && <p className="error">{error}</p>}
