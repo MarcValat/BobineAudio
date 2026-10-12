@@ -1,6 +1,6 @@
 // Client for the syncaudio FastAPI sidecar (engine/src/syncaudio/server.py),
 // spawned by src-tauri/src/lib.rs; its address and startup are in engine.ts.
-import { engineReady, getEngineUrl } from "./engine";
+import { engineHeaders, engineReady, getEngineToken, getEngineUrl } from "./engine";
 import { t } from "./i18n";
 
 export interface TrackInfo {
@@ -77,7 +77,9 @@ async function readErrorDetail(resp: Response): Promise<string> {
  * starts, it just goes through a moment later. */
 async function engineFetch(path: string, init?: RequestInit): Promise<Response> {
   await engineReady();
-  return fetch(`${await getEngineUrl()}${path}`, init);
+  const headers = new Headers(init?.headers);
+  for (const [name, value] of Object.entries(await engineHeaders())) headers.set(name, value);
+  return fetch(`${await getEngineUrl()}${path}`, { ...init, headers });
 }
 
 export async function probe(path: string): Promise<ProbeResponse> {
@@ -384,7 +386,9 @@ export async function cancelJob(jobId: string): Promise<void> {
  * way to know something went wrong.
  */
 export async function connectJobWS<TResult>(jobId: string, onEvent: (event: JobEvent<TResult>) => void): Promise<() => void> {
-  const ws = new WebSocket(`${(await getEngineUrl()).replace("http", "ws")}/jobs/${jobId}/ws`);
+  // A WebSocket takes no header: the token goes in its address.
+  const token = encodeURIComponent(await getEngineToken());
+  const ws = new WebSocket(`${(await getEngineUrl()).replace("http", "ws")}/jobs/${jobId}/ws?token=${token}`);
   let settled = false;
 
   ws.onmessage = (ev) => {
