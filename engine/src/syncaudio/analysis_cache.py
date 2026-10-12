@@ -256,7 +256,7 @@ def prefetch(
             with tempfile.TemporaryDirectory(prefix="syncaudio-decode-") as tmp:
                 log(tr("[extraction] {path} : {count} piste(s) en une seule passe...", path=path, count=len(group)))
                 files = decode_tracks_to_files(path, [_stream_index(s) for s, _ in group], sample_rate, Path(tmp))
-                for (spec, key), file in zip(group, files):
+                for (spec, key), file in zip(group, files, strict=True):
                     pending.discard(key)
                     result = None
                     try:

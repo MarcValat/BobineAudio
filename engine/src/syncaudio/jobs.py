@@ -79,7 +79,7 @@ def start_job(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Job:
             job.finish(result)
         except Cancelled:
             job.mark_cancelled()
-        except Exception as exc:  # noqa: BLE001 - a background thread has no other way to surface a failure
+        except Exception as exc:  # a background thread has no other way to surface a failure
             # An HTTPException's str() is "400: <detail>"; the user only needs the detail.
             job.fail(str(getattr(exc, "detail", None) or exc))
 

@@ -297,7 +297,7 @@ def render(
     candidates = same_file_specs + import_audio_specs
     candidate_keys = [track_key(c) for c in candidates]
 
-    for raw, key in zip(subs_pairs, subs_audio_keys):
+    for raw, key in zip(subs_pairs, subs_audio_keys, strict=True):
         if key not in candidate_keys:
             raise click.ClickException(
                 f"--subs {raw!r} : la piste audio indiquée ne correspond à aucune piste corrigée "
@@ -332,7 +332,7 @@ def render(
                 )
 
         segmented_imported_subs: list[tuple[AudioTrackSpec, list[Segment]]] = []
-        for subs_spec, key in zip(subs_specs, subs_audio_keys):
+        for subs_spec, key in zip(subs_specs, subs_audio_keys, strict=True):
             pos = candidate_keys.index(key)
             segmented_imported_subs.append((subs_spec, seg_corrections[pos].segments))
             click.echo(
@@ -382,7 +382,7 @@ def render(
         )
 
     imported_subs: list[tuple[AudioTrackSpec, float]] = []
-    for subs_spec, key in zip(subs_specs, subs_audio_keys):
+    for subs_spec, key in zip(subs_specs, subs_audio_keys, strict=True):
         pos = candidate_keys.index(key)
         offset = corrections[pos].offset_seconds
         imported_subs.append((subs_spec, offset))

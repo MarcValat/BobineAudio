@@ -75,7 +75,7 @@ app = FastAPI(title="Bobine Audio", version="0.1.0", lifespan=_lifespan)
 # dev) call it, same as any other local desktop-app sidecar.
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-_NO_LOG: Callable[[str], None] = lambda _msg: None  # noqa: E731
+_NO_LOG: Callable[[str], None] = lambda _msg: None
 
 
 @app.get("/health")
@@ -590,7 +590,8 @@ def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> Rend
                         )
                     )
             segmented_imported_subs = [
-                (pair.subs.to_spec(), seg_corrections[pos].segments) for pair, pos in zip(req.subs, subs_positions)
+                (pair.subs.to_spec(), seg_corrections[pos].segments)
+                for pair, pos in zip(req.subs, subs_positions, strict=True)
             ]
             log(tr("[rendu] écriture de {path} ...", path=output_path))
             written = render_tracks(
@@ -613,7 +614,8 @@ def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> Rend
                 reference_spec, candidates, start=req.start, duration=req.duration, log=log
             )
             imported_subs = [
-                (pair.subs.to_spec(), corrections[pos].offset_seconds) for pair, pos in zip(req.subs, subs_positions)
+                (pair.subs.to_spec(), corrections[pos].offset_seconds)
+                for pair, pos in zip(req.subs, subs_positions, strict=True)
             ]
             log(tr("[rendu] écriture de {path} ...", path=output_path))
             written = render_tracks(

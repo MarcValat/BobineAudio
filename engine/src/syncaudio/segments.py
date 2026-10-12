@@ -445,7 +445,7 @@ def classify_segments(
         tolerance = min(jump_threshold_s, max(_OUTLIER_MIN_TOL_S, _OUTLIER_NOISE_SIGMAS * step_noise))
         reliable = np.abs(offsets - smoothed) <= tolerance
         if 2 <= int(reliable.sum()) < len(offsets):
-            usable = [w for w, keep in zip(usable, reliable) if keep]
+            usable = [w for w, keep in zip(usable, reliable, strict=True) if keep]
             times = times[reliable]
             offsets = offsets[reliable]
 
