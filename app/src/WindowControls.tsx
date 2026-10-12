@@ -59,7 +59,7 @@ export function WindowControls() {
     { label: t.window.close, kind: "close", icon: <path d="M2 2l8 8M10 2l-8 8" />, onClick: () => win?.close() },
   ];
   return (
-    <div className="window-controls">
+    <div className={maximized ? "window-controls window-controls-maximized" : "window-controls"}>
       {buttons.map((b) => (
         // No tooltip: these three are the same in every app.
         <button key={b.kind} className={`window-button window-${b.kind}`} aria-label={b.label} onClick={b.onClick}>
