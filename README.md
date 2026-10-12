@@ -24,7 +24,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/main-en-dark.png">
-  <img src="docs/screenshots/main-en-light.png" alt="Bobine Audio: offset over time, then the reference, the track to correct and the final result, as waveforms">
+  <img src="docs/screenshots/main-en-light.png" alt="Bobine Audio: a season's episodes on the left; on the right, the tracks, the offset over time, then the reference, the track to correct and the final result as waveforms">
 </picture>
 
 ## Why
@@ -38,8 +38,8 @@ A dub rarely lines up with the video it's added to: a few frames of delay, an of
 - ✏️ **Correct by hand if needed**: drag a segment or a boundary, split, remove a false detection, undo / redo, remove unreliable segments in one click.
 - 📦 **A clean export**: a new MKV with the video, the reference track and the corrected tracks; the text subtitles (SRT, ASS) that go with a track get the same jumps and drift. The original file is never changed.
 - 🗂️ **A whole series in one pass**: files that each hold both versions (tracks picked by language), or pairs of files where the corrected track comes from another file (a video, or a bare audio file).
-- 🖱️ **Drag and drop**: files, or a whole folder in batch mode (episodes in name order).
-- 🌗 **Comfort**: English or French, light or dark theme, analyses kept on disk (reopening a file is instant), automatic updates.
+- 🖱️ **Drag and drop**: files, or a whole folder (episodes in name order).
+- 🌗 **Comfort**: English or French, light or dark theme, adjustable interface size, analyses kept on disk (reopening a file is instant), automatic updates.
 
 ## Install
 
@@ -57,15 +57,15 @@ Nothing else to install: the analysis engine and ffmpeg come with the app. When 
 
 ## How it works
 
-1. **Open a file** (or drop it on the window), pick the **reference** track (the one in sync with the video, never changed) and the tracks **to correct**.
+1. **Drop your files** on the window (one episode or a whole season), pick the **reference** track (the one in sync with the video, never changed) and the tracks **to correct**, for every file at once.
 2. **Analyze**: the offset curve shows the segments found. Listen to the result, and adjust the segments by hand if something's off.
-3. **Export**: the synchronized file is written as a new MKV, next to the original by default (`Film.synced.mkv`).
+3. **Export**: each synchronized file is written as a new MKV, next to its original by default (`Film.synced.mkv`).
 
-📖 The [user guide](docs/guide.md) covers everything in detail: reading the result, the segment editor, subtitles, batch mode, FAQ.
+📖 The [user guide](docs/guide.md) covers everything in detail: reading the result, the segment editor, subtitles, file pairs, FAQ.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/editor-en-dark.png">
-  <img src="docs/screenshots/editor-en-light.png" alt="The segment editor: offset chart with draggable boundaries, segment table, waveforms">
+  <img src="docs/screenshots/editor-en-light.png" alt="The segment editor: offset chart with draggable boundaries, waveforms, segment table">
 </picture>
 
 ## Good to know

@@ -24,7 +24,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/main-fr-dark.png">
-  <img src="docs/screenshots/main-fr-light.png" alt="Bobine Audio : décalage en fonction du temps, puis la référence, la piste à corriger et le résultat final en formes d'onde">
+  <img src="docs/screenshots/main-fr-light.png" alt="Bobine Audio : les épisodes d'une saison à gauche ; à droite, les pistes, le décalage en fonction du temps, puis la référence, la piste à corriger et le résultat final en formes d'onde">
 </picture>
 
 ## Pourquoi
@@ -38,8 +38,8 @@ Un doublage colle rarement à la vidéo à laquelle on l'ajoute : quelques image
 - ✏️ **Corriger à la main si besoin** : glisser un segment ou une frontière, couper, retirer une fausse détection, défaire / refaire, retirer d'un clic les segments peu fiables.
 - 📦 **Un export propre** : un nouveau MKV avec la vidéo, la piste de référence et les pistes corrigées ; les sous-titres texte (SRT, ASS) associés à une piste subissent les mêmes sauts et la même dérive. Le fichier d'origine n'est jamais modifié.
 - 🗂️ **Une série entière en une passe** : des fichiers qui contiennent chacun les deux versions (pistes choisies par langue), ou des paires de fichiers où la piste corrigée vient d'un autre fichier (une vidéo, ou un simple fichier audio).
-- 🖱️ **Glisser-déposer** : des fichiers, ou tout un dossier en mode batch (épisodes dans l'ordre des noms).
-- 🌗 **Confort** : français ou anglais, thème clair ou sombre, analyses gardées sur le disque (rouvrir un fichier est immédiat), mises à jour automatiques.
+- 🖱️ **Glisser-déposer** : des fichiers, ou tout un dossier (épisodes dans l'ordre des noms).
+- 🌗 **Confort** : français ou anglais, thème clair ou sombre, taille de l'interface réglable, analyses gardées sur le disque (rouvrir un fichier est immédiat), mises à jour automatiques.
 
 ## Installation
 
@@ -57,15 +57,15 @@ Rien d'autre à installer : le moteur d'analyse et ffmpeg sont fournis avec l'ap
 
 ## Comment ça marche
 
-1. **Ouvre un fichier** (ou dépose-le sur la fenêtre), choisis la piste de **référence** (celle qui est calée sur la vidéo, jamais modifiée) et les pistes **à corriger**.
+1. **Dépose tes fichiers** sur la fenêtre (un épisode ou une saison entière), choisis la piste de **référence** (celle qui est calée sur la vidéo, jamais modifiée) et les pistes **à corriger**, pour tous les fichiers à la fois.
 2. **Analyse** : la courbe de décalage montre les segments trouvés. Écoute le résultat, et ajuste les segments à la main si quelque chose cloche.
-3. **Exporte** : le fichier synchronisé est écrit dans un nouveau MKV, à côté de l'original par défaut (`Film.synced.mkv`).
+3. **Exporte** : chaque fichier synchronisé est écrit dans un nouveau MKV, à côté de son original par défaut (`Film.synced.mkv`).
 
-📖 Le [guide d'utilisation](docs/guide.fr.md) détaille tout : lire le résultat, l'éditeur de segments, les sous-titres, le mode batch, les questions fréquentes.
+📖 Le [guide d'utilisation](docs/guide.fr.md) détaille tout : lire le résultat, l'éditeur de segments, les sous-titres, les paires de fichiers, les questions fréquentes.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/editor-fr-dark.png">
-  <img src="docs/screenshots/editor-fr-light.png" alt="L'éditeur de segments : graphe des décalages avec frontières déplaçables, tableau des segments, formes d'onde">
+  <img src="docs/screenshots/editor-fr-light.png" alt="L'éditeur de segments : graphe des décalages avec frontières déplaçables, formes d'onde, tableau des segments">
 </picture>
 
 ## Bon à savoir

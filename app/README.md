@@ -1,6 +1,6 @@
 # Bobine Audio (app)
 
-GUI standalone de [Bobine Audio](../README.md) (Tauri v2 + React/TypeScript) : ouvrir un fichier (ou une série entière en mode batch), choisir la piste de référence et les pistes à corriger, lancer l'analyse (décalage constant, dérive ou sauts), vérifier le résultat par un aperçu visuel (formes d'onde, style diff) et sonore avant d'exporter, éditer manuellement les segments détectés si besoin — y compris ignorer en un clic ceux dont le score de confiance est trop faible pour être fiable.
+GUI standalone de [Bobine Audio](../README.md) (Tauri v2 + React/TypeScript) : ajouter un fichier ou une série entière, choisir la piste de référence et les pistes à corriger, lancer l'analyse (décalage constant, dérive ou sauts), vérifier le résultat par un aperçu visuel (formes d'onde, style diff) et sonore avant d'exporter, éditer manuellement les segments détectés si besoin — y compris ignorer en un clic ceux dont le score de confiance est trop faible pour être fiable.
 
 Ne contient aucune logique de détection/correction elle-même : elle pilote le moteur Python (`../engine/`), lancé au démarrage comme process séparé (« sidecar ») exposant une API HTTP + WebSocket locale (`127.0.0.1:8756`, ou un autre port libre si celui-ci est déjà pris : l'interface le demande à l'app). Voir [`engine/README.md`](../engine/README.md) pour le détail du moteur et de son API.
 
@@ -50,7 +50,7 @@ N'étant pas signé avec un certificat Authenticode (aucun pour l'instant), l'in
 
 ## Mise à jour automatique
 
-`tauri-plugin-updater` vérifie au démarrage (`src/UpdateButton.tsx`, désactivable dans les Options) si une release plus récente existe sur GitHub, via l'URL configurée dans `src-tauri/tauri.conf.json` (`plugins.updater.endpoints`, convention `.../releases/latest/download/latest.json`). Chaque installateur publié doit être signé avec la même paire de clés que celle dont la clé publique est intégrée dans ce fichier.
+`tauri-plugin-updater` vérifie au démarrage (`src/UpdateButton.tsx`, désactivable dans les Paramètres) si une release plus récente existe sur GitHub, via l'URL configurée dans `src-tauri/tauri.conf.json` (`plugins.updater.endpoints`, convention `.../releases/latest/download/latest.json`). Chaque installateur publié doit être signé avec la même paire de clés que celle dont la clé publique est intégrée dans ce fichier.
 
 La paire de clés a été générée une fois (`npx tauri signer generate -w .tauri-keys/syncaudio.key`) ; `.tauri-keys/` est gitignoré — **ne jamais commit la clé privée**. Pour publier une release signée, deux variables d'environnement doivent être disponibles au moment du `tauri build` (localement, ou en secrets CI — voir `.github/workflows/release.yml`) :
 
@@ -67,11 +67,12 @@ Secrets requis côté GitHub (Settings > Secrets and variables > Actions) : `TAU
 
 ## Structure
 
-- `src/App.tsx` — écran fichier unique : liste des pistes, lancement de l'analyse, onglets par piste analysée.
-- `src/BatchView.tsx` — mode batch : deux listes de fichiers appariées par position, un couple de pistes référence/à corriger appliqué à toute la série, analyse/export en un clic.
+- `src/App.tsx` — la barre du haut, qui sert aussi de barre de titre à la fenêtre (sans décorations système, `src/WindowControls.tsx`) : les deux modes, l'état du moteur, la mise à jour, les Paramètres (`src/Options.tsx`).
+- `src/BatchView.tsx` — l'espace de travail des deux modes, gardés montés tous les deux : `src/MultiTrackBatch.tsx` (des fichiers qui contiennent chacun la référence et les pistes à corriger) et `src/PairsBatch.tsx` (des paires de fichiers appariés par position). Leurs pièces communes : `src/Workspace.tsx` (liste repliable, lignes, état vide), `src/Detail.tsx` (le détail du fichier choisi), `src/batchShared.tsx` (file d'analyse/export, sortie, étape suivante).
+- `src/uiScale.ts` — la taille de l'interface (zoom de la WebView), réduite d'office sur un écran trop petit pour la mise en page ; la taille minimale de la fenêtre la suit.
 - `src/SegmentChart.tsx` / `SegmentEditor.tsx` — graphe décalage-vs-temps et éditeur manuel des segments (glisser une frontière, fusionner/supprimer, saisie numérique, score de confiance par segment avec option "Ignorer les segments peu fiables").
 - `src/TrackPreview.tsx` / `Waveform.tsx` / `WaveformNavigator.tsx` — aperçu avant export : formes d'onde zoomables (référence / candidate / résultat, surlignage façon diff), barre de navigation sur la piste entière, lecture audio synchronisée (Web Audio API, pour un démarrage simultané précis des pistes comparées). Le « Résultat final » est fidèle au fichier exporté : l'extrait écouté est produit par le moteur avec le même filtre que le rendu (`POST /corrected-clip`), et sa forme d'onde suit la même logique segment par segment (`src/resultPlan.ts`) — sauts, contenu en trop sauté, blancs là où la piste doublée manque de contenu.
-- `src/UpdateButton.tsx` — vérification de mise à jour au démarrage, et son installation depuis l'icône à côté des Options.
+- `src/UpdateButton.tsx` — vérification de mise à jour au démarrage, et son installation depuis l'icône à côté des Paramètres.
 - `src/api.ts` — client du sidecar HTTP/WebSocket.
 - `src-tauri/` — coquille Rust : démarrage/arrêt du sidecar (`src/lib.rs`), config de la fenêtre/du bundle/de l'updater (`tauri.conf.json`), icônes (`icons/` : `icon-source.svg` éditable, et `icon-source-small.svg` pour les tailles de 16 à 48 px du `.ico`), hooks de l'installateur NSIS (`windows/installer-hooks.nsh`).
 
