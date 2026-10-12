@@ -94,8 +94,9 @@ def _audio_encode_args(stream: AudioStreamInfo | None, selector: str) -> list[st
     track's own source codec (see ``_ENCODER_FOR_CODEC``) and, when known,
     its own bitrate. ``stream`` is ``None`` when the source codec couldn't
     be probed at all -- also falls back to flac then."""
-    name = (stream.codec if stream else None) or ""
-    name = name.split("(")[0].split()[0].strip().lower()
+    words = ((stream.codec if stream else None) or "").split("(")[0].split()
+    # An unknown codec (none probed, or an empty name) falls back to flac below.
+    name = words[0].lower() if words else ""
     if name == "vorbis":
         return [f"-c:a:{selector}", "libvorbis", f"-q:a:{selector}", _VORBIS_QUALITY]
     encoder, default_bitrate = _ENCODER_FOR_CODEC.get(name, ("flac", None))
@@ -105,6 +106,28 @@ def _audio_encode_args(stream: AudioStreamInfo | None, selector: str) -> list[st
         if bitrate:
             args += [f"-b:a:{selector}", str(bitrate)]
     return args
+
+
+# How each encoder's output is commonly named ("FR Opus 2.0").
+_CODEC_NAME_FOR_ENCODER = {
+    "libopus": "Opus",
+    "ac3": "AC3",
+    "eac3": "E-AC3",
+    "libmp3lame": "MP3",
+    "libvorbis": "Vorbis",
+    "flac": "FLAC",
+    "pcm_s16le": "PCM",
+    "pcm_s24le": "PCM",
+    "pcm_s32le": "PCM",
+}
+
+
+def export_codec_name(stream: AudioStreamInfo | None) -> str:
+    """The codec a corrected track is exported in, by its common name: its
+    source's, or what replaces it (see ``_ENCODER_FOR_CODEC``: AAC -> Opus,
+    DTS/TrueHD -> FLAC) -- for the GUI's automatic track names."""
+    encoder = _audio_encode_args(stream, "0")[1]
+    return _CODEC_NAME_FOR_ENCODER.get(encoder, encoder)
 
 
 @dataclass(frozen=True)
@@ -133,6 +156,8 @@ class SegmentedTrackCorrection:
     track: AudioTrackSpec
     language: str | None
     segments: list[Segment]
+    # The exported track's name in place of its source's ("" for none).
+    title: str | None = None
 
 
 def correction_filter(offset_seconds: float) -> str | None:
@@ -459,12 +484,14 @@ def _source_title(spec: AudioTrackSpec, kind: str) -> str | None:
     return tags[idx].get("title") if idx < len(tags) else None
 
 
-def _title_args(spec: AudioTrackSpec, kind: str, out_selector: str) -> list[str]:
+def _title_args(spec: AudioTrackSpec, kind: str, out_selector: str, title: str | None = None) -> list[str]:
     """Carry a source track's title over explicitly: re-encoded (filtered) or
     re-imported streams don't inherit their source's tags the way plain
     stream copies do, and ``-map_metadata`` can't be used instead since any
-    stream-level use of it disables tag copying for every other stream."""
-    title = _source_title(spec, kind)
+    stream-level use of it disables tag copying for every other stream.
+    ``title``, when given, is written instead ("" writes none)."""
+    if title is None:
+        title = _source_title(spec, kind)
     return [f"-metadata:s:{out_selector}", f"title={title}"] if title else []
 
 
@@ -603,7 +630,7 @@ def render(
                 "-map",
                 "[out]",
                 *encode_args,
-                *_title_args(seg_corr.track, "Audio", "a:0"),
+                *_title_args(seg_corr.track, "Audio", "a:0", seg_corr.title),
                 "-t",
                 str(ref_duration),
                 str(track_out),
@@ -659,7 +686,7 @@ def render(
         audio_codec_args += _audio_encode_args(stream_info(spec), str(pos))
         if seg_corr.language:
             metadata_args += [f"-metadata:s:a:{pos}", f"language={seg_corr.language}"]
-        metadata_args += _title_args(spec, "Audio", f"a:{pos}")
+        metadata_args += _title_args(spec, "Audio", f"a:{pos}", seg_corr.title)
         pos += 1
 
     # A --subs pairing may point at a subtitle track that's already inside
