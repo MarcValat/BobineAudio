@@ -171,6 +171,12 @@ uv run syncaudio serve
 
 Démarre sur `http://127.0.0.1:8756` par défaut (`--host`/`--port` pour changer). Docs interactives (Swagger) sur `/docs` une fois lancé — pratique pour explorer les endpoints à la main. `POST /jobs/render` reprend les mêmes options que la commande `render` (dont `segmented`, `import_audio`, `subs`) en JSON plutôt qu'en flags.
 
+**Qui peut l'appeler.** Le serveur n'écoute que sur `127.0.0.1` (hors de portée des autres machines), mais les autres programmes de la machine et les sites ouverts dans son navigateur pourraient l'appeler. Donc :
+- avec la variable d'environnement `SYNCAUDIO_TOKEN`, chaque requête doit la renvoyer dans l'en-tête `X-Bobine-Token` (un WebSocket, qui ne prend pas d'en-tête, dans le paramètre `token` de son adresse), sinon 401 ; seul `/health` répond sans. L'app en génère un nouveau à chaque lancement (`app/src-tauri/src/lib.rs`), `bobine-dev` en dev (`tauri dev`, et ce que la page envoie hors de Tauri) ;
+- seules les pages de l'app peuvent lire ses réponses (CORS) : la fenêtre Tauri (`tauri://localhost`, `http(s)://tauri.localhost`) et le serveur de dev (`http://localhost:1420`).
+
+Lancé à la main sans `SYNCAUDIO_TOKEN`, il ne demande pas de jeton.
+
 La détection et le rendu tournent **en job** (`POST /jobs/segments`, `POST /jobs/render`) : l'appel retourne immédiatement un `job_id`, le traitement tourne en arrière-plan, et `WS /jobs/{job_id}/ws` diffuse en direct les mêmes messages de progression que ceux affichés par le CLI (`[analyse] ...`), puis un message final `done` (avec le résultat) ou `error` (le message d'erreur seul, lisible tel quel). Sur un vrai fichier (dizaines de secondes), le GUI affiche ainsi une progression en direct plutôt qu'un bouton figé.
 
 Endpoints synchrones, pour ce qui est rapide :

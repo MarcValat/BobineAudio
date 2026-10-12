@@ -16,7 +16,9 @@ progress instead of a frozen spinner.
 from __future__ import annotations
 
 import asyncio
+import os
 import re
+import secrets
 import threading
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -28,6 +30,8 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconn
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
+from starlette.datastructures import QueryParams
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from syncaudio import analysis_cache, dsp, waveform_cache
 from syncaudio.analysis_cache import ANALYSIS_SAMPLE_RATE
@@ -73,11 +77,53 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Bobine Audio", version="0.1.0", lifespan=_lifespan)
 
-# The sidecar only ever binds to 127.0.0.1 (see `syncaudio serve`), so it's
-# never reachable from outside the machine -- wide-open CORS here just lets
-# the Tauri webview (a different origin: tauri://... or localhost:1420 in
-# dev) call it, same as any other local desktop-app sidecar.
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+# Who may call the engine. It only listens on 127.0.0.1 (see `syncaudio
+# serve`), out of other machines' reach -- but not of this one's other
+# programs, nor of the websites open in its browser. So:
+# - the app that starts it passes it a secret (SYNCAUDIO_TOKEN, new at every
+#   launch), and every request must carry it back: the TOKEN_HEADER header,
+#   or a `token` query parameter for a WebSocket (a browser can't set its
+#   headers). /health alone answers without it (it tells nothing);
+# - only the app's own pages may read its answers (CORS): the Tauri window
+#   (tauri://localhost on Linux, http(s)://tauri.localhost on Windows) and
+#   the dev server.
+# Without SYNCAUDIO_TOKEN (`syncaudio serve` run by hand), no token is asked.
+TOKEN_HEADER = "X-Bobine-Token"
+APP_ORIGINS = ["tauri://localhost", "http://tauri.localhost", "https://tauri.localhost", "http://localhost:1420"]
+
+
+class TokenGuard:
+    """Refuses any request without the engine's token (see above): 401 for a
+    request, a closed handshake for a WebSocket."""
+
+    def __init__(self, inner: ASGIApp) -> None:
+        self.inner = inner
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        expected = os.environ.get("SYNCAUDIO_TOKEN")
+        if not expected or scope["type"] not in ("http", "websocket") or scope["path"] == "/health":
+            await self.inner(scope, receive, send)
+            return
+        # A CORS preflight carries no custom header: CORSMiddleware answers it.
+        if scope["type"] == "http" and scope["method"] == "OPTIONS":
+            await self.inner(scope, receive, send)
+            return
+        if scope["type"] == "http":
+            headers = dict(scope["headers"])
+            given = headers.get(TOKEN_HEADER.lower().encode(), b"").decode("latin-1")
+        else:
+            given = QueryParams(scope["query_string"]).get("token", "")
+        if secrets.compare_digest(given.encode(), expected.encode()):
+            await self.inner(scope, receive, send)
+        elif scope["type"] == "http":
+            await JSONResponse(status_code=401, content={"detail": "unauthorized"})(scope, receive, send)
+        else:
+            await send({"type": "websocket.close", "code": 1008})
+
+
+# The token checked inside CORS: a refusal still says where it came from.
+app.add_middleware(TokenGuard)
+app.add_middleware(CORSMiddleware, allow_origins=APP_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 
 
 def _NO_LOG(_msg: str) -> None:
