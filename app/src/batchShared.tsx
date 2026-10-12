@@ -83,7 +83,8 @@ export function AnalyzeButton({
   return (
     <>
       {analyzed > 0 && (
-        <button className="small-button" disabled={disabled} title={blockedTitle ?? redoTitle} onClick={() => onAnalyze(true)}>
+        // As tall as the buttons beside it.
+        <button disabled={disabled} title={blockedTitle ?? redoTitle} onClick={() => onAnalyze(true)}>
           {t.batch.reanalyzeAll}
         </button>
       )}
