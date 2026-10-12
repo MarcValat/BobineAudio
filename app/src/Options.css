@@ -16,8 +16,10 @@
 .setting {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px 0;
+  gap: 8px;
+  /* Every setting in sight at the window's smallest (1024x640, the
+     version note included): no scrolling for the cache at the bottom. */
+  padding: 12px 0;
   border-bottom: 1px solid var(--border);
 }
 
