@@ -422,7 +422,11 @@ textarea {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  /* A sharp line under it, not --shadow's blur: the same look, but a blur
+     this size is redrawn on every frame the panels resize (the list
+     folding), which WebKit's CPU drawing (WebKitGTK, Linux) paid 70ms a
+     frame for. */
+  box-shadow: 0 1px 0 var(--shadow-color);
   padding: 1em 1.1em;
   /* Clips to the rounded corners. */
   overflow: hidden;
