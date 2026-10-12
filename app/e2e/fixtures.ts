@@ -41,9 +41,48 @@ function instrument() {
   };
 }
 
+/** A segment as the engine reports it. */
+export interface Segment {
+  start_s: number;
+  end_s: number;
+  offset_start: number;
+  offset_end: number;
+  is_drift: boolean;
+  confidence: number;
+}
+
+/** What the engine's jobs answered, read from their WebSocket: each
+ * analysis by its track ("path@index"), each export's written files. */
+export class Jobs {
+  readonly analyses = new Map<string, Segment[]>();
+  readonly written: string[] = [];
+
+  watch(page: Page) {
+    page.on("websocket", (ws) =>
+      ws.on("framereceived", ({ payload }) => {
+        const event = JSON.parse(String(payload));
+        if (event.type !== "done" || !event.result) return;
+        if (event.result.segments && event.result.track) this.analyses.set(event.result.track, event.result.segments);
+        if (event.result.written) this.written.push(...event.result.written);
+      }),
+    );
+  }
+
+  /** The segments found for `file`'s track `index`. */
+  segments(file: string, index: number): Segment[] {
+    const found = this.analyses.get(`${file}@${index}`);
+    if (!found) throw new Error(`no analysis of ${file}@${index} (have: ${[...this.analyses.keys()].join(", ")})`);
+    return found;
+  }
+}
+
 /** What a test drives the app with: its page, and the usual gestures. */
 export class App {
-  constructor(readonly page: Page) {}
+  readonly jobs = new Jobs();
+
+  constructor(readonly page: Page) {
+    this.jobs.watch(page);
+  }
 
   /** The detail's Analyser, once the file's tracks are read; done once the
    * results show. */
@@ -65,9 +104,12 @@ export class App {
   async analyzeAll() {
     await expect(this.footerPrimary()).toBeEnabled({ timeout: 120_000 });
     await this.footerPrimary().click();
-    await expect(this.page.locator(".list-row .list-badge").filter({ hasText: /Analy/ })).toHaveCount(await this.rows().count(), {
-      timeout: 300_000,
-    });
+    await expect(this.page.locator(".list-row .list-badge").filter({ hasText: /^Analysée?( ·|$)/ })).toHaveCount(
+      await this.rows().count(),
+      {
+        timeout: 300_000,
+      },
+    );
   }
 
   rows() {
