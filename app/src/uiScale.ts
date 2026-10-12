@@ -51,7 +51,6 @@ export function useEffectiveUiScale(): number {
  * to another screen. Nothing outside Tauri (a plain browser). */
 export async function applyUiScale(): Promise<void> {
   if (!isTauri()) return;
-  const win = getCurrentWindow();
   let zoom = loadUiScale() / 100;
   let room = { width: Infinity, height: Infinity };
   try {
@@ -74,24 +73,46 @@ export async function applyUiScale(): Promise<void> {
     getCurrentWebview()
       .setZoom(zoom)
       .catch(() => {}),
-    win.setMinSize(min).catch(() => {}),
+    applyMinSize(min),
   ]);
-  // A bigger size can need more room than the window has: it grows to it
-  // (a maximized window already has all there is).
-  try {
-    if (!(await win.isMaximized())) {
-      const size = (await win.innerSize()).toLogical(await win.scaleFactor());
-      if (size.width < min.width || size.height < min.height) {
-        await win.setSize(new LogicalSize(Math.max(size.width, min.width), Math.max(size.height, min.height)));
-      }
-    }
-  } catch {
-    // left as it is
-  }
   const percent = Math.round(zoom * 100);
   if (percent !== effective) {
     effective = percent;
     listeners.forEach((listener) => listener());
+  }
+}
+
+/** The minimum size last given to the window, and one waiting for it to
+ * be unmaximized (applyMinSize). */
+let appliedMin: LogicalSize | null = null;
+let pendingMin: LogicalSize | null = null;
+
+/** Gives the window `min` as its minimum size, and grows it to that if it's
+ * smaller. Not while it's maximized: on Windows, a new minimum size makes
+ * the window take a normal size again -- a window snapped maximized on
+ * another screen came back out of it. It waits for the window to be
+ * unmaximized then (startUiScale). Nothing when it's the minimum already. */
+async function applyMinSize(min: LogicalSize): Promise<void> {
+  if (appliedMin && appliedMin.width === min.width && appliedMin.height === min.height) {
+    pendingMin = null;
+    return;
+  }
+  const win = getCurrentWindow();
+  try {
+    if (await win.isMaximized()) {
+      pendingMin = min;
+      return;
+    }
+    pendingMin = null;
+    appliedMin = min;
+    await win.setMinSize(min);
+    // A bigger size can need more room than the window has: it grows to it.
+    const size = (await win.innerSize()).toLogical(await win.scaleFactor());
+    if (size.width < min.width || size.height < min.height) {
+      await win.setSize(new LogicalSize(Math.max(size.width, min.width), Math.max(size.height, min.height)));
+    }
+  } catch {
+    // left as it is
   }
 }
 
@@ -101,22 +122,20 @@ export async function startUiScale(): Promise<void> {
   if (!isTauri()) return;
   await applyUiScale();
   const win = getCurrentWindow();
-  // Another screen: another size or scale. A move only matters once it
-  // ends, and landing on another screen.
-  let monitorName: string | null | undefined;
-  currentMonitor()
-    .then((m) => (monitorName = m?.name))
-    .catch(() => {});
+  // Another screen: another size or scale. Only once a move ends: dragged
+  // across screens, the window passes over several, and its snapping
+  // (maximized at the top of a screen) happens as the drag ends.
   let timer: number | undefined;
   const settle = () => {
     clearTimeout(timer);
-    timer = setTimeout(async () => {
-      const name = (await currentMonitor().catch(() => null))?.name;
-      if (name === monitorName) return;
-      monitorName = name;
-      void applyUiScale();
-    }, 300);
+    timer = setTimeout(() => void applyUiScale(), 300);
   };
   win.onMoved(settle).catch(() => {});
-  win.onScaleChanged(() => void applyUiScale()).catch(() => {});
+  win.onScaleChanged(settle).catch(() => {});
+  // A minimum size kept waiting while the window was maximized.
+  win
+    .onResized(() => {
+      if (pendingMin) void applyMinSize(pendingMin);
+    })
+    .catch(() => {});
 }
