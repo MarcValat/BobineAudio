@@ -18,6 +18,7 @@ import { InfoTip } from "./InfoTip";
 import { ALL_TRACKS, defaultPick, keyName, matchesAny, matchesKey, trackOptions, TrackFilterPicker, type TrackKey } from "./TrackFilter";
 import {
   EmptyWorkspace,
+  PairKind,
   trackName,
   Issues,
   FoldButton,
@@ -96,7 +97,7 @@ function PairTrackTable({
     tracks?.map((tr) => (
       <tr key={`${side}-${tr.index}`} title={tr.title ? m.tracks.titled(tr.title) : undefined}>
         <td>
-          <span className={`pair-row-kind pair-row-kind-${side}`}>{side === "ref" ? m.pairs.refShort : m.pairs.candShort}</span>
+          <PairKind kind={side} />
         </td>
         <td>@{tr.index}</td>
         <td>{tr.language ?? "?"}</td>

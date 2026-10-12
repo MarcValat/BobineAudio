@@ -14,7 +14,7 @@ import {
 import { ConfidenceGauge } from "./ConfidenceGauge";
 import { InfoTip } from "./InfoTip";
 import { RedoEditIcon, UndoIcon } from "./icons";
-import { PillSwitch } from "./PillSwitch";
+import { ViewSwitch, type AnalysisView } from "./Detail";
 import { type TimeView, WHEEL_ZOOM_IN_FACTOR, WHEEL_ZOOM_OUT_FACTOR, useTimelinePointer, useWheel, zoomView } from "./timeView";
 import { TrackPreview, type TrackPreviewHandle } from "./TrackPreview";
 import { useMarkerGlide } from "./Waveform";
@@ -206,7 +206,7 @@ export function SegmentEditor({
   const chartHeight = Math.max(MIN_CHART_HEIGHT, chartBox.height || 300);
   const [panelRef, panelSize] = useElementSize<HTMLDivElement>();
   const narrow = preview !== undefined && panelSize.width > 0 && panelSize.width < NARROW_EDITOR_WIDTH;
-  const [editorView, setEditorView] = useState<"segments" | "listen">("segments");
+  const [editorView, setEditorView] = useState<AnalysisView>("segments");
   // The segment whose "Retirer" button is hovered: shown on the chart, with
   // the neighbour that would take its place.
   const [removalPreview, setRemovalPreview] = useState<number | null>(null);
@@ -499,18 +499,7 @@ export function SegmentEditor({
         }
       >
         {/* Too narrow for the chart and the preview side by side: one at a time. */}
-        {narrow && (
-          <PillSwitch
-            className="view-switch"
-            label={t.common.view}
-            options={[
-              ["segments", t.common.segments],
-              ["listen", t.common.listen],
-            ]}
-            value={editorView}
-            onChange={setEditorView}
-          />
-        )}
+        {narrow && <ViewSwitch value={editorView} onChange={setEditorView} />}
         {/* What the lines mean, then the question when closing would lose
               edits (Annuler or Escape). */}
         <SegmentLegend unreliable={state.confidences.some((c) => c < LOW_CONFIDENCE_THRESHOLD)} />

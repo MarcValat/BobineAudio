@@ -354,6 +354,13 @@ export function MoveButtons({
   );
 }
 
+/** "RÉF." or "CORR.": which file of a pair a line is (the list, the pair's
+ * tracks table). */
+export function PairKind({ kind }: { kind: "ref" | "cand" }) {
+  const t = useT();
+  return <span className={`pair-row-kind pair-row-kind-${kind}`}>{kind === "ref" ? t.pairs.refShort : t.pairs.candShort}</span>;
+}
+
 /** One pair of the pairs list: a file row (ListRow, the same as a
  * multitrack file's) whose two lines are its reference file and its file to
  * correct; on hover, each file's own ↑ ↓ ✕ (they move within their own
@@ -381,10 +388,9 @@ export function PairRow({
   selected: boolean;
   onSelect: () => void;
 }) {
-  const t = useT();
   const line = (kind: "ref" | "cand", file: { name: string; path?: string; missing: string }) => (
     <>
-      <span className={`pair-row-kind pair-row-kind-${kind}`}>{kind === "ref" ? t.pairs.refShort : t.pairs.candShort}</span>
+      <PairKind kind={kind} />
       <span className={`pair-row-name${file.path ? "" : " pair-row-missing"}`}>{file.path ? file.name : file.missing}</span>
     </>
   );
