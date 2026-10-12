@@ -6,6 +6,8 @@
   /* Also makes native widgets (select popups, their scrollbars,
      checkboxes...) follow the app's theme. */
   color-scheme: light dark;
+  /* The native checkboxes and radios in the app's blue, not the browser's. */
+  accent-color: var(--accent-strong);
   /* Blue to violet, the suite's logo colors: --accent for text, links,
      focus and the reference waveform; --accent-strong and --accent-2 for
      the fills, the main action's gradient (--gradient). */
