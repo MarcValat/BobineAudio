@@ -171,7 +171,7 @@ Each row of the list is a **pair**: on top the **reference** file (Ref., the vid
 Everything else works as in [Multitrack files](#multitrack-files-step-by-step), with these differences:
 
 - **Adding**: "+ References" and "+ To correct" under the list. When dropping files, the **left half** of the window adds them to the references and the **right half** to the files to correct.
-- Files are paired **in order**: the ↑ ↓ of a row put a column back in the right order. A file without its match is flagged **⚠ No pair**.
+- Files are paired **in order**: the ↑ ↓ of a row put a column back in the right order. A file without its match is flagged **⚠ Unpaired**.
 - **Tracks**: picked in the settings bar from the first file of each column, then applied to every pair. "All tracks", above the list, shows each file's tracks, to make sure every episode is organized the same way. In a pair's detail, the tracks table holds both files' tracks (File column: Ref. or Corr.): changing a box sets that pair's tracks only, "By default" goes back to the bar's.
 - **Added language**: the language given to the corrected track in the export. "From the file" keeps its own; picking one helps for an audio file that has none.
 - **Subtitles**: the text subtitles of the file to correct, in its track's language, are imported and retimed with it.
@@ -195,7 +195,7 @@ When an update is available, an icon shows next to the ⚙: "Install and restart
 **Windows says "Windows protected your PC" when installing.**
 The installer isn't signed with a paid certificate. Click "More info", then "Run anyway".
 
-**"Starting the engine..." shows at the top right.**
+**"Starting the engine…" shows at the top right.**
 The analysis engine is starting in the background, usually in a second or two. Files can already be added: their tracks show up as soon as it's ready.
 
 **"The engine isn't responding".**
