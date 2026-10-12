@@ -192,7 +192,9 @@ Endpoints synchrones, pour ce qui est rapide :
 uv run pytest
 ```
 
-`tests/test_align.py` valide l'algorithme sur des signaux synthétiques (sans ffmpeg). `tests/test_ffmpeg_backend.py` valide l'extraction/probe de bout en bout avec le ffmpeg embarqué. `tests/test_server.py` valide le sidecar HTTP avec `fastapi.testclient`.
+`uv run pytest --cov` ajoute la couverture : les lignes du moteur que les tests n'exécutent pas (~91 % couvertes ; reste surtout le chien de garde du processus parent, testé dans un sous-processus que la mesure ne voit pas).
+
+`tests/test_cli.py` valide la ligne de commande (ce que chaque commande trouve et écrit). `tests/test_align.py` valide l'algorithme sur des signaux synthétiques (sans ffmpeg). `tests/test_ffmpeg_backend.py` valide l'extraction/probe de bout en bout avec le ffmpeg embarqué. `tests/test_server.py` valide le sidecar HTTP avec `fastapi.testclient`.
 
 ## Empaquetage (binaire autonome pour l'app)
 
