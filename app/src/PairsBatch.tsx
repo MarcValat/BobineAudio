@@ -477,6 +477,9 @@ export function PairsBatch({
   }
 
   const pairRows = Array.from({ length: pairCount }, (_, i) => i);
+  /** Row `i` can be analyzed: both its files read, and a track to correct
+   * known (until then, "Analyser" would have nothing to do). */
+  const analyzableRow = (i: number) => i < pairCount && probed(i) && unreadable(i).length === 0 && tracksOf(i).candidates.length > 0;
   // The corrected tracks' languages (a custom name each), and the first
   // one's automatic name (for the export options to show).
   const exported = pairRows.flatMap((i) => tracksOf(i).candidates.map((index) => exportedTrack(i, index)));
@@ -771,7 +774,7 @@ export function PairsBatch({
                 exported={detailExport?.exportStatus === "done"}
                 primary={pairCount === 1}
                 disabled={busy || blocked}
-                analyzeDisabled={unreadable(selected).length > 0}
+                analyzeDisabled={!analyzableRow(selected)}
                 blockedTitle={blocked ? m.batch.otherModeBusy : undefined}
                 analyzeTitle={m.pairs.analyzePairHint}
                 exportLabel={m.pairs.exportPair}
@@ -907,7 +910,7 @@ export function PairsBatch({
                 analyzed={analyzedCount}
                 unit="pair"
                 primary={listNext === "analyze"}
-                disabled={pairCount === 0 || busy || blocked}
+                disabled={!pairRows.some(analyzableRow) || busy || blocked}
                 blocked={blocked}
                 onAnalyze={(all) => handleAnalyze(all)}
               />
