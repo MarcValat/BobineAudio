@@ -55,7 +55,7 @@ export interface Segment {
 
 /** What the engine's jobs answered, read from their WebSocket: each
  * analysis by its track ("path@index"), each export's written files. */
-export class Jobs {
+class Jobs {
   readonly analyses = new Map<string, Segment[]>();
   readonly written: string[] = [];
 
