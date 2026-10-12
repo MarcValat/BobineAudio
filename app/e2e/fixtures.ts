@@ -112,6 +112,8 @@ export class App {
 
   /** Every listed file analyzed, from the footer. */
   async analyzeAll() {
+    // Every file read first: "Analyser tout" only takes those already read.
+    await expect(this.rows().filter({ hasText: /Lecture…|Reading…/ })).toHaveCount(0, { timeout: 120_000 });
     await expect(this.footerPrimary()).toBeEnabled({ timeout: 120_000 });
     await this.footerPrimary().click();
     await expect(this.page.locator(".list-row .list-badge").filter({ hasText: /^Analysée?( ·|$)/ })).toHaveCount(

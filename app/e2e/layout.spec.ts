@@ -109,6 +109,7 @@ for (const [width, height] of SIZES)
 
 /** Every row analyzed, in either language. */
 async function analyzeAll(app: App) {
+  await expect(app.rows().filter({ hasText: /Lecture…|Reading…/ })).toHaveCount(0, { timeout: 120_000 });
   await app.footerPrimary().click();
   await expect(
     app
