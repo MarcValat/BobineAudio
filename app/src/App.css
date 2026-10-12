@@ -144,8 +144,7 @@ body {
   cursor: default;
 }
 
-input,
-textarea {
+input {
   user-select: text;
 }
 
@@ -769,18 +768,15 @@ button:focus-visible {
 }
 
 /* Airier tables, the same for every table of the app (tracks, editor,
-   batch, "Choisir", "Vérifier toutes les pistes"), as in Bobine Subs: the
+   "Vérifier toutes les pistes"), as in Bobine Subs: the
    column rules kept (they help read a row across), every other row faintly
    tinted, a little more room in the cells. The wrappers make these win over
    the tables' own rules (BatchView.css, SegmentEditor.css). */
-.batch-choice-panel .batch-tracks-table th,
-.batch-choice-panel .batch-tracks-table td,
 .batch-tracks-side .batch-tracks-table th,
 .batch-tracks-side .batch-tracks-table td {
   border: 1px solid var(--border);
 }
 
-.batch-choice-panel .batch-tracks-table td,
 .batch-tracks-side .batch-tracks-table td {
   padding: 0.6em 0.5em;
 }
@@ -792,19 +788,16 @@ button:focus-visible {
 }
 
 .editor-table-wrap .editor-table tbody tr:nth-child(even),
-.batch-choice-panel .batch-tracks-table tbody tr:nth-child(even),
 .batch-tracks-side .batch-tracks-table tbody tr:nth-child(even) {
   background: color-mix(in srgb, var(--surface-alt) 60%, transparent);
 }
 
 /* The dialogs' track tables in a frame, as the others: its outer edges are
    the frame's. */
-.batch-choice-panel .tracks-table-wrap,
 .batch-tracks-side .tracks-table-wrap {
   overflow: hidden;
 }
 
-.batch-choice-panel .batch-tracks-table,
 .batch-tracks-side .batch-tracks-table {
   border-collapse: collapse;
   border-style: hidden;

@@ -19,17 +19,11 @@
   flex-wrap: wrap;
 }
 
-.batch-config label,
 .batch-config .config-field {
   display: flex;
   align-items: center;
   gap: 0.5em;
   font-size: 0.9em;
-}
-
-/* "Vérifier toutes les pistes" at the far right. */
-.batch-config > button:last-child {
-  margin-left: auto;
 }
 
 .batch-footer {
