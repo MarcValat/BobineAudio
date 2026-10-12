@@ -21,6 +21,19 @@ Ouvre la fenêtre de l'app avec rechargement à chaud du frontend ; le sidecar m
 
 `npm run dev` (sans Tauri, juste `vite`) lance le frontend seul dans un navigateur — utile pour itérer vite sur l'UI, mais sans le sidecar ni les API natives (`@tauri-apps/*`), donc rien ne fonctionne au-delà de l'affichage statique.
 
+## Vérifications
+
+Elles tournent en local (GitHub Actions ne lance que les tests du moteur et le build, à la release : une vérification là-bas bloquerait la release tard).
+
+```
+npm run check              # types, formatage, lint, code mort : ~25 s
+npm run check -- --full    # + clippy et les tests du moteur : ~2 min (pas pendant `tauri dev`)
+```
+
+`scripts/check.mjs` enchaîne `tsc`, Prettier, ESLint (règles des hooks React), knip (exports et dépendances inutilisés), ruff (`check` et `format`) sur le moteur et `cargo fmt`. `npm run format` reformate l'app (Prettier), `uv run ruff format` le moteur, `cargo fmt` la coquille Rust.
+
+Avant chaque commit, le hook `../.githooks/pre-commit` vérifie le formatage et le lint des seuls fichiers indexés (quelques secondes) ; `npm install` l'active (script `prepare` : `git config core.hooksPath .githooks`). `git commit --no-verify` le saute une fois.
+
 ## Build
 
 ```
