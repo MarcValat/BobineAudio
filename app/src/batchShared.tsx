@@ -4,6 +4,8 @@ import { cancelJob, type RenderResponse, type SegmentsResponse } from "./api";
 import { JobCancelled, runJob, type RunStatus } from "./jobs";
 import { pickFolder, planOutputPaths } from "./mediaDialog";
 import { FolderIcon } from "./icons";
+import { Select } from "./Dropdown";
+import { SUBTITLE_MODES, type SubtitleMode } from "./subtitles";
 import { Tooltip } from "./InfoTip";
 import { errorMessage, loadSetting, saveSetting } from "./util";
 import { t, useT } from "./i18n";
@@ -317,5 +319,31 @@ export function BatchFooter({
         </button>
       )}
     </div>
+  );
+}
+
+/** "Sous-titres :" in a mode's settings bar: which subtitles go with each
+ * corrected track, for every file (short names on the closed button). */
+export function SubtitleModeField({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: SubtitleMode;
+  onChange: (mode: SubtitleMode) => void;
+  disabled: boolean;
+}) {
+  const t = useT();
+  return (
+    <span className="config-field">
+      {t.common.labelled(t.batch.subtitles)}
+      <Select
+        label={t.batch.subtitles}
+        value={value}
+        options={SUBTITLE_MODES.map((mode) => ({ value: mode, label: t.subtitles.modes[mode], short: t.subtitles.shortModes[mode] }))}
+        onChange={onChange}
+        disabled={disabled}
+      />
+    </span>
   );
 }

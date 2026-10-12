@@ -9,6 +9,12 @@ import { Tooltip } from "./InfoTip";
 import { saveListCollapsed } from "./settings";
 import "./Workspace.css";
 
+/** "@1 fre": a track as the list, the detail and the editor name it; "@1"
+ * alone while its file isn't read, or when it has no language. */
+export function trackName(index: number, track?: TrackInfo | null): string {
+  return track?.language ? `@${index} ${track.language}` : `@${index}`;
+}
+
 /** The workspace's two ways (picked in the top bar): files that each hold
  * the reference and the tracks to correct, or pairs of files. */
 export type BatchMode = "multi" | "pairs";

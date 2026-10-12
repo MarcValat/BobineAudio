@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { SubtitleMode } from "./subtitles";
 import { loadSetting, saveSetting } from "./util";
 
@@ -32,6 +32,15 @@ export function saveSubtitleDefault(mode: SubtitleMode): void {
 
 export function useSubtitleDefault(): SubtitleMode {
   return useSyncExternalStore(subscribe, loadSubtitleDefault);
+}
+
+/** A mode's own subtitle pick: it starts as the default setting, and
+ * follows it when it changes in Paramètres. */
+export function useSubtitleMode(): [SubtitleMode, (mode: SubtitleMode) => void] {
+  const subtitleDefault = useSubtitleDefault();
+  const [mode, setMode] = useState(subtitleDefault);
+  useEffect(() => setMode(subtitleDefault), [subtitleDefault]);
+  return [mode, setMode];
 }
 
 /** Whether the app looks for an update on GitHub at startup (the default). */

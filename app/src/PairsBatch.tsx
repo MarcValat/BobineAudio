@@ -5,6 +5,7 @@ import { LanguageSelect } from "./languages";
 import {
   AnalyzeButton,
   BatchFooter,
+  SubtitleModeField,
   nextStep,
   IDLE_EXPORT,
   rowState,
@@ -14,10 +15,10 @@ import {
   type ExportFields,
 } from "./batchShared";
 import { InfoTip } from "./InfoTip";
-import { Select } from "./Dropdown";
 import { ALL_TRACKS, defaultPick, keyName, matchesAny, matchesKey, trackOptions, TrackFilterPicker, type TrackKey } from "./TrackFilter";
 import {
   EmptyWorkspace,
+  trackName,
   Issues,
   FoldButton,
   ModeCards,
@@ -49,18 +50,15 @@ import { DropZone } from "./DropZone";
 import { pickMediaFiles } from "./mediaDialog";
 import { DropOverlay, useFileDrop } from "./FileDrop";
 import { basename } from "./paths";
-import { assignSubtitles, SUBTITLE_MODES, subtitlesFor, type SubtitleMode } from "./subtitles";
+import { assignSubtitles, subtitlesFor } from "./subtitles";
 import { devParam, errorMessage, toggled } from "./util";
 import { Dialog, DialogHeader } from "./Dialog";
 import { TrackTable } from "./TrackTable";
 import { useT } from "./i18n";
-import { useListCollapsed, useSubtitleDefault } from "./settings";
+import { useListCollapsed, useSubtitleMode } from "./settings";
 
 /** "S01E01 VO.mkv" -> "S01E01 VO": a pair named after its reference. */
 const stem = (name: string) => name.replace(/\.[^.]+$/, "");
-
-/** "@1 fre", or "@1" while its file's tracks aren't read. */
-const trackLabel = (index: number, track: TrackInfo | undefined) => (track?.language ? `@${index} ${track.language}` : `@${index}`);
 
 /** A pair's tracks: its reference, and the tracks of its other file to
  * correct (each analyzed on its own, all added by its one export). */
@@ -256,9 +254,7 @@ export function PairsBatch({
   // instead (a bare .wav has none).
   const [candidateLanguage, setCandidateLanguage] = useState("");
   // Starts as the default setting (Options), and follows it when it changes.
-  const subtitleDefault = useSubtitleDefault();
-  const [subsMode, setSubsMode] = useState<SubtitleMode>(subtitleDefault);
-  useEffect(() => setSubsMode(subtitleDefault), [subtitleDefault]);
+  const [subsMode, setSubsMode] = useSubtitleMode();
   // Keyed by what each was made of (trackKey: one corrected track; pairKey:
   // a pair's export), not by row: moving files, adding more or picking other
   // tracks never shows a pair another one's, and one that comes back finds
@@ -636,20 +632,7 @@ export function PairsBatch({
               />
               <InfoTip>{m.pairs.languageHint}</InfoTip>
             </span>
-            <span className="config-field">
-              {m.common.labelled(m.batch.subtitles)}
-              <Select
-                label={m.batch.subtitles}
-                value={subsMode}
-                options={SUBTITLE_MODES.map((mode) => ({
-                  value: mode,
-                  label: m.subtitles.modes[mode],
-                  short: m.subtitles.shortModes[mode],
-                }))}
-                onChange={setSubsMode}
-                disabled={busy}
-              />
-            </span>
+            <SubtitleModeField value={subsMode} onChange={setSubsMode} disabled={busy} />
             <InfoTip>{m.pairs.hint}</InfoTip>
           </div>
 
@@ -738,9 +721,9 @@ export function PairsBatch({
                 meta={
                   detailPaired &&
                   m.pairs.pairMeta(
-                    trackLabel(detailTracks.reference, detailReferenceTrack),
+                    trackName(detailTracks.reference, detailReferenceTrack),
                     basename(detailReference!),
-                    detailTracks.candidates.map((t) => trackLabel(t, candidateInfo(t))).join(", ") || "—",
+                    detailTracks.candidates.map((t) => trackName(t, candidateInfo(t))).join(", ") || "—",
                     basename(detailCandidate!),
                   )
                 }
@@ -775,7 +758,7 @@ export function PairsBatch({
                 <div className="detail-body" ref={view.ref}>
                   {shownTrack !== undefined && (
                     <DetailTabs
-                      tracks={detailTracks.candidates.map((t) => [String(t), trackLabel(t, candidateInfo(t))] as const)}
+                      tracks={detailTracks.candidates.map((t) => [String(t), trackName(t, candidateInfo(t))] as const)}
                       value={String(shownTrack)}
                       onChange={(t) => setShownTracks((c) => ({ ...c, [filesKey(selected)]: Number(t) }))}
                       view={view.compact && detailResult ? { value: view.view, onChange: view.setView } : undefined}
@@ -908,7 +891,7 @@ export function PairsBatch({
             (t) =>
               [
                 t,
-                trackLabel(
+                trackName(
                   t,
                   probes[candidateFiles[subsEditing]]?.tracks?.find((tr) => tr.index === t),
                 ),
@@ -929,9 +912,10 @@ export function PairsBatch({
       {editing !== null && editingRun?.result && (
         <SegmentEditor
           segments={editingRun.result.segments}
-          subtitle={`${basename(candidateFiles[editing.row])} · @${editing.track} ${
-            probes[candidateFiles[editing.row]]?.tracks?.find((t) => t.index === editing.track)?.language ?? "?"
-          }`}
+          subtitle={`${basename(candidateFiles[editing.row])} · ${trackName(
+            editing.track,
+            probes[candidateFiles[editing.row]]?.tracks?.find((t) => t.index === editing.track),
+          )}`}
           onClose={() => setEditing(null)}
           onSave={(edited) =>
             updateRun(trackKey(editing.row, editing.track), (a) => ({ result: a.result ? { ...a.result, segments: edited } : a.result }))

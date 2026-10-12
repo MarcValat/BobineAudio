@@ -5,6 +5,7 @@ import { ALL_TRACKS, defaultPick, keyName, matchesAny, matchesKey, trackOptions,
 import {
   AnalyzeButton,
   BatchFooter,
+  SubtitleModeField,
   nextStep,
   IDLE_EXPORT,
   rowState,
@@ -14,9 +15,9 @@ import {
   type ExportFields,
 } from "./batchShared";
 import { InfoTip } from "./InfoTip";
-import { Select } from "./Dropdown";
 import {
   EmptyWorkspace,
+  trackName,
   Issues,
   ListRow,
   FoldButton,
@@ -47,15 +48,12 @@ import { pickMediaFiles } from "./mediaDialog";
 import { DropOverlay, useFileDrop } from "./FileDrop";
 import { basename } from "./paths";
 import { SegmentEditor } from "./SegmentEditor";
-import { assignSubtitles, SUBTITLE_MODES, type SubtitleMode, subtitlesFor } from "./subtitles";
+import { assignSubtitles, subtitlesFor } from "./subtitles";
 import { devParam, errorMessage, toggled } from "./util";
 import { TrackTable } from "./TrackTable";
 import { t, useT } from "./i18n";
 import { WarningIcon } from "./icons";
-import { useListCollapsed, useSubtitleDefault } from "./settings";
-
-/** "@1 fre": a track as the list and the detail name it. */
-const trackName = (track: TrackInfo) => `@${track.index} ${track.language ?? "?"}`;
+import { useListCollapsed, useSubtitleMode } from "./settings";
 
 /** A file's tracks ticked by hand in its detail's tracks table (and its
  * subtitles in "Changer"), instead of the top bar's pick. */
@@ -146,9 +144,7 @@ export function MultiTrackBatch({
   const [targetKeys, setTargetKeys] = useState<TrackKey[]>([]);
   const [choices, setChoices] = useState<Record<string, TrackChoice>>({});
   // Starts as the default setting (Options), and follows it when it changes.
-  const subtitleDefault = useSubtitleDefault();
-  const [subsMode, setSubsMode] = useState<SubtitleMode>(subtitleDefault);
-  useEffect(() => setSubsMode(subtitleDefault), [subtitleDefault]);
+  const [subsMode, setSubsMode] = useSubtitleMode();
   const [runs, setRuns] = useState<Record<string, FileRun>>({});
   const [analyzing, setAnalyzing] = useState(false);
   const queue = useExportQueue(outputDir);
@@ -368,9 +364,9 @@ export function MultiTrackBatch({
     const subs = subsOf(path, res.targets);
     const targets = res.targets.map((t) => {
       const retimed = subs[t.index]?.length ? ` + ST ${subs[t.index].map((i) => `@${i}`).join(" ")}` : "";
-      return `${trackName(t)}${retimed}`;
+      return `${trackName(t.index, t)}${retimed}`;
     });
-    return `${res.reference ? trackName(res.reference) : "?"} → ${targets.length > 0 ? targets.join(", ") : m.multi.nothing}`;
+    return `${res.reference ? trackName(res.reference.index, res.reference) : "?"} → ${targets.length > 0 ? targets.join(", ") : m.multi.nothing}`;
   }
 
   /** A row's badge: what's running first, then what's wrong, then how far it got. */
@@ -451,20 +447,7 @@ export function MultiTrackBatch({
               {m.multi.toCorrect}
               <TrackFilterPicker label={m.common.toCorrect} options={options} value={targetKeys} onChange={setTargetKeys} disabled={busy} />
             </span>
-            <span className="config-field">
-              {m.common.labelled(m.batch.subtitles)}
-              <Select
-                label={m.batch.subtitles}
-                value={subsMode}
-                options={SUBTITLE_MODES.map((mode) => ({
-                  value: mode,
-                  label: m.subtitles.modes[mode],
-                  short: m.subtitles.shortModes[mode],
-                }))}
-                onChange={setSubsMode}
-                disabled={busy}
-              />
-            </span>
+            <SubtitleModeField value={subsMode} onChange={setSubsMode} disabled={busy} />
             <InfoTip>{m.multi.hint}</InfoTip>
           </div>
 
@@ -574,7 +557,7 @@ export function MultiTrackBatch({
                   <div className="detail-body" ref={view.ref}>
                     {shownTrack && (
                       <DetailTabs
-                        tracks={detailRes.targets.map((t) => [String(t.index), trackName(t)] as const)}
+                        tracks={detailRes.targets.map((t) => [String(t.index), trackName(t.index, t)] as const)}
                         value={String(shownTrack.index)}
                         onChange={(index) => setShownTracks((c) => ({ ...c, [detailPath]: Number(index) }))}
                         view={view.compact && shownResult ? { value: view.view, onChange: view.setView } : undefined}
@@ -630,7 +613,7 @@ export function MultiTrackBatch({
                       <DetailChart
                         summary={
                           <>
-                            {detailReference && shownTrack && m.multi.againstReference(trackName(detailReference))}
+                            {detailReference && shownTrack && m.multi.againstReference(trackName(detailReference.index, detailReference))}
                             {shownResult && ` · ${describeSegments(shownResult.segments)}`}
                           </>
                         }
@@ -714,7 +697,7 @@ export function MultiTrackBatch({
         <SubtitleChoiceDialog
           title={m.multi.subsOf(basename(subsEditing))}
           titleTooltip={subsEditing}
-          tracks={resolutions[subsEditing]!.targets.map((t) => [t.index, trackName(t)] as const)}
+          tracks={resolutions[subsEditing]!.targets.map((t) => [t.index, trackName(t.index, t)] as const)}
           subtitles={probes[subsEditing]?.subtitles ?? []}
           assigned={subsOf(subsEditing, resolutions[subsEditing]!.targets)}
           onToggle={(track, sub) =>
@@ -730,10 +713,10 @@ export function MultiTrackBatch({
       {editing && editingRun?.result && (
         <SegmentEditor
           segments={editingRun.result.segments}
-          subtitle={`${basename(editing.path)} · ${(() => {
-            const track = probes[editing.path]?.tracks?.find((t) => t.index === editing.track);
-            return track ? trackName(track) : `@${editing.track}`;
-          })()}`}
+          subtitle={`${basename(editing.path)} · ${trackName(
+            editing.track,
+            probes[editing.path]?.tracks?.find((t) => t.index === editing.track),
+          )}`}
           onClose={() => setEditing(null)}
           onSave={(edited) =>
             updateTarget(editing.path, editing.track, (t) => ({
