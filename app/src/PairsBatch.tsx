@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { probe, startSegmentsJob, startCrossFileSegmentedRenderJob, type SegmentsResponse, type TrackInfo } from "./api";
+import { startSegmentsJob, startCrossFileSegmentedRenderJob, type SegmentsResponse, type TrackInfo } from "./api";
 import { runJob } from "./jobs";
 import { LanguageSelect } from "./languages";
 import {
@@ -28,6 +28,7 @@ import {
   runBadge,
   useProbes,
   type BadgeKind,
+  type FileProbe,
   type BatchMode,
 } from "./Workspace";
 import {
@@ -145,46 +146,23 @@ function PairTrackTable({
   );
 }
 
-/** "Vérifier toutes les pistes" modal: probes *every* file in both lists
- * (unlike the track pickers above, which only ever look at the first file
- * of each) so the user can audit that every episode really does have the
- * expected tracks in the expected order before committing to one
- * reference/candidate index for the whole batch. Fetched fresh each time
- * the modal opens rather than kept live -- this is a manual spot-check,
- * not something that needs to track file-list edits in real time. */
+/** "Vérifier toutes les pistes": every file of both lists with its tracks
+ * (the track pickers only look at the first file of each), to make sure
+ * every episode has the expected tracks in the expected order before one
+ * pick applies to the whole series. From the files as already read
+ * (`probes`): it opens at once, and follows a file still being read. */
 function AllTracksModal({
   referenceFiles,
   candidateFiles,
+  probes,
   onClose,
 }: {
   referenceFiles: string[];
   candidateFiles: string[];
+  probes: Record<string, FileProbe>;
   onClose: () => void;
 }) {
   const m = useT();
-  const [entries, setEntries] = useState<Record<string, { tracks: TrackInfo[] | null; error: string | null }>>({});
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    const paths = [...new Set([...referenceFiles, ...candidateFiles])];
-    setLoading(true);
-    Promise.all(
-      paths.map((path) =>
-        probe(path)
-          .then((res) => [path, { tracks: res.tracks, error: null }] as const)
-          .catch((err) => [path, { tracks: null, error: errorMessage(err) }] as const),
-      ),
-    ).then((results) => {
-      if (cancelled) return;
-      setEntries(Object.fromEntries(results));
-      setLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally a one-shot snapshot on open, not live-tracking the lists
-  }, []);
 
   function renderSide(title: string, files: string[]) {
     return (
@@ -194,13 +172,13 @@ function AllTracksModal({
           <p className="placeholder">{m.pairs.noFiles}</p>
         ) : (
           files.map((path, i) => {
-            const entry = entries[path];
+            const entry = probes[path];
             return (
               <div className="batch-tracks-file" key={`${i}-${path}`}>
                 <p className="batch-tracks-filename" title={path}>
                   {i + 1}. {basename(path)}
                 </p>
-                {loading && !entry && <p className="placeholder">{m.pairs.probing}</p>}
+                {!entry && <p className="placeholder">{m.pairs.probing}</p>}
                 {entry?.error && <p className="error">{entry.error}</p>}
                 {entry?.tracks && (
                   <div className="tracks-table-wrap">
@@ -552,30 +530,15 @@ export function PairsBatch({
   );
   useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
 
-  // The files' own start times, for the editor's informational "delay
-  // already in the file" note: probed when a pair is opened for editing.
-  const [editStartTimes, setEditStartTimes] = useState<{ reference?: number; track?: number }>({});
-  useEffect(() => {
-    setEditStartTimes({});
-    if (editing === null) return;
-    let cancelled = false;
-    const referenceTrack = tracksOf(editing.row).reference;
-    Promise.all([probe(referenceFiles[editing.row]), probe(candidateFiles[editing.row])])
-      .then(([ref, cand]) => {
-        if (cancelled) return;
-        setEditStartTimes({
-          reference: ref.tracks.find((t) => t.index === referenceTrack)?.start_time,
-          track: cand.tracks.find((t) => t.index === editing.track)?.start_time,
-        });
-      })
-      .catch(() => {
-        // informational only: the editor just goes without it
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the lists and tracks can't change while the editor is open
-  }, [editing]);
+  // The tracks' own start times, for the editor's informational "delay
+  // already in the file" note.
+  const editStartTimes =
+    editing === null
+      ? {}
+      : {
+          reference: probes[referenceFiles[editing.row]]?.tracks?.find((t) => t.index === tracksOf(editing.row).reference)?.start_time,
+          track: probes[candidateFiles[editing.row]]?.tracks?.find((t) => t.index === editing.track)?.start_time,
+        };
   const editingRun = editing !== null ? runOf(editing.row, editing.track) : undefined;
 
   /** A row's badge: what's running first, then what's wrong, then how far it got. */
@@ -929,7 +892,12 @@ export function PairsBatch({
       )}
 
       {showTracksModal && (
-        <AllTracksModal referenceFiles={referenceFiles} candidateFiles={candidateFiles} onClose={() => setShowTracksModal(false)} />
+        <AllTracksModal
+          referenceFiles={referenceFiles}
+          candidateFiles={candidateFiles}
+          probes={probes}
+          onClose={() => setShowTracksModal(false)}
+        />
       )}
 
       {subsEditing !== null && subsEditing < pairCount && (
