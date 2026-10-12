@@ -34,6 +34,31 @@ npm run check -- --full    # + clippy et les tests du moteur : ~2 min (pas penda
 
 Les tests unitaires (Vitest, `npm test`) couvrent la logique pure de l'interface, à côté de ce qu'ils testent (`src/*.test.ts`) : choix des pistes (`TrackFilter`), plan du résultat (ce qui est joué, coupé ou laissé en silence), éditions de segments, vue temporelle et formes d'onde, chemins de sortie (Windows et Linux), noms des pistes exportées, état des lignes et prochaine étape, sous-titres, formats d'affichage.
 
+### Tests de bout en bout
+
+```
+npm run test:e2e                                   # tout : ~8 min
+npm run test:e2e -- e2e/workflows.spec.ts          # une suite
+npm run test:e2e -- -g "pairs"                     # les tests dont le nom contient « pairs »
+npx playwright show-report e2e/report              # le rapport du dernier passage (traces des échecs)
+```
+
+L'app dans Chromium, pilotée comme par un utilisateur (Playwright, `playwright.config.ts`), contre le vrai moteur. Vite et le moteur sont démarrés pour le passage puis arrêtés — ou réutilisés s'ils tournent déjà (`tauri dev`). Le moteur lancé par les tests a son propre cache d'analyse.
+
+Les médias sont **synthétiques** (`e2e/make_media.py`, ~15 s, refaits seulement quand le script change, dans `e2e/media/`, ignoré par git) : chaque piste mélange un fond commun (notes, bruitages) décalé d'une valeur connue et une « voix » propre à sa langue, comme un doublage. Les tests vérifient que l'analyse retrouve ces décalages.
+
+| Suite | Ce qu'elle vérifie |
+|---|---|
+| `workflows` | les deux modes de bout en bout : décalages retrouvés (constant, en avance, saut, paires), options d'export réglées dans leur fenêtre, exports relus (pistes, codecs, noms automatiques, sous-titres forcés recalés, autres copiés) et vérifiés synchronisés |
+| `editor` | l'éditeur de segments : couper, défaire / refaire (touches et boutons), réinitialiser, question avant d'abandonner, l'export suit ce qui est enregistré |
+| `playback` | l'écoute : jamais plus de trois extraits à la fois, aucun après un arrêt, une fermeture ou un changement de mode, référence et résultat de même durée |
+| `ui` | la liste (flèches, déplacer, retirer, « Tout retirer », repli retenu), le choix des pistes, mode / thème / langue retenus, un fichier illisible |
+| `layout` | chaque écran à 1024×640 et 1440×900, deux thèmes, deux langues : icônes centrées au pixel, hauteurs entières, arrondis concentriques, texte coupé ou hors fenêtre, boutons voisins, contraste 4,5:1 (mesuré contre la pire couleur des dégradés) |
+| `a11y` | accessibilité (axe-core, WCAG 2.1 A / AA) des écrans et dialogues |
+| `visual` | les écrans principaux comparés à des captures de référence, enregistrées au premier passage sur chaque système (`e2e/__screenshots__/<système>`, hors git : polices et rendu diffèrent) ; après un changement voulu, `npm run test:e2e -- e2e/visual.spec.ts --update-snapshots` |
+
+Chaque test échoue aussi sur une erreur du moteur (HTTP 4xx/5xx), de la page ou de la console, ou un export laissé à côté des médias. Hors de portée : la vraie fenêtre Tauri (barre de titre, dialogues natifs, WebView2 / WebKitGTK) et le son lui-même.
+
 Avant chaque commit, le hook `../.githooks/pre-commit` vérifie le formatage et le lint des seuls fichiers indexés (quelques secondes) ; `npm install` l'active (script `prepare` : `git config core.hooksPath .githooks`). `git commit --no-verify` le saute une fois.
 
 ## Build
