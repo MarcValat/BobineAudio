@@ -446,7 +446,11 @@ def load_pcm_file(path: Path) -> np.ndarray:
     return _pcm_from_s16le(np.fromfile(path, dtype="<i2"))
 
 
-_PEAKS_SAMPLE_RATE = 22050
+# The analysis's own rate (analysis_cache.ANALYSIS_SAMPLE_RATE): the
+# prefetch draws a track's waveform from the PCM it decodes for the
+# analysis (see peaks_from_pcm), no second pass over the file -- and at a
+# whole episode's 20000 buckets, 16 kHz shows every peak 22.05 kHz did.
+PEAKS_SAMPLE_RATE = 16000
 
 
 def extract_peaks(
@@ -463,8 +467,13 @@ def extract_peaks(
     multi-minute track would not be. A whole-track call (``duration=None``)
     is how the GUI learns a track's total duration in the first place.
     """
-    pcm = extract_pcm(spec, sample_rate=_PEAKS_SAMPLE_RATE, start=start or None, duration=duration)
-    actual_duration = len(pcm) / _PEAKS_SAMPLE_RATE
+    pcm = extract_pcm(spec, sample_rate=PEAKS_SAMPLE_RATE, start=start or None, duration=duration)
+    return peaks_from_pcm(pcm, buckets, PEAKS_SAMPLE_RATE)
+
+
+def peaks_from_pcm(pcm: np.ndarray, buckets: int, sample_rate: int) -> tuple[np.ndarray, np.ndarray, float]:
+    """``extract_peaks``' result from samples already decoded (at ``sample_rate``)."""
+    actual_duration = len(pcm) / sample_rate
     if len(pcm) == 0 or buckets <= 0:
         return np.zeros(0, dtype=np.float32), np.zeros(0, dtype=np.float32), actual_duration
 

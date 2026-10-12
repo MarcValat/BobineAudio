@@ -35,7 +35,15 @@ from pathlib import Path
 import numpy as np
 
 from syncaudio.features import DEFAULT_HOP, DEFAULT_N_FFT, ENVELOPE_VERSION, extract_envelope
-from syncaudio.ffmpeg_backend import _file_identity, decode_tracks_to_files, extract_pcm, load_pcm_file
+from syncaudio import waveform_cache
+from syncaudio.ffmpeg_backend import (
+    PEAKS_SAMPLE_RATE,
+    _file_identity,
+    decode_tracks_to_files,
+    extract_pcm,
+    load_pcm_file,
+    peaks_from_pcm,
+)
 from syncaudio.i18n import tr
 from syncaudio.models import AudioTrackSpec
 
@@ -235,6 +243,7 @@ def prefetch(
     start: float = 0.0,
     duration: float | None = None,
     log: Callable[[str], None] = lambda msg: None,
+    waveform_buckets: int | None = None,
 ) -> None:
     """Warm the cache for all of ``specs``, decoding each file's tracks in one pass.
 
@@ -242,28 +251,43 @@ def prefetch(
     each track's seek point depends on its own container delay (see
     ``ffmpeg_backend._seek_args``). Anything not batched, or whose batch
     failed, then goes through ``get_envelope`` one by one as before.
+
+    With ``waveform_buckets``, the same pass also leaves each track's
+    whole-track waveform in ``waveform_cache`` (the GUI's /waveform), from the
+    PCM already decoded -- also for a track whose envelope was cached already
+    (on disk, from an earlier session) but whose waveform isn't (memory only).
     """
-    owned: dict[str, list[tuple[AudioTrackSpec, _CacheKey]]] = {}
+    peaks = waveform_buckets if waveform_buckets and sample_rate == PEAKS_SAMPLE_RATE else None
+    # Per file: each track to decode, its envelope's key if this call owns
+    # computing it, and whether its waveform is wanted.
+    owned: dict[str, list[tuple[AudioTrackSpec, _CacheKey | None, bool]]] = {}
     if not start and duration is None:
         for spec in specs:
             key = _key(spec, sample_rate, start, duration)
-            if key is not None and _claim(key, sample_rate) is None:
-                owned.setdefault(spec.path, []).append((spec, key))
+            mine = key is not None and _claim(key, sample_rate) is None
+            wave = peaks is not None and not waveform_cache.has_whole_track(spec, peaks)
+            if mine or wave:
+                owned.setdefault(spec.path, []).append((spec, key if mine else None, wave))
 
     for path, group in owned.items():
-        pending = {key for _, key in group}
+        pending = {key for _, key, _ in group if key is not None}
         try:
             with tempfile.TemporaryDirectory(prefix="syncaudio-decode-") as tmp:
                 log(tr("[extraction] {path} : {count} piste(s) en une seule passe...", path=path, count=len(group)))
-                files = decode_tracks_to_files(path, [_stream_index(s) for s, _ in group], sample_rate, Path(tmp))
-                for (spec, key), file in zip(group, files, strict=True):
+                files = decode_tracks_to_files(path, [_stream_index(s) for s, _, _ in group], sample_rate, Path(tmp))
+                for (spec, key, wave), file in zip(group, files, strict=True):
+                    pcm = load_pcm_file(file)
+                    if wave:
+                        waveform_cache.store_whole_track(spec, peaks, peaks_from_pcm(pcm, peaks, sample_rate))
+                    if key is None:
+                        continue
                     pending.discard(key)
                     result = None
                     try:
-                        result = _analyze(spec, load_pcm_file(file), sample_rate, log)
+                        result = _analyze(spec, pcm, sample_rate, log)
                     finally:
                         _release(key, result)
-        except Exception as exc:
+        except Exception as exc:  # the tracks left are then done one by one, below
             log(tr("[extraction] passe groupée impossible, pistes une par une ({error})", error=exc))
         finally:
             for key in pending:

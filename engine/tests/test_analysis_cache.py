@@ -11,7 +11,8 @@ import pytest
 
 import syncaudio.analysis_cache as analysis_cache
 from syncaudio.analysis_cache import get_envelope
-from syncaudio.ffmpeg_backend import resolve_ffmpeg
+from syncaudio import waveform_cache
+from syncaudio.ffmpeg_backend import extract_peaks, resolve_ffmpeg
 from syncaudio.models import AudioTrackSpec
 
 
@@ -206,7 +207,7 @@ def test_a_changed_file_is_analyzed_again(tone_wav: Path, tmp_path: Path, monkey
     assert not env.any()
 
 
-def test_prefetch_decodes_a_file_once_for_all_its_tracks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def _two_track_mkv(tmp_path: Path) -> Path:
     ffmpeg = resolve_ffmpeg()
     mkv = tmp_path / "multi.mkv"
     subprocess.run(
@@ -235,6 +236,11 @@ def test_prefetch_decodes_a_file_once_for_all_its_tracks(tmp_path: Path, monkeyp
         check=True,
         capture_output=True,
     )
+    return mkv
+
+
+def test_prefetch_decodes_a_file_once_for_all_its_tracks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    mkv = _two_track_mkv(tmp_path)
     specs = [AudioTrackSpec(raw=f"{mkv}@{i}", path=str(mkv), stream_index=i) for i in (0, 1)]
     expected = [get_envelope(s)[0] for s in specs]
     analysis_cache.clear()
@@ -246,6 +252,39 @@ def test_prefetch_decodes_a_file_once_for_all_its_tracks(tmp_path: Path, monkeyp
     assert single_calls == []
     for spec, env in zip(specs, expected):
         assert np.array_equal(get_envelope(spec)[0], env)
+
+
+def test_prefetch_leaves_the_waveforms_from_the_same_pass(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    mkv = _two_track_mkv(tmp_path)
+    specs = [AudioTrackSpec(raw=f"{mkv}@{i}", path=str(mkv), stream_index=i) for i in (0, 1)]
+    expected = [extract_peaks(s, 50) for s in specs]
+    analysis_cache.clear()
+    waveform_cache.clear()
+
+    batch_calls = _counting(monkeypatch, "decode_tracks_to_files")
+    analysis_cache.prefetch(specs, waveform_buckets=50)
+    assert batch_calls == [1]
+    monkeypatch.setattr(waveform_cache, "extract_peaks", lambda *a, **k: pytest.fail("decoded again"))
+    for spec, (mins, maxes, duration) in zip(specs, expected, strict=True):
+        got = waveform_cache.get_peaks(spec, 50)
+        assert np.array_equal(got[0], mins) and np.array_equal(got[1], maxes) and got[2] == duration
+
+
+def test_prefetch_draws_a_missing_waveform_without_redoing_the_analysis(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mkv = _two_track_mkv(tmp_path)
+    specs = [AudioTrackSpec(raw=f"{mkv}@{i}", path=str(mkv), stream_index=i) for i in (0, 1)]
+    for spec in specs:
+        get_envelope(spec)
+    waveform_cache.clear()
+
+    analyses = _counting(monkeypatch, "_analyze")
+    batch_calls = _counting(monkeypatch, "decode_tracks_to_files")
+    analysis_cache.prefetch(specs, waveform_buckets=50)
+    assert batch_calls == [1]
+    assert analyses == []
+    assert all(waveform_cache.has_whole_track(spec, 50) for spec in specs)
 
 
 def _point_cache_roots_at(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

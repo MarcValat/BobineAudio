@@ -342,6 +342,9 @@ class PrefetchRequest(BaseModel):
     tracks: list[TrackRef]
     start: float = 0.0
     duration: float | None = None
+    # Also each track's whole-track waveform at this many buckets (/waveform),
+    # from the same pass over the file.
+    waveform_buckets: int | None = None
 
 
 class PrefetchResponse(BaseModel):
@@ -350,7 +353,12 @@ class PrefetchResponse(BaseModel):
 
 def _do_prefetch(req: PrefetchRequest, log: Callable[[str], None] = lambda _msg: None) -> PrefetchResponse:
     analysis_cache.prefetch(
-        [ref.to_spec() for ref in req.tracks], ANALYSIS_SAMPLE_RATE, req.start, req.duration, log=log
+        [ref.to_spec() for ref in req.tracks],
+        ANALYSIS_SAMPLE_RATE,
+        req.start,
+        req.duration,
+        log=log,
+        waveform_buckets=req.waveform_buckets,
     )
     return PrefetchResponse(cached=len(req.tracks))
 

@@ -96,6 +96,26 @@ def get_peaks(
         event.set()
 
 
+def has_whole_track(spec: AudioTrackSpec, buckets: int) -> bool:
+    """Whether ``spec``'s whole-track peaks are cached, or being computed."""
+    key = _key(spec, buckets, 0.0, None)
+    with _lock:
+        return key in _cache or key in _inflight
+
+
+def store_whole_track(spec: AudioTrackSpec, buckets: int, result: tuple[np.ndarray, np.ndarray, float]) -> None:
+    """Keeps peaks computed elsewhere (the prefetch's pass over the file) as
+    what ``get_peaks`` returns for ``spec``'s whole track."""
+    key = _key(spec, buckets, 0.0, None)
+    with _lock:
+        if key in _cache or key in _inflight:
+            return
+        _cache[key] = result
+        _cache.move_to_end(key)
+        while len(_cache) > _MAX_ENTRIES:
+            _cache.popitem(last=False)
+
+
 def clear() -> None:
     """Drop every cached entry (mainly for tests, to avoid cross-test leakage)."""
     with _lock:
