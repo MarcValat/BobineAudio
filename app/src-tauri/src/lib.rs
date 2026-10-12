@@ -2,8 +2,8 @@
 use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::sync::Mutex;
-use tauri::path::BaseDirectory;
 use tauri::Manager;
+use tauri::path::BaseDirectory;
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
 /// The engine's port, picked at startup: the usual one when it's free,
@@ -71,8 +71,9 @@ impl KillOnCloseJob {
     fn new() -> Option<Self> {
         use windows_sys::Win32::Foundation::CloseHandle;
         use windows_sys::Win32::System::JobObjects::{
-            CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject,
-            JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+            CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
+            SetInformationJobObject,
         };
         unsafe {
             let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
@@ -208,7 +209,15 @@ fn spawn_sidecar(app: &tauri::AppHandle, port: u16) -> Option<Child> {
     if cfg!(debug_assertions) {
         let dir = engine_dir();
         match Command::new("uv")
-            .args(["run", "syncaudio", "serve", "--port", &port, "--parent-pid", &parent_pid])
+            .args([
+                "run",
+                "syncaudio",
+                "serve",
+                "--port",
+                &port,
+                "--parent-pid",
+                &parent_pid,
+            ])
             .current_dir(&dir)
             .spawn()
         {
@@ -304,7 +313,11 @@ pub fn run() {
         // Restores the main window's size, position and maximized state as
         // it's created. It's created hidden (tauri.conf.json) and only shown
         // here, once restored, so it doesn't flash at the default size first.
-        .plugin(tauri_plugin_window_state::Builder::default().with_state_flags(window_state_flags()).build())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(window_state_flags())
+                .build(),
+        )
         .setup(|app| {
             // Known before the window shows: the frontend asks for it at once.
             let port = free_port();
