@@ -26,11 +26,13 @@ Ouvre la fenêtre de l'app avec rechargement à chaud du frontend ; le sidecar m
 Elles tournent en local (GitHub Actions ne lance que les tests du moteur et le build, à la release : une vérification là-bas bloquerait la release tard).
 
 ```
-npm run check              # types, formatage, lint, code mort : ~25 s
+npm run check              # types, formatage, lint, code mort, tests unitaires : ~30 s
 npm run check -- --full    # + clippy et les tests du moteur : ~2 min (pas pendant `tauri dev`)
 ```
 
-`scripts/check.mjs` enchaîne `tsc`, Prettier, ESLint (règles des hooks React), knip (exports et dépendances inutilisés), ruff (`check` et `format`) sur le moteur et `cargo fmt`. `npm run format` reformate l'app (Prettier), `uv run ruff format` le moteur, `cargo fmt` la coquille Rust.
+`scripts/check.mjs` enchaîne `tsc`, Prettier, ESLint (règles des hooks React), knip (exports et dépendances inutilisés), les tests unitaires, ruff (`check` et `format`) sur le moteur et `cargo fmt`. `npm run format` reformate l'app (Prettier), `uv run ruff format` le moteur, `cargo fmt` la coquille Rust.
+
+Les tests unitaires (Vitest, `npm test`) couvrent la logique pure de l'interface, à côté de ce qu'ils testent (`src/*.test.ts`) : choix des pistes (`TrackFilter`), plan du résultat (ce qui est joué, coupé ou laissé en silence), éditions de segments, vue temporelle et formes d'onde, chemins de sortie (Windows et Linux), noms des pistes exportées, état des lignes et prochaine étape, sous-titres, formats d'affichage.
 
 Avant chaque commit, le hook `../.githooks/pre-commit` vérifie le formatage et le lint des seuls fichiers indexés (quelques secondes) ; `npm install` l'active (script `prepare` : `git config core.hooksPath .githooks`). `git commit --no-verify` le saute une fois.
 
