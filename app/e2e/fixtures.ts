@@ -81,9 +81,17 @@ export class Jobs {
 /** What a test drives the app with: its page, and the usual gestures. */
 export class App {
   readonly jobs = new Jobs();
+  /** Errors a test causes on purpose (see allowErrors). */
+  readonly allowed: RegExp[] = [];
 
   constructor(readonly page: Page) {
     this.jobs.watch(page);
+  }
+
+  /** Engine, page or console errors matching `pattern` don't fail the test:
+   * it causes them on purpose (a file that can't be read...). */
+  allowErrors(pattern: RegExp) {
+    this.allowed.push(pattern);
   }
 
   /** The detail's Analyser, once the file's tracks are read; done once the
@@ -206,13 +214,17 @@ export const test = base.extend<{ app: App }>({
       if (m.type() === "error" && !/favicon/.test(m.text())) problems.push(`console: ${m.text().slice(0, 200)}`);
     });
     await page.addInitScript(instrument);
-    await use(new App(page));
+    const app = new App(page);
+    await use(app);
     // An export next to the media (the output folder not set in time):
     // removed, and failed.
     const strays = readdirSync(MEDIA_DIR).filter((name) => name.includes(".synced"));
     for (const name of strays) rmSync(`${MEDIA_DIR}/${name}`);
     expect(strays, "exports written next to the media").toEqual([]);
-    expect(problems, "engine, page or console errors").toEqual([]);
+    expect(
+      problems.filter((p) => !app.allowed.some((pattern) => pattern.test(p))),
+      "engine, page or console errors",
+    ).toEqual([]);
   },
 });
 
