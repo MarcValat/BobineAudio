@@ -177,3 +177,53 @@ export function defaultPick(tracks: TrackInfo[], others: TrackInfo[] = tracks): 
   const fallback = others === tracks ? candidates : others.slice(others.length > 1 ? 1 : 0, others.length > 1 ? 2 : 1);
   return { reference, targets: fallback.map((tr) => indexKey(tr.index)) };
 }
+
+/** A file's tracks ticked by hand in its detail's tracks table (and its
+ * subtitles in "Changer"), instead of the top bar's pick. */
+export interface TrackChoice {
+  reference: number;
+  targets: number[];
+  /** The subtitle tracks retimed with each corrected track (by its index),
+   * picked by hand too; absent: per the subtitle setting. */
+  subtitles?: Record<number, number[]>;
+}
+
+/** Which of a file's tracks is the reference and which get corrected, and
+ * what was off when picking them by language (shown as ⚠). */
+export interface Resolution {
+  reference: TrackInfo | null;
+  targets: TrackInfo[];
+  issues: string[];
+  manual: boolean;
+  /** The reference picked at the top names none of its tracks, or several:
+   * the 1st track is the reference, every other one to correct ("(auto)"). */
+  auto: boolean;
+}
+
+/** A file's tracks as the top bar picks them (by number, language or
+ * name, see TrackFilter), or as ticked in its detail (`choice`). A
+ * reference naming none of its tracks, or several, doesn't block it: its
+ * first track (or first match) is the reference, and every other track is
+ * to correct when the reference matched none ("(auto)"). A track to correct
+ * that a ticked entry should name but can't is flagged (⚠). */
+export function resolveTracks(tracks: TrackInfo[], referenceKey: TrackKey, targetKeys: TrackKey[], choice?: TrackChoice): Resolution {
+  if (choice) {
+    return {
+      reference: tracks.find((t) => t.index === choice.reference) ?? null,
+      targets: tracks.filter((t) => choice.targets.includes(t.index)),
+      issues: [],
+      manual: true,
+      auto: false,
+    };
+  }
+  const matches = referenceKey ? tracks.filter((t) => matchesKey(t, referenceKey)) : [];
+  const reference = matches[0] ?? tracks[0] ?? null;
+  if (matches.length === 0) {
+    return { reference, targets: tracks.filter((t) => t !== reference), issues: [], manual: false, auto: true };
+  }
+  const others = tracks.filter((t) => t !== reference);
+  const issues = targetKeys
+    .filter((key) => key !== ALL_TRACKS && !others.some((t) => matchesKey(t, key)))
+    .map((key) => t().multi.noTrack(keyName(key)));
+  return { reference, targets: others.filter((t) => matchesAny(t, targetKeys)), issues, manual: false, auto: matches.length > 1 };
+}

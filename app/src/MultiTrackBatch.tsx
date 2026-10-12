@@ -3,7 +3,15 @@ import { startSegmentedRenderJob, startSegmentsJob, type SegmentsResponse, type 
 import { runJob } from "./jobs";
 import { prefetchNow } from "./prefetch";
 import { ExportNames, exportTitle, useExportOptions } from "./exportOptions";
-import { ALL_TRACKS, defaultPick, keyName, matchesAny, matchesKey, trackOptions, TrackFilterPicker, type TrackKey } from "./TrackFilter";
+import {
+  defaultPick,
+  resolveTracks,
+  trackOptions,
+  TrackFilterPicker,
+  type Resolution,
+  type TrackChoice,
+  type TrackKey,
+} from "./TrackFilter";
 import {
   AnalyzeButton,
   BatchFooter,
@@ -53,31 +61,9 @@ import { SegmentEditor } from "./SegmentEditor";
 import { assignSubtitles, subtitlesFor } from "./subtitles";
 import { devParam, errorMessage, toggled } from "./util";
 import { TrackTable } from "./TrackTable";
-import { t, useT } from "./i18n";
+import { useT } from "./i18n";
 import { WarningIcon } from "./icons";
 import { useListCollapsed, useSubtitleMode } from "./settings";
-
-/** A file's tracks ticked by hand in its detail's tracks table (and its
- * subtitles in "Changer"), instead of the top bar's pick. */
-interface TrackChoice {
-  reference: number;
-  targets: number[];
-  /** The subtitle tracks retimed with each corrected track (by its index),
-   * picked by hand too; absent: per the subtitle setting. */
-  subtitles?: Record<number, number[]>;
-}
-
-/** Which of a file's tracks is the reference and which get corrected, and
- * what was off when picking them by language (shown as ⚠). */
-interface Resolution {
-  reference: TrackInfo | null;
-  targets: TrackInfo[];
-  issues: string[];
-  manual: boolean;
-  /** The reference picked at the top names none of its tracks, or several:
-   * the 1st track is the reference, every other one to correct ("(auto)"). */
-  auto: boolean;
-}
 
 /** One file's analyses (one per corrected track) and its single export. Kept
  * with the reference they were made against: a different one since makes
@@ -85,34 +71,6 @@ interface Resolution {
 interface FileRun extends ExportFields {
   referenceIndex: number;
   targets: Record<number, AnalysisRun>;
-}
-
-/** A file's tracks as the top bar picks them (by number, language or
- * name, see TrackFilter), or as ticked in its detail (`choice`). A
- * reference naming none of its tracks, or several, doesn't block it: its
- * first track (or first match) is the reference, and every other track is
- * to correct when the reference matched none ("(auto)"). A track to correct
- * that a ticked entry should name but can't is flagged (⚠). */
-function resolve(tracks: TrackInfo[], referenceKey: TrackKey, targetKeys: TrackKey[], choice?: TrackChoice): Resolution {
-  if (choice) {
-    return {
-      reference: tracks.find((t) => t.index === choice.reference) ?? null,
-      targets: tracks.filter((t) => choice.targets.includes(t.index)),
-      issues: [],
-      manual: true,
-      auto: false,
-    };
-  }
-  const matches = referenceKey ? tracks.filter((t) => matchesKey(t, referenceKey)) : [];
-  const reference = matches[0] ?? tracks[0] ?? null;
-  if (matches.length === 0) {
-    return { reference, targets: tracks.filter((t) => t !== reference), issues: [], manual: false, auto: true };
-  }
-  const others = tracks.filter((t) => t !== reference);
-  const issues = targetKeys
-    .filter((key) => key !== ALL_TRACKS && !others.some((t) => matchesKey(t, key)))
-    .map((key) => t().multi.noTrack(keyName(key)));
-  return { reference, targets: others.filter((t) => matchesAny(t, targetKeys)), issues, manual: false, auto: matches.length > 1 };
 }
 
 /** "Fichiers multipistes": one file or a series of files that each hold
@@ -208,7 +166,7 @@ export function MultiTrackBatch({
   const resolutions: Record<string, Resolution | null> = Object.fromEntries(
     files.map((f) => {
       const tracks = probes[f]?.tracks;
-      return [f, tracks ? resolve(tracks, referenceKey, targetKeys, choices[f]) : null];
+      return [f, tracks ? resolveTracks(tracks, referenceKey, targetKeys, choices[f]) : null];
     }),
   );
 
