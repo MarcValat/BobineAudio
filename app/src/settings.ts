@@ -86,7 +86,7 @@ export const TRACK_NAMINGS: TrackNaming[] = ["source", "auto", "custom"];
 const EXPORT_CODEC_KEY = "syncaudio.exportCodec";
 const TRACK_NAMING_KEY = "syncaudio.trackNaming";
 
-export function loadExportCodec(): ExportCodec {
+function loadExportCodec(): ExportCodec {
   const saved = loadSetting(EXPORT_CODEC_KEY) as ExportCodec | null;
   return saved && EXPORT_CODECS.includes(saved) ? saved : "auto";
 }
@@ -100,7 +100,7 @@ export function useExportCodec(): ExportCodec {
   return useSyncExternalStore(subscribe, loadExportCodec);
 }
 
-export function loadTrackNaming(): TrackNaming {
+function loadTrackNaming(): TrackNaming {
   const saved = loadSetting(TRACK_NAMING_KEY) as TrackNaming | null;
   return saved && TRACK_NAMINGS.includes(saved) ? saved : "source";
 }

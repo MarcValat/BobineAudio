@@ -52,7 +52,7 @@ export interface SegmentsResponse {
   segments: SegmentOut[];
 }
 
-export interface RenderedTrack {
+interface RenderedTrack {
   track: string;
   language: string | null;
   offset_seconds: number | null; // null for a segmented (non-constant) correction
