@@ -18,6 +18,7 @@ import { Select } from "./Dropdown";
 import { ALL_TRACKS, defaultPick, keyName, matchesAny, matchesKey, trackOptions, TrackFilterPicker, type TrackKey } from "./TrackFilter";
 import {
   EmptyWorkspace,
+  Issues,
   FoldButton,
   ModeCards,
   RemoveAllButton,
@@ -749,6 +750,7 @@ export function PairsBatch({
                       )}
                       badge={badge}
                       badgeKind={badgeKind}
+                      badgeAlert={i >= pairCount}
                       selected={i === selected}
                       onSelect={() => setSelected(i)}
                     />
@@ -852,9 +854,7 @@ export function PairsBatch({
                           }
                         />
                       </div>
-                      {detailPicked && detailPicked.issues.length > 0 && (
-                        <span className="list-row-issues">⚠ {detailPicked.issues.join(", ")}</span>
-                      )}
+                      {detailPicked && detailPicked.issues.length > 0 && <Issues issues={detailPicked.issues} />}
                       {(probes[detailCandidate!]?.subtitles.length ?? 0) > 0 && detailTracks.candidates.length > 0 && (
                         <RetimedSubs
                           subtitles={probes[detailCandidate!]!.subtitles}

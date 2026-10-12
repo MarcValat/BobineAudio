@@ -17,6 +17,7 @@ import { InfoTip } from "./InfoTip";
 import { Select } from "./Dropdown";
 import {
   EmptyWorkspace,
+  Issues,
   ListRow,
   FoldButton,
   ModeCards,
@@ -50,6 +51,7 @@ import { assignSubtitles, SUBTITLE_MODES, type SubtitleMode, subtitlesFor } from
 import { devParam, errorMessage, toggled } from "./util";
 import { TrackTable } from "./TrackTable";
 import { t, useT } from "./i18n";
+import { WarningIcon } from "./icons";
 import { useListCollapsed, useSubtitleDefault } from "./settings";
 
 /** "@1 fre": a track as the list and the detail name it. */
@@ -512,7 +514,7 @@ export function MultiTrackBatch({
                           {res && tracksSummary(path, res)}
                           {res?.manual && <span className="list-row-manual">{m.multi.manual}</span>}
                           {res?.auto && <span className="list-row-manual">{m.multi.auto}</span>}
-                          {res && res.issues.length > 0 && <span className="list-row-issues">⚠ {res.issues.join(", ")}</span>}
+                          {res && res.issues.length > 0 && <Issues issues={res.issues} />}
                         </>
                       }
                       actions={<MoveButtons count={files.length} index={i} disabled={busy} onChange={(update) => setFiles(update)} />}
@@ -613,7 +615,7 @@ export function MultiTrackBatch({
                             onToggleTarget={(index) => editChoice(detailPath, (c) => ({ ...c, targets: toggled(c.targets, index) }))}
                           />
                         </div>
-                        {detailRes.issues.length > 0 && <span className="list-row-issues">⚠ {detailRes.issues.join(", ")}</span>}
+                        {detailRes.issues.length > 0 && <Issues issues={detailRes.issues} />}
                         {detailProbe.subtitles.length > 0 && detailRes.targets.length > 0 && (
                           <RetimedSubs
                             subtitles={detailProbe.subtitles}
@@ -679,7 +681,12 @@ export function MultiTrackBatch({
                 {m.multi.progressFiles(files.length)}
                 {m.multi.progressAnalyzed(analyzedCount, allTargets.length)}
                 {exportedCount > 0 && m.multi.progressExported(exportedCount)}
-                {flaggedCount > 0 && m.multi.progressFlagged(flaggedCount)}
+                {flaggedCount > 0 && (
+                  <>
+                    {" · "}
+                    <WarningIcon /> {m.multi.progressFlagged(flaggedCount)}
+                  </>
+                )}
               </>
             }
             analyzeButton={

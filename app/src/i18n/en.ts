@@ -49,7 +49,7 @@ export const en: Messages = {
     ready: "Engine ready",
     starting: "Starting the engine...",
     unreachable: "The analysis engine isn't responding. Try again, or restart the app.",
-    unreachableShort: "⚠ The engine isn't responding",
+    unreachableShort: "The engine isn't responding",
   },
 
   modes: {
@@ -243,7 +243,7 @@ export const en: Messages = {
     progressFiles: (n) => `${n} file${n === 1 ? "" : "s"}`,
     progressAnalyzed: (done, total) => ` · ${done} of ${total} track${total === 1 ? "" : "s"} analyzed`,
     progressExported: (n) => ` · ${n} exported`,
-    progressFlagged: (n) => ` · ⚠ ${n} to check`,
+    progressFlagged: (n) => `${n} to check`,
     filesCount: (n) => `Files · ${n}`,
     addMore: "+ Add videos",
     dropMore: "or drop them, or a folder, on the window",
@@ -264,7 +264,7 @@ export const en: Messages = {
     status: {
       reading: "Reading...",
       unreadable: "Unreadable",
-      check: "⚠ To check",
+      check: "To check",
       toAnalyze: "To analyze",
       pending: "Waiting",
       running: "Analyzing...",
@@ -298,7 +298,6 @@ export const en: Messages = {
     pickReferences: "Reference files",
     pickCandidates: "To correct: videos or audio files",
     empty: "On the window's left, the reference files; on its right, the ones to correct, one per episode: they're paired in order.",
-    unpaired: "⚠ No pair",
     progressPairs: (n) => `${n} pair${n === 1 ? "" : "s"}`,
     progressAnalyzed: (done, total) => ` · ${done} of ${total} analyzed`,
     progressExported: (n) => ` · ${n} exported`,
@@ -340,7 +339,7 @@ export const en: Messages = {
       exported: "Exported",
       exportFailed: "Export failed",
       cancelled: "Export cancelled",
-      unpaired: "⚠ Unpaired",
+      unpaired: "Unpaired",
     },
   },
 

@@ -50,7 +50,7 @@ export const fr = {
     ready: "Moteur prêt",
     starting: "Démarrage du moteur...",
     unreachable: "Le moteur d'analyse ne répond pas. Réessaie, ou redémarre l'application.",
-    unreachableShort: "⚠ Le moteur ne répond pas",
+    unreachableShort: "Le moteur ne répond pas",
   },
 
   modes: {
@@ -246,7 +246,7 @@ export const fr = {
     progressFiles: (n: number) => `${n} fichier${n > 1 ? "s" : ""}`,
     progressAnalyzed: (done: number, total: number) => ` · ${done} piste${done > 1 ? "s" : ""} sur ${total} analysée${done > 1 ? "s" : ""}`,
     progressExported: (n: number) => ` · ${n} exporté${n > 1 ? "s" : ""}`,
-    progressFlagged: (n: number) => ` · ⚠ ${n} à vérifier`,
+    progressFlagged: (n: number) => `${n} à vérifier`,
     filesCount: (n: number) => `Fichiers · ${n}`,
     addMore: "+ Ajouter des vidéos",
     dropMore: "ou glisse-les, ou un dossier, sur la fenêtre",
@@ -267,7 +267,7 @@ export const fr = {
     status: {
       reading: "Lecture...",
       unreadable: "Illisible",
-      check: "⚠ À vérifier",
+      check: "À vérifier",
       toAnalyze: "À analyser",
       pending: "En attente",
       running: "Analyse...",
@@ -302,7 +302,6 @@ export const fr = {
     pickCandidates: "À corriger : vidéos ou fichiers audio",
     empty:
       "À gauche de la fenêtre, les fichiers de référence ; à droite, ceux à corriger, un par épisode : ils sont appariés dans l'ordre.",
-    unpaired: "⚠ Sans paire",
     progressPairs: (n: number) => `${n} paire${n > 1 ? "s" : ""}`,
     progressAnalyzed: (done: number, total: number) => ` · ${done} sur ${total} analysée${done > 1 ? "s" : ""}`,
     progressExported: (n: number) => ` · ${n} exportée${n > 1 ? "s" : ""}`,
@@ -346,7 +345,7 @@ export const fr = {
       exported: "Exportée",
       exportFailed: "Échec de l'export",
       cancelled: "Export annulé",
-      unpaired: "⚠ Sans paire",
+      unpaired: "Sans paire",
     },
   },
 

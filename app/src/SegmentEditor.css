@@ -119,6 +119,12 @@
   pointer-events: none;
 }
 
+.editor-chart .segment-label.low-confidence {
+  /* Unreliable: its value in red (its line dotted). */
+  fill: var(--danger);
+  font-weight: 600;
+}
+
 .editor-chart .segment-label.dragged {
   font-weight: 700;
   opacity: 1;

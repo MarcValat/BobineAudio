@@ -4,7 +4,7 @@ import { moved } from "./batchShared";
 import type { RunStatus } from "./jobs";
 import { errorMessage, shortcutKey } from "./util";
 import { useT } from "./i18n";
-import { ArrowDownIcon, ArrowUpIcon, CloseIcon, FoldIcon, LayersIcon, LinkIcon } from "./icons";
+import { ArrowDownIcon, ArrowUpIcon, CloseIcon, FoldIcon, LayersIcon, LinkIcon, WarningIcon } from "./icons";
 import { Tooltip } from "./InfoTip";
 import { saveListCollapsed } from "./settings";
 import "./Workspace.css";
@@ -106,6 +106,16 @@ export function RemoveAllButton({ results, disabled, onRemove }: { results: bool
   );
 }
 
+/** What's off with a file's tracks ("aucune piste fre"), behind the
+ * warning sign: under its name in the list, under its tracks table. */
+export function Issues({ issues }: { issues: string[] }) {
+  return (
+    <span className="list-row-issues">
+      <WarningIcon /> {issues.join(", ")}
+    </span>
+  );
+}
+
 /** How a list row's badge is tinted: what it's at (see rowState), or a
  * warning for a file whose tracks need checking. */
 export type BadgeKind = "idle" | "queued" | "running" | "analyzed" | "exported" | "error" | "warning";
@@ -178,6 +188,7 @@ export function ListRow({
   state,
   badge,
   badgeKind,
+  badgeAlert = badgeKind === "warning",
   selected,
   onSelect,
   actions,
@@ -192,6 +203,8 @@ export function ListRow({
   state: string;
   badge: string;
   badgeKind: BadgeKind;
+  /** The warning sign before it (default: a warning badge's). */
+  badgeAlert?: boolean;
   selected: boolean;
   onSelect: () => void;
   actions?: ReactNode;
@@ -216,7 +229,10 @@ export function ListRow({
           <span className="list-row-detail">{detail}</span>
         </span>
         <span className="list-row-status">
-          <span className={`list-badge list-badge-${badgeKind}`}>{badge}</span>
+          <span className={`list-badge list-badge-${badgeKind}`}>
+            {badgeAlert && <WarningIcon />}
+            {badge}
+          </span>
           {/* Something's running on it: the app's spinner (the engine
               doesn't say how far along it is). */}
           {badgeKind === "running" && <span className="spinner spinner-small" aria-hidden="true" />}
@@ -341,6 +357,7 @@ export function PairRow({
   state,
   badge,
   badgeKind,
+  badgeAlert,
   selected,
   onSelect,
 }: {
@@ -351,6 +368,7 @@ export function PairRow({
   state: string;
   badge: string;
   badgeKind: BadgeKind;
+  badgeAlert?: boolean;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -370,6 +388,7 @@ export function PairRow({
       state={state}
       badge={badge}
       badgeKind={badgeKind}
+      badgeAlert={badgeAlert}
       selected={selected}
       onSelect={onSelect}
       actions={

@@ -1,5 +1,6 @@
 import { retryEngine, useEngineStatus } from "./engine";
 import { useT } from "./i18n";
+import { WarningIcon } from "./icons";
 
 /** The engine's state, top right, as a pill (as the mockup): "Moteur prêt"
  * with a green dot once it's up, a small spinner while it starts, the
@@ -26,6 +27,7 @@ export function EngineStatusBadge() {
   }
   return (
     <span className="engine-status engine-status-error" role="alert" title={t.startup.unreachable}>
+      <WarningIcon />
       {t.startup.unreachableShort}
       <button className="small-button" onClick={retryEngine}>
         {t.common.retry}

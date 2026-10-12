@@ -595,11 +595,10 @@ export function SegmentEditor({
                         <text
                           x={labelX(seg)}
                           y={yStart + (yEnd - yStart) * ((labelX(seg) - x(seg.start_s)) / (x(seg.end_s) - x(seg.start_s) || 1)) - 10}
-                          className={isDragged ? "segment-label dragged" : "segment-label"}
+                          className={`segment-label${isDragged ? " dragged" : ""}${seg.confidence < LOW_CONFIDENCE_THRESHOLD ? " low-confidence" : ""}`}
                           textAnchor="middle"
                         >
                           {segmentOffsetLabel(seg)}
-                          {seg.confidence < LOW_CONFIDENCE_THRESHOLD ? " ⚠" : ""}
                         </text>
                       </g>
                     );
