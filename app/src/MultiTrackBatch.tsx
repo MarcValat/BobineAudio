@@ -192,7 +192,6 @@ export function MultiTrackBatch({
   useEffect(() => {
     const list = devParam("batchFiles");
     if (list) addPaths(list.split("|"));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // The picks start out from the first probed file (see defaultPick). Only

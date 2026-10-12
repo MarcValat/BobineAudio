@@ -337,7 +337,9 @@ export function TrackPreview({
     unmountedRef.current = false;
     return () => {
       // A clip still on its way is dropped (it would start playing after
-      // the preview is gone, with nothing left to stop it).
+      // the preview is gone, with nothing left to stop it). A counter, not
+      // a node: its value now is the one to move past.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       loadGenerationRef.current++;
       unmountedRef.current = true;
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
@@ -381,6 +383,9 @@ export function TrackPreview({
     return () => {
       cancelled = true;
     };
+    // Fetched again for other tracks only (setView is a new function each
+    // render).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [referenceFilePath, candidateFilePath, referenceIndex, trackIndex]);
 
   const plan = useMemo(() => planResult(segments), [segments]);
