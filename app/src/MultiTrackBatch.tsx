@@ -57,7 +57,8 @@ import { useListCollapsed, useSubtitleDefault } from "./settings";
 /** "@1 fre": a track as the list and the detail name it. */
 const trackName = (track: TrackInfo) => `@${track.index} ${track.language ?? "?"}`;
 
-/** A file's tracks picked by hand ("Choisir"), instead of by language. */
+/** A file's tracks ticked by hand in its detail's tracks table (and its
+ * subtitles in "Changer"), instead of the top bar's pick. */
 interface TrackChoice {
   reference: number;
   targets: number[];

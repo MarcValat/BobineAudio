@@ -292,7 +292,7 @@ export async function startSegmentedRenderJob(
 
 /**
  * Segmented render pulling the corrected track from a *different* file than
- * the reference (batch mode's case: reference and to-correct files are two
+ * the reference (the pairs' case: reference and to-correct files are two
  * separate imports, never the same file@index pair `startSegmentedRenderJob`
  * assumes) -- `input_path` supplies the video/reference/subtitles as-is,
  * `only_imports` keeps it from also (redundantly) "correcting" any of its

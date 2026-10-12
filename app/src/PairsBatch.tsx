@@ -226,11 +226,9 @@ function AllTracksModal({
   );
 }
 
-/** Batch mode's "Paires de fichiers": process a whole series of episodes in
- * one pass, each episode's corrected track coming from another file than
+/** "Paires de fichiers": one episode or a whole series in one pass, each episode's corrected track coming from another file than
  * its reference (a video, or an audio-only file). Two independently-
- * imported file lists, paired
- * strictly by position (row 1 of each = pair 1, etc.) -- chosen over
+ * imported file lists, paired strictly by position (row 1 of each = pair 1, etc.) -- chosen over
  * auto-matching by filename for predictability: a wrong position is
  * visible and fixable with the up/down arrows, a wrong filename-based
  * guess could silently pair the wrong episodes. One reference/candidate
@@ -245,8 +243,8 @@ function AllTracksModal({
  * listening, its own Analyser / Exporter cette paire. With no file yet,
  * two drop zones, one per column.
  *
- * Always kept mounted by the caller (App.tsx) even while on the other tab
- * -- `hidden` just toggles visibility -- so switching tabs never resets
+ * Always kept mounted (BatchView.tsx) even while the other mode is shown
+ * -- `hidden` just toggles visibility -- so switching modes never resets
  * the imported file lists or analysis results. */
 export function PairsBatch({
   hidden,

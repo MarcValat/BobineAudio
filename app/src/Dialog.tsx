@@ -19,8 +19,9 @@ export function useEscape(onEscape: () => void): void {
   }, []);
 }
 
-/** A window over the whole app, on a dimmed backdrop: "Choisir",
- * "Vérifier toutes les pistes", Options, the segment editor.
+/** A window over the whole app, on a dimmed backdrop: the subtitles'
+ * "Changer", "Vérifier toutes les pistes", the log, Paramètres, the segment
+ * editor.
  *
  * Escape runs `onEscape` (default: `onClose`); a click on the backdrop
  * closes it only with `closeOnBackdrop` -- not where a stray click would
