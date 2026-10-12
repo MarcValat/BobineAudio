@@ -142,6 +142,11 @@ body,
   margin: 0;
 }
 
+/* No pinch zoom on a touch screen: the app sizes itself (Paramètres). */
+html {
+  touch-action: pan-x pan-y;
+}
+
 body {
   background: var(--bg);
   /* An app, not a page: no text gets selected by a click-drag or a double
