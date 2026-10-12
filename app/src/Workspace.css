@@ -281,8 +281,10 @@
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: 0.6em;
+  /* Whole pixels, its lines' heights below: as tall wrapped or not. */
+  padding: 7px;
   font-size: 12.5px;
+  line-height: 16px;
   border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, transparent);
   background: color-mix(in srgb, var(--accent) 5%, transparent);
   color: var(--accent);
@@ -301,6 +303,7 @@
 .file-list-add span + span,
 .pair-add button span + span {
   font-size: 11.5px;
+  line-height: 15px;
   font-weight: 400;
   color: var(--text-muted);
 }
