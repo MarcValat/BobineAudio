@@ -8,18 +8,12 @@ import { formatOffsetMs, formatTime, segmentOffsetLabel } from "./SegmentChart";
 import { Waveform, type HighlightRegion } from "./Waveform";
 import { WaveformNavigator } from "./WaveformNavigator";
 import { errorMessage, inFront, shortcutKey } from "./util";
-import { peakRange, resamplePeaks, type FullPeaks, type PeaksData } from "./peaks";
+import { FULL_TRACK_BUCKETS, peakRange, resamplePeaks, type FullPeaks, type PeaksData } from "./peaks";
 import { MinusIcon, PlusIcon } from "./icons";
 import { useT } from "./i18n";
 
 const PREVIEW_DURATION_S = 12;
 const WAVEFORM_BUCKETS = 800;
-// Fetched once per track, whole-file, so every zoom/pan afterwards is a pure
-// client-side resample (see resamplePeaks) instead of a network round trip.
-// Kept at this: the navigator redraws all of them on every pan, and 120000
-// made navigation visibly lag. The waveform gets coarse near the
-// MIN_VIEW_DURATION_S zoom floor, an accepted trade-off.
-const FULL_TRACK_BUCKETS = 20000;
 
 // Waveforms loaded ahead, one at a time: they share the engine with the
 // analyses still running.

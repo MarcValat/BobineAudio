@@ -2,6 +2,14 @@
 // whole track (TrackPreview's FULL_TRACK_BUCKETS), then cut down to what a
 // waveform shows -- the zoomed waveforms and the whole-track navigator.
 
+// Fetched once per track, whole-file, so every zoom/pan afterwards is a pure
+// client-side resample (see resamplePeaks) instead of a network round trip;
+// also what the background prefetch (prefetch.ts) asks the engine to draw
+// ahead. Kept at this: the navigator redraws all of them on every pan, and
+// 120000 made navigation visibly lag. The waveform gets coarse near the
+// MIN_VIEW_DURATION_S zoom floor, an accepted trade-off.
+export const FULL_TRACK_BUCKETS = 20000;
+
 export interface PeaksData {
   min: number[];
   max: number[];

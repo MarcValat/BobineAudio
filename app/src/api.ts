@@ -216,6 +216,21 @@ async function requestWaveform(query: string): Promise<WaveformResponse> {
   return resp.json();
 }
 
+/** Decodes and analyzes these tracks of `path` ahead, all in one pass over
+ * the file (POST /jobs/prefetch): an analysis using them then starts from
+ * the cache, and so does their whole-track waveform at `waveformBuckets`.
+ * One already there, or being done, isn't done again. */
+export async function startPrefetchJob(path: string, indices: number[], waveformBuckets: number): Promise<string> {
+  const resp = await engineFetch(`/jobs/prefetch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tracks: indices.map((index) => ({ path, index })), waveform_buckets: waveformBuckets }),
+  });
+  if (!resp.ok) throw new Error(await readErrorDetail(resp));
+  const data = await resp.json();
+  return data.job_id as string;
+}
+
 export async function startSegmentsJob(
   referencePath: string,
   referenceIndex: number,

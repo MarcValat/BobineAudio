@@ -7,6 +7,7 @@ import { useT } from "./i18n";
 import { ArrowDownIcon, ArrowUpIcon, CloseIcon, FoldIcon, LayersIcon, LinkIcon, WarningIcon } from "./icons";
 import { Tooltip } from "./InfoTip";
 import { saveListCollapsed } from "./settings";
+import { dropPrefetch, prefetchTracks } from "./prefetch";
 import "./Workspace.css";
 
 /** "@1 fre": a track as the list, the detail and the editor name it; "@1"
@@ -166,16 +167,28 @@ export interface FileProbe {
 }
 
 /** Every file of `paths` read once, as soon as it's listed (absent: not
- * read yet). */
+ * read yet) -- and its audio tracks then decoded ahead in the background
+ * (prefetch.ts), until it leaves the list. */
 export function useProbes(paths: string[]): Record<string, FileProbe> {
   const [probes, setProbes] = useState<Record<string, FileProbe>>({});
   const requested = useRef(new Set<string>());
+  const listed = useRef<string[]>([]);
   useEffect(() => {
+    const gone = listed.current.filter((path) => !paths.includes(path));
+    if (gone.length > 0) dropPrefetch(gone);
+    listed.current = paths;
     for (const path of paths) {
       if (requested.current.has(path)) continue;
       requested.current.add(path);
       probe(path)
-        .then((res) => setProbes((p) => ({ ...p, [path]: { tracks: res.tracks, subtitles: res.subtitles ?? [], error: null } })))
+        .then((res) => {
+          setProbes((p) => ({ ...p, [path]: { tracks: res.tracks, subtitles: res.subtitles ?? [], error: null } }));
+          if (listed.current.includes(path))
+            prefetchTracks(
+              path,
+              res.tracks.map((t) => t.index),
+            );
+        })
         .catch((err) => setProbes((p) => ({ ...p, [path]: { tracks: null, subtitles: [], error: errorMessage(err) } })));
     }
   }, [paths]);

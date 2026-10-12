@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { startSegmentedRenderJob, startSegmentsJob, type SegmentsResponse, type TrackInfo } from "./api";
 import { runJob } from "./jobs";
+import { prefetchNow } from "./prefetch";
 import { ALL_TRACKS, defaultPick, keyName, matchesAny, matchesKey, trackOptions, TrackFilterPicker, type TrackKey } from "./TrackFilter";
 import {
   AnalyzeButton,
@@ -291,6 +292,9 @@ export function MultiTrackBatch({
       return next;
     });
     for (const { path, reference, targets } of plan) {
+      // The file's tracks decoded in one pass first (or what's left of it,
+      // if it was being done ahead): each analysis then starts from them.
+      await prefetchNow(path, [reference.index, ...targets.map((t) => t.index)]);
       for (const target of targets) {
         updateTarget(path, target.index, { status: "running" });
         try {
