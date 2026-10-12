@@ -75,7 +75,8 @@ app = FastAPI(title="Bobine Audio", version="0.1.0", lifespan=_lifespan)
 # dev) call it, same as any other local desktop-app sidecar.
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-_NO_LOG: Callable[[str], None] = lambda _msg: None
+def _NO_LOG(_msg: str) -> None:
+    """A job step's log when nobody listens."""
 
 
 @app.get("/health")
