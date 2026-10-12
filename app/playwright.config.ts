@@ -54,7 +54,9 @@ export default defineConfig({
       stdout: "ignore",
       stderr: "ignore",
       // Its own analysis cache, not the app's.
-      env: { SYNCAUDIO_CACHE_DIR: join(tmpdir(), "bobine-e2e-cache") },
+      // The dev builds' token (src-tauri/src/lib.rs's DEV_TOKEN), which the
+      // page sends outside Tauri -- as does `tauri dev`'s engine, reusable.
+      env: { SYNCAUDIO_CACHE_DIR: join(tmpdir(), "bobine-e2e-cache"), SYNCAUDIO_TOKEN: "bobine-dev" },
     },
   ],
 });
