@@ -234,8 +234,8 @@
   width: 100%;
   min-width: 4.8em;
   box-sizing: border-box;
-  padding: 0.3em 0.5em;
-  font-size: 0.95em;
+  padding: 1px 7px;
+  font-size: 13px;
   /* Digits of one width: values line up from row to row. */
   font-variant-numeric: tabular-nums;
 }

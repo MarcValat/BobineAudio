@@ -462,8 +462,11 @@ input,
 button {
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
-  padding: 0.55em 1.1em;
+  /* In whole pixels, line height included (a button's own is "normal",
+     the font's): 34px tall, its text and icons on whole pixels. */
+  padding: 6px 15px;
   font-size: 1em;
+  line-height: 20px;
   font-weight: 500;
   font-family: inherit;
   color: var(--text);
@@ -519,8 +522,10 @@ button:focus-visible {
 }
 
 .small-button {
-  padding: 0.3em 0.75em;
+  /* 24px tall, as the icon ones (BatchView.css). */
+  padding: 3px 9px;
   font-size: 0.85em;
+  line-height: 16px;
 }
 
 /* A unit in an uppercase table header: "(ms)" must not become "(MS)". */
@@ -648,7 +653,8 @@ button:focus-visible {
 
 .preview-controls input[type="number"] {
   width: 4.5em;
-  padding: 0.3em 0.5em;
+  /* 24px tall, as the small buttons beside it. */
+  padding: 1px 7px;
 }
 
 /* No up/down arrows (the arrow keys still step it): WebKitGTK shows them
