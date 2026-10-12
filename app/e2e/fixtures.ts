@@ -1,4 +1,6 @@
 import { test as base, expect, type Page } from "@playwright/test";
+import { readdirSync, rmSync } from "node:fs";
+import { MEDIA_DIR } from "./media";
 
 declare global {
   interface Window {
@@ -188,8 +190,8 @@ export class App {
   }
 }
 
-/** Every test fails on an engine error (HTTP 4xx/5xx), a page error or a
- * console error, besides its own checks. */
+/** Every test fails on an engine error (HTTP 4xx/5xx), a page error, a
+ * console error or an export left next to the media, besides its own checks. */
 export const test = base.extend<{ app: App }>({
   app: async ({ page }, use) => {
     const problems: string[] = [];
@@ -205,6 +207,11 @@ export const test = base.extend<{ app: App }>({
     });
     await page.addInitScript(instrument);
     await use(new App(page));
+    // An export next to the media (the output folder not set in time):
+    // removed, and failed.
+    const strays = readdirSync(MEDIA_DIR).filter((name) => name.includes(".synced"));
+    for (const name of strays) rmSync(`${MEDIA_DIR}/${name}`);
+    expect(strays, "exports written next to the media").toEqual([]);
     expect(problems, "engine, page or console errors").toEqual([]);
   },
 });
