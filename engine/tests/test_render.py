@@ -994,3 +994,20 @@ def test_export_codec_name_follows_the_encoder_used() -> None:
     assert export_codec_name(stream("truehd")) == "FLAC"
     assert export_codec_name(stream("ac3")) == "AC3"
     assert export_codec_name(None) == "FLAC"
+
+
+@pytest.mark.parametrize(("codec", "expected"), [("flac", "flac"), ("ac3", "ac3"), ("opus", "opus")])
+def test_render_segmented_exports_in_the_codec_asked(
+    segmented_cross_file_fixture: tuple[Path, Path, float, float], codec: str, expected: str
+) -> None:
+    ref_mkv, donor_mkv, _, _ = segmented_cross_file_fixture
+    seg_corr = plan_segmented_correction(_spec(ref_mkv, 0), _spec(donor_mkv, 0))
+    output_path = str(ref_mkv.with_name(f"{codec}.synced.mkv"))
+    render(
+        str(ref_mkv),
+        reference_index=0,
+        corrections=[],
+        output_path=output_path,
+        segmented_corrections=[dataclasses.replace(seg_corr, codec=codec)],
+    )
+    assert (probe_audio_streams(output_path)[1].codec or "").startswith(expected)

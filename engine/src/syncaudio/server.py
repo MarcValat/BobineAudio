@@ -21,6 +21,7 @@ import threading
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
@@ -504,6 +505,9 @@ class SegmentOverride(BaseModel):
     language: str | None = None
     # The corrected track's name in the export instead of its source's ("" for none).
     title: str | None = None
+    # Its export codec, one of render.EXPORT_CODECS, instead of the one
+    # matching its source.
+    codec: Literal["opus", "aac", "flac", "ac3", "eac3"] | None = None
 
 
 class RenderRequest(BaseModel):
@@ -594,6 +598,7 @@ def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> Rend
                             language=language,
                             segments=[s.to_segment() for s in override.segments],
                             title=override.title,
+                            codec=override.codec,
                         )
                     )
                 else:

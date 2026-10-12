@@ -89,14 +89,39 @@ def _stream_index(spec: AudioTrackSpec) -> int:
     return spec.stream_index if spec.stream_index is not None else 0
 
 
-def _audio_encode_args(stream: AudioStreamInfo | None, selector: str) -> list[str]:
+# The codecs a corrected track can be exported in on request (the GUI's
+# "Codec d'export"), in place of _ENCODER_FOR_CODEC's choice. AAC is
+# ffmpeg's own encoder: about 15x realtime, slow on a long track (see above).
+EXPORT_CODECS: dict[str, tuple[str, int | None]] = {
+    "opus": ("libopus", 192_000),
+    "aac": ("aac", 256_000),
+    "flac": ("flac", None),
+    "ac3": ("ac3", 640_000),
+    "eac3": ("eac3", 768_000),
+}
+
+
+def _audio_encode_args(stream: AudioStreamInfo | None, selector: str, codec: str | None = None) -> list[str]:
     """``-c:a:<selector> ... [-b:a:<selector> ...]`` matching a corrected
     track's own source codec (see ``_ENCODER_FOR_CODEC``) and, when known,
-    its own bitrate. ``stream`` is ``None`` when the source codec couldn't
-    be probed at all -- also falls back to flac then."""
+    its own bitrate -- or in ``codec`` (one of ``EXPORT_CODECS``) when asked.
+    ``stream`` is ``None`` when the source codec couldn't be probed at all --
+    also falls back to flac then."""
     words = ((stream.codec if stream else None) or "").split("(")[0].split()
     # An unknown codec (none probed, or an empty name) falls back to flac below.
     name = words[0].lower() if words else ""
+    if codec is not None:
+        encoder, default_bitrate = EXPORT_CODECS[codec]
+        # The source's own bitrate only means something in its own codec.
+        same = _ENCODER_FOR_CODEC.get(name, (None, None))[0] == encoder
+        args = [f"-c:a:{selector}", encoder]
+        if encoder not in _LOSSLESS_ENCODERS:
+            bitrate = (stream.bit_rate if same and stream and stream.bit_rate else None) or default_bitrate
+            args += [f"-b:a:{selector}", str(bitrate)]
+        # AC3 and E-AC3 carry 5.1 at most: a 7.1 source is mixed down to it.
+        if encoder in ("ac3", "eac3") and stream and (stream.channels or 0) > 6:
+            args += [f"-ac:a:{selector}", "6"]
+        return args
     if name == "vorbis":
         return [f"-c:a:{selector}", "libvorbis", f"-q:a:{selector}", _VORBIS_QUALITY]
     encoder, default_bitrate = _ENCODER_FOR_CODEC.get(name, ("flac", None))
@@ -111,6 +136,7 @@ def _audio_encode_args(stream: AudioStreamInfo | None, selector: str) -> list[st
 # How each encoder's output is commonly named ("FR Opus 2.0").
 _CODEC_NAME_FOR_ENCODER = {
     "libopus": "Opus",
+    "aac": "AAC",
     "ac3": "AC3",
     "eac3": "E-AC3",
     "libmp3lame": "MP3",
@@ -122,11 +148,12 @@ _CODEC_NAME_FOR_ENCODER = {
 }
 
 
-def export_codec_name(stream: AudioStreamInfo | None) -> str:
+def export_codec_name(stream: AudioStreamInfo | None, codec: str | None = None) -> str:
     """The codec a corrected track is exported in, by its common name: its
     source's, or what replaces it (see ``_ENCODER_FOR_CODEC``: AAC -> Opus,
-    DTS/TrueHD -> FLAC) -- for the GUI's automatic track names."""
-    encoder = _audio_encode_args(stream, "0")[1]
+    DTS/TrueHD -> FLAC), or ``codec`` when asked -- for the GUI's automatic
+    track names."""
+    encoder = _audio_encode_args(stream, "0", codec)[1]
     return _CODEC_NAME_FOR_ENCODER.get(encoder, encoder)
 
 
@@ -158,6 +185,8 @@ class SegmentedTrackCorrection:
     segments: list[Segment]
     # The exported track's name in place of its source's ("" for none).
     title: str | None = None
+    # Its export codec (EXPORT_CODECS) in place of the source-matching one.
+    codec: str | None = None
 
 
 def correction_filter(offset_seconds: float) -> str | None:
@@ -612,7 +641,7 @@ def render(
             written.append(str(track_out))
         for seg_corr in segmented_corrections:
             idx = _stream_index(seg_corr.track)
-            encode_args = _audio_encode_args(stream_info(seg_corr.track), "0")
+            encode_args = _audio_encode_args(stream_info(seg_corr.track), "0", seg_corr.codec)
             ext = _EXTENSION_FOR_ENCODER[encode_args[1]]
             donor = Path(seg_corr.track.path).stem
             track_out = out_base.with_name(f"{out_base.stem}.{donor}.track{idx}.{ext}")
@@ -683,7 +712,7 @@ def render(
         label = f"a{pos}"
         filter_complex_parts.append(segment_correction_filter(seg_corr.segments, f"{in_idx}:a:{idx}", label))
         audio_map_args += ["-map", f"[{label}]"]
-        audio_codec_args += _audio_encode_args(stream_info(spec), str(pos))
+        audio_codec_args += _audio_encode_args(stream_info(spec), str(pos), seg_corr.codec)
         if seg_corr.language:
             metadata_args += [f"-metadata:s:a:{pos}", f"language={seg_corr.language}"]
         metadata_args += _title_args(spec, "Audio", f"a:{pos}", seg_corr.title)
