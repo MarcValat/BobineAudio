@@ -7,7 +7,7 @@ import { MIN_VIEW_DURATION_S, panView, type TimeView, zoomView } from "./timeVie
 import { formatOffsetMs, formatTime, segmentOffsetLabel } from "./SegmentChart";
 import { Waveform, type HighlightRegion } from "./Waveform";
 import { WaveformNavigator } from "./WaveformNavigator";
-import { errorMessage, inFront, shortcutKey } from "./util";
+import { errorMessage, FIELD_PROPS, inFront, shortcutKey } from "./util";
 import { FULL_TRACK_BUCKETS, peakRange, resamplePeaks, type FullPeaks, type PeaksData } from "./peaks";
 import { MinusIcon, PlusIcon } from "./icons";
 import { useT } from "./i18n";
@@ -794,6 +794,7 @@ export function TrackPreview({
         <label>
           {t.preview.position}
           <input
+            {...FIELD_PROPS}
             type="number"
             step="0.5"
             min="0"

@@ -4,6 +4,7 @@ import type { TrackInfo } from "./api";
 import { Dialog, DialogHeader } from "./Dialog";
 import { Select } from "./Dropdown";
 import { useT } from "./i18n";
+import { FIELD_PROPS } from "./util";
 import { languageLabel, shortLanguage } from "./languages";
 import { pickFolder } from "./mediaDialog";
 import { Setting } from "./Options";
@@ -189,6 +190,7 @@ function ExportDialog({
             <label key={language ?? ""} className="export-options-name">
               <span>{e.customFor(languageLabel(language))}</span>
               <input
+                {...FIELD_PROPS}
                 type="text"
                 value={options.customNames[language ?? ""] ?? ""}
                 placeholder={e.customEmpty}
@@ -221,6 +223,7 @@ export function ExportNames({
         <label key={row.index} className="detail-name-row">
           <span>{row.label}</span>
           <input
+            {...FIELD_PROPS}
             type="text"
             value={row.value}
             placeholder={row.shown ?? e.noName}

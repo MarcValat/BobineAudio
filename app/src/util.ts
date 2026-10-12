@@ -57,3 +57,7 @@ export function inFront(el: Element): boolean {
   const dialogs = document.querySelectorAll(".dialog-overlay");
   return dialogs.length === 0 || dialogs[dialogs.length - 1].contains(el);
 }
+
+/** A typed field's props: no list of earlier entries under it (the
+ * WebView's autofill) and no spelling underlines ("VFF", "JP AAC 2.0"). */
+export const FIELD_PROPS = { autoComplete: "off", spellCheck: false } as const;

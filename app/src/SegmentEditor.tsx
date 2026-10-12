@@ -32,6 +32,7 @@ import {
 import "./SegmentEditor.css";
 import { Dialog, DialogHeader } from "./Dialog";
 import { useT } from "./i18n";
+import { FIELD_PROPS } from "./util";
 
 // The chart is drawn at the size its box actually gets (measured), so its
 // text keeps one size on any window (see SegmentChart).
@@ -599,6 +600,7 @@ export function SegmentEditor({
                 <td>{i + 1}</td>
                 <td>
                   <input
+                    {...FIELD_PROPS}
                     type="text"
                     inputMode="decimal"
                     aria-label={t.editor.cell(t.editor.start, i + 1)}
@@ -610,6 +612,7 @@ export function SegmentEditor({
                 </td>
                 <td>
                   <input
+                    {...FIELD_PROPS}
                     type="text"
                     inputMode="decimal"
                     aria-label={t.editor.cell(t.editor.end, i + 1)}
@@ -621,6 +624,7 @@ export function SegmentEditor({
                 </td>
                 <td>
                   <input
+                    {...FIELD_PROPS}
                     type="text"
                     inputMode="decimal"
                     aria-label={t.editor.cell(t.editor.offsetStart, i + 1)}
@@ -631,6 +635,7 @@ export function SegmentEditor({
                 </td>
                 <td>
                   <input
+                    {...FIELD_PROPS}
                     type="text"
                     inputMode="decimal"
                     aria-label={t.editor.cell(t.editor.offsetEnd, i + 1)}
