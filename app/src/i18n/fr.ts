@@ -115,6 +115,9 @@ export const fr = {
     channels: "Canaux",
     referenceShort: "Réf.",
     titled: (title: string) => `« ${title} »`,
+    // A track's radio button and checkbox, for a screen reader: "Référence : @1 fre".
+    asReference: (track: string) => `Référence : ${track}`,
+    toCorrect: (track: string) => `À corriger : ${track}`,
   },
 
   languages: {
@@ -406,6 +409,8 @@ export const fr = {
     confidenceHint:
       "Fiabilité de cette détection (décalage, dérive ou constant). Un score bas vient de mesures qui ne s'accordent pas entre elles, ou trop peu nombreuses : à vérifier à l'écoute, sans être forcément faux.",
     actions: "Actions",
+    // A cell of the table, for a screen reader: "Début, segment 2".
+    cell: (column: string, segment: number) => `${column}, segment ${segment}`,
     onlySegment: "Le seul segment ne peut pas être retiré.",
     removeHint: (segment: number, neighbour: number) =>
       `Retire le segment ${segment} (une fausse détection, par exemple) : le segment ${neighbour} s'étend sur sa durée, avec son propre décalage. Aperçu en pointillés verts sur le graphe.`,

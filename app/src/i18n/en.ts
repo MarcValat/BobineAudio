@@ -114,6 +114,8 @@ export const en: Messages = {
     channels: "Channels",
     referenceShort: "Ref.",
     titled: (title) => `“${title}”`,
+    asReference: (track) => `Reference: ${track}`,
+    toCorrect: (track) => `To correct: ${track}`,
   },
 
   languages: {
@@ -398,6 +400,7 @@ export const en: Messages = {
     confidenceHint:
       "How reliable this detection is (offset, drift or constant). A low score comes from measurements that disagree with each other, or too few of them: worth checking by ear, without necessarily being wrong.",
     actions: "Actions",
+    cell: (column, segment) => `${column}, segment ${segment}`,
     onlySegment: "The only segment can't be removed.",
     removeHint: (segment, neighbour) =>
       `Removes segment ${segment} (a false detection, for instance): segment ${neighbour} extends over its duration, with its own offset. Previewed as green dots on the chart.`,

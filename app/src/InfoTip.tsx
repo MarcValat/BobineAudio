@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type FocusEvent, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type FocusEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import "./InfoTip.css";
 import { useT } from "./i18n";
@@ -13,7 +13,17 @@ const EDGE_PX = 8;
  * panel or dialog that clips its content would otherwise cut it off.
  * Placed below the anchor, or above when there's no room below, and kept
  * inside the window. */
-function Bubble({ anchor, open, children }: { anchor: React.RefObject<HTMLElement | null>; open: boolean; children: ReactNode }) {
+function Bubble({
+  anchor,
+  open,
+  id,
+  children,
+}: {
+  anchor: React.RefObject<HTMLElement | null>;
+  open: boolean;
+  id?: string;
+  children: ReactNode;
+}) {
   const bubbleRef = useRef<HTMLSpanElement>(null);
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
 
@@ -36,6 +46,7 @@ function Bubble({ anchor, open, children }: { anchor: React.RefObject<HTMLElemen
   return createPortal(
     <span
       ref={bubbleRef}
+      id={id}
       className="info-tip-bubble"
       role="tooltip"
       // Measured hidden first, then shown where it fits.
@@ -79,10 +90,21 @@ function useBubble() {
 export function InfoTip({ children }: { children: ReactNode }) {
   const t = useT();
   const iconRef = useRef<HTMLSpanElement>(null);
+  const bubbleId = useId();
   const { open, handlers } = useBubble();
 
+  // A screen reader hears "Aide" on it, and the bubble's text as its
+  // description once it shows.
   return (
-    <span ref={iconRef} className="info-tip" tabIndex={0} aria-label={t.common.help} {...handlers}>
+    <span
+      ref={iconRef}
+      className="info-tip"
+      tabIndex={0}
+      role="button"
+      aria-label={t.common.help}
+      aria-describedby={open ? bubbleId : undefined}
+      {...handlers}
+    >
       {/* Drawn, not typed: a glyph sits wherever the font puts it, never
           quite centered in its circle. */}
       <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -90,7 +112,7 @@ export function InfoTip({ children }: { children: ReactNode }) {
         <path className="info-tip-mark" d="M7.6 7.7a2.5 2.5 0 0 1 4.85.85c0 1.65-2.45 2.05-2.45 3.7" />
         <circle className="info-tip-dot" cx="10" cy="14.6" r="1.05" />
       </svg>
-      <Bubble anchor={iconRef} open={open}>
+      <Bubble anchor={iconRef} open={open} id={bubbleId}>
         {children}
       </Bubble>
     </span>

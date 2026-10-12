@@ -107,6 +107,7 @@ function PairTrackTable({
           {side === "ref" && (
             <input
               type="radio"
+              aria-label={m.tracks.asReference(trackName(tr.index, tr))}
               name="pair-reference"
               checked={reference === tr.index}
               disabled={disabled}
@@ -118,6 +119,7 @@ function PairTrackTable({
           {side === "cand" && (
             <input
               type="checkbox"
+              aria-label={m.tracks.toCorrect(trackName(tr.index, tr))}
               checked={candidates.includes(tr.index)}
               disabled={disabled}
               onChange={() => onToggleCandidate(tr.index)}

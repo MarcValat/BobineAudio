@@ -1,5 +1,6 @@
 import type { TrackInfo } from "./api";
 import { useT } from "./i18n";
+import { trackName } from "./Workspace";
 
 /** A file's audio tracks, one row each: index, language, codec, then either
  * the reference / track-to-correct picks (with `onReference`) or, read-only,
@@ -54,6 +55,7 @@ export function TrackTable({
               <td className="track-pick">
                 <input
                   type="radio"
+                  aria-label={t.tracks.asReference(trackName(tr.index, tr))}
                   name={radioName}
                   checked={reference === tr.index}
                   disabled={disabled}
@@ -65,6 +67,7 @@ export function TrackTable({
               <td className="track-pick">
                 <input
                   type="checkbox"
+                  aria-label={t.tracks.toCorrect(trackName(tr.index, tr))}
                   disabled={disabled || reference === tr.index}
                   checked={targets.includes(tr.index)}
                   onChange={() => onToggleTarget?.(tr.index)}

@@ -423,6 +423,7 @@ export function SegmentEditor({
               className={`editor-chart${preview ? " editor-chart-listenable" : ""}${dragging ? " editor-chart-dragging" : ""}`}
               viewBox={`0 0 ${chartWidth} ${chartHeight}`}
               role="img"
+              aria-label={t.chart.ariaLabel}
               onPointerDown={chartPointer.onPointerDown}
               onMouseDown={chartPointer.onMouseDown}
               onDoubleClick={handleChartDoubleClick}
@@ -600,6 +601,7 @@ export function SegmentEditor({
                   <input
                     type="text"
                     inputMode="decimal"
+                    aria-label={t.editor.cell(t.editor.start, i + 1)}
                     value={cellValue(`start-${i}`, secondsText(seg.start_s))}
                     disabled={i === 0}
                     onChange={(e) => handleCellChange(`start-${i}`, e.target.value, (n) => updateTime(i, n))}
@@ -610,6 +612,7 @@ export function SegmentEditor({
                   <input
                     type="text"
                     inputMode="decimal"
+                    aria-label={t.editor.cell(t.editor.end, i + 1)}
                     value={cellValue(`end-${i}`, secondsText(seg.end_s))}
                     disabled={i === segmentsPreview.length - 1}
                     onChange={(e) => handleCellChange(`end-${i}`, e.target.value, (n) => updateTime(i + 1, n))}
@@ -620,6 +623,7 @@ export function SegmentEditor({
                   <input
                     type="text"
                     inputMode="decimal"
+                    aria-label={t.editor.cell(t.editor.offsetStart, i + 1)}
                     value={cellValue(`offsetStart-${i}`, msText(seg.offset_start))}
                     onChange={(e) => handleCellChange(`offsetStart-${i}`, e.target.value, (n) => updateOffset("start", i, n / 1000))}
                     onBlur={() => handleCellBlur(`offsetStart-${i}`)}
@@ -629,6 +633,7 @@ export function SegmentEditor({
                   <input
                     type="text"
                     inputMode="decimal"
+                    aria-label={t.editor.cell(t.editor.offsetEnd, i + 1)}
                     value={cellValue(`offsetEnd-${i}`, msText(seg.offset_end))}
                     onChange={(e) => handleCellChange(`offsetEnd-${i}`, e.target.value, (n) => updateOffset("end", i, n / 1000))}
                     onBlur={() => handleCellBlur(`offsetEnd-${i}`)}
