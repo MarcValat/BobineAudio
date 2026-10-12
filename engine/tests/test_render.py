@@ -10,7 +10,13 @@ import pytest
 
 from syncaudio.align import estimate_offset
 from syncaudio.features import extract_envelope
-from syncaudio.ffmpeg_backend import extract_pcm, parse_track_spec, probe_audio_streams, probe_stream_tags, resolve_ffmpeg
+from syncaudio.ffmpeg_backend import (
+    extract_pcm,
+    parse_track_spec,
+    probe_audio_streams,
+    probe_stream_tags,
+    resolve_ffmpeg,
+)
 from syncaudio.models import AudioTrackSpec
 from syncaudio.render import (
     SegmentedTrackCorrection,
@@ -87,12 +93,31 @@ def offset_mkv(tmp_path: Path) -> tuple[Path, float]:
     mkv = tmp_path / "multi.mkv"
     ffmpeg = resolve_ffmpeg()
     cmd = [
-        ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-        "-f", "lavfi", "-i", f"color=c=black:s=64x64:d={duration_s}",
-        "-i", str(ref_wav), "-i", str(cand_wav),
-        "-map", "0:v", "-map", "1:a", "-map", "2:a",
-        "-metadata:s:a:0", "language=jpn", "-metadata:s:a:1", "language=fre",
-        "-shortest", str(mkv),
+        ffmpeg,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        f"color=c=black:s=64x64:d={duration_s}",
+        "-i",
+        str(ref_wav),
+        "-i",
+        str(cand_wav),
+        "-map",
+        "0:v",
+        "-map",
+        "1:a",
+        "-map",
+        "2:a",
+        "-metadata:s:a:0",
+        "language=jpn",
+        "-metadata:s:a:1",
+        "language=fre",
+        "-shortest",
+        str(mkv),
     ]
     subprocess.run(cmd, check=True, capture_output=True)
     return mkv, offset_s
@@ -145,14 +170,33 @@ def _build_single_codec_mkv(tmp_path: Path, name: str, codec: str, codec_args: l
     mkv = tmp_path / f"{name}.mkv"
     subprocess.run(
         [
-            resolve_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "lavfi", "-i", f"color=c=black:s=64x64:d={duration_s}",
-            "-i", str(ref_wav), "-i", str(cand_wav),
-            "-map", "0:v", "-map", "1:a", "-map", "2:a",
-            "-c:a", codec, *codec_args,
-            "-shortest", str(mkv),
+            resolve_ffmpeg(),
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            f"color=c=black:s=64x64:d={duration_s}",
+            "-i",
+            str(ref_wav),
+            "-i",
+            str(cand_wav),
+            "-map",
+            "0:v",
+            "-map",
+            "1:a",
+            "-map",
+            "2:a",
+            "-c:a",
+            codec,
+            *codec_args,
+            "-shortest",
+            str(mkv),
         ],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     assert probe_audio_streams(str(mkv))[1].codec.split()[0] == codec
     return mkv, offset_s
@@ -181,21 +225,48 @@ def test_render_corrected_track_matches_source_codec_instead_of_always_flac(tmp_
     # reference track -- irrelevant to what changed here).
     corrected_track = tmp_path / "corrected.ac3"
     subprocess.run(
-        [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", output_path, "-map", "0:a:1", "-c", "copy", str(corrected_track)],
-        check=True, capture_output=True,
+        [
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            output_path,
+            "-map",
+            "0:a:1",
+            "-c",
+            "copy",
+            str(corrected_track),
+        ],
+        check=True,
+        capture_output=True,
     )
     flac_out = tmp_path / "corrected.flac"
     subprocess.run(
         [
-            ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(mkv),
-            "-filter_complex", f"[0:a:1]{correction_filter(offset_s)}[a1]",
-            "-map", "[a1]", "-c:a", "flac",
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(mkv),
+            "-filter_complex",
+            f"[0:a:1]{correction_filter(offset_s)}[a1]",
+            "-map",
+            "[a1]",
+            "-c:a",
+            "flac",
             # correction_filter's apad pads indefinitely without a cap --
             # render() always caps it with -t ref_duration, this direct
             # ffmpeg call must too, or it never terminates.
-            "-t", "20", str(flac_out),
+            "-t",
+            "20",
+            str(flac_out),
         ],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     assert flac_out.stat().st_size > corrected_track.stat().st_size
 
@@ -270,14 +341,28 @@ def cross_file_fixture(tmp_path: Path) -> tuple[Path, Path, float, float]:
     ref_mkv = tmp_path / "reference.mkv"
     subprocess.run(
         [
-            ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "lavfi", "-i", f"color=c=black:s=64x64:d={duration_s}",
-            "-i", str(ref_wav),
-            "-map", "0:v", "-map", "1:a",
-            "-metadata:s:a:0", "language=jpn",
-            "-shortest", str(ref_mkv),
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            f"color=c=black:s=64x64:d={duration_s}",
+            "-i",
+            str(ref_wav),
+            "-map",
+            "0:v",
+            "-map",
+            "1:a",
+            "-metadata:s:a:0",
+            "language=jpn",
+            "-shortest",
+            str(ref_mkv),
         ],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
 
     srt_path = tmp_path / "donor.srt"
@@ -286,13 +371,25 @@ def cross_file_fixture(tmp_path: Path) -> tuple[Path, Path, float, float]:
     donor_mkv = tmp_path / "donor.mkv"
     subprocess.run(
         [
-            ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-            "-i", str(donor_wav), "-i", str(srt_path),
-            "-map", "0:a", "-map", "1:s",
-            "-metadata:s:a:0", "language=fre",
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(donor_wav),
+            "-i",
+            str(srt_path),
+            "-map",
+            "0:a",
+            "-map",
+            "1:s",
+            "-metadata:s:a:0",
+            "language=fre",
             str(donor_mkv),
         ],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     return ref_mkv, donor_mkv, offset_s, cue_start_s
 
@@ -325,7 +422,8 @@ def test_render_imports_audio_and_subs_from_another_file(cross_file_fixture: tup
     extracted_srt = ref_mkv.with_name("out.extracted.srt")
     subprocess.run(
         [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", output_path, "-map", "0:s:0", str(extracted_srt)],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     lines = extracted_srt.read_text(encoding="utf-8").splitlines()
     start_str = lines[1].split(" --> ")[0]
@@ -378,7 +476,9 @@ def _time_stretch(signal: np.ndarray, factor: float) -> np.ndarray:
     return np.interp(old_idx, np.arange(n), signal)
 
 
-def _mux_two_track_mkv(tmp_path: Path, name: str, ref: np.ndarray, cand: np.ndarray, sr: int, duration_s: float) -> Path:
+def _mux_two_track_mkv(
+    tmp_path: Path, name: str, ref: np.ndarray, cand: np.ndarray, sr: int, duration_s: float
+) -> Path:
     ref_wav = tmp_path / f"{name}_ref.wav"
     cand_wav = tmp_path / f"{name}_cand.wav"
     _write_wav(ref_wav, ref, sr)
@@ -388,14 +488,34 @@ def _mux_two_track_mkv(tmp_path: Path, name: str, ref: np.ndarray, cand: np.ndar
     ffmpeg = resolve_ffmpeg()
     subprocess.run(
         [
-            ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "lavfi", "-i", f"color=c=black:s=64x64:d={duration_s}",
-            "-i", str(ref_wav), "-i", str(cand_wav),
-            "-map", "0:v", "-map", "1:a", "-map", "2:a",
-            "-metadata:s:a:0", "language=jpn", "-metadata:s:a:1", "language=fre",
-            "-shortest", str(mkv),
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            f"color=c=black:s=64x64:d={duration_s}",
+            "-i",
+            str(ref_wav),
+            "-i",
+            str(cand_wav),
+            "-map",
+            "0:v",
+            "-map",
+            "1:a",
+            "-map",
+            "2:a",
+            "-metadata:s:a:0",
+            "language=jpn",
+            "-metadata:s:a:1",
+            "language=fre",
+            "-shortest",
+            str(mkv),
         ],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     return mkv
 
@@ -442,13 +562,29 @@ def test_render_segmented_works_without_a_video_track(jump_mkv: tuple[Path, floa
     mkv, _jump_time_s, _delta_s = jump_mkv
     mka = mkv.with_name("jump.mka")
     subprocess.run(
-        [resolve_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-i", str(mkv), "-map", "0:a", "-c", "copy", str(mka)],
-        check=True, capture_output=True,
+        [
+            resolve_ffmpeg(),
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(mkv),
+            "-map",
+            "0:a",
+            "-c",
+            "copy",
+            str(mka),
+        ],
+        check=True,
+        capture_output=True,
     )
 
     seg_corr = plan_segmented_correction(_spec(mka, 0), _spec(mka, 1))
     output_path = str(mka.with_name("out.synced.mkv"))
-    written = render(str(mka), reference_index=0, corrections=[], output_path=output_path, segmented_corrections=[seg_corr])
+    written = render(
+        str(mka), reference_index=0, corrections=[], output_path=output_path, segmented_corrections=[seg_corr]
+    )
     assert written == [output_path]
     assert len(probe_audio_streams(output_path)) == 2
     assert abs(_residual_offset(str(mka), output_path)) < 0.3
@@ -505,14 +641,28 @@ def segmented_cross_file_fixture(tmp_path: Path) -> tuple[Path, Path, float, flo
     ref_mkv = tmp_path / "reference.mkv"
     subprocess.run(
         [
-            ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "lavfi", "-i", f"color=c=black:s=64x64:d={duration_s}",
-            "-i", str(ref_wav),
-            "-map", "0:v", "-map", "1:a",
-            "-metadata:s:a:0", "language=jpn",
-            "-shortest", str(ref_mkv),
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            f"color=c=black:s=64x64:d={duration_s}",
+            "-i",
+            str(ref_wav),
+            "-map",
+            "0:v",
+            "-map",
+            "1:a",
+            "-metadata:s:a:0",
+            "language=jpn",
+            "-shortest",
+            str(ref_mkv),
         ],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
 
     # One cue before the jump (candidate-time == reference-time there), one
@@ -520,21 +670,38 @@ def segmented_cross_file_fixture(tmp_path: Path) -> tuple[Path, Path, float, flo
     cue_before_s = 20.0
     cue_after_s = 110.0
     srt_path = tmp_path / "donor.srt"
-    _write_srt_multi(srt_path, [(cue_before_s, cue_before_s + 2.0, "Before"), (cue_after_s, cue_after_s + 2.0, "After")])
+    _write_srt_multi(
+        srt_path, [(cue_before_s, cue_before_s + 2.0, "Before"), (cue_after_s, cue_after_s + 2.0, "After")]
+    )
 
     donor_mkv = tmp_path / "donor.mkv"
     subprocess.run(
         [
-            ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-            "-i", str(donor_wav), "-i", str(srt_path),
-            "-map", "0:a", "-map", "1:s",
-            "-metadata:s:a:0", "language=fre",
-            "-metadata:s:a:0", "title=VF Stéréo",
-            "-metadata:s:s:0", "language=fre",
-            "-metadata:s:s:0", "title=Forcés",
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(donor_wav),
+            "-i",
+            str(srt_path),
+            "-map",
+            "0:a",
+            "-map",
+            "1:s",
+            "-metadata:s:a:0",
+            "language=fre",
+            "-metadata:s:a:0",
+            "title=VF Stéréo",
+            "-metadata:s:s:0",
+            "language=fre",
+            "-metadata:s:s:0",
+            "title=Forcés",
             str(donor_mkv),
         ],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     return ref_mkv, donor_mkv, cue_before_s, cue_after_s
 
@@ -544,7 +711,8 @@ def _extract_srt_start_times(path: str) -> list[float]:
     out = Path(path).with_suffix(".extracted.srt")
     subprocess.run(
         [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", path, "-map", "0:s:0", str(out)],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     times = []
     for line in out.read_text(encoding="utf-8").splitlines():
@@ -617,14 +785,38 @@ def offset_mkv_with_native_subs(tmp_path: Path) -> tuple[Path, float, float]:
     ffmpeg = resolve_ffmpeg()
     subprocess.run(
         [
-            ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "lavfi", "-i", f"color=c=black:s=64x64:d={duration_s}",
-            "-i", str(ref_wav), "-i", str(cand_wav), "-i", str(srt_path),
-            "-map", "0:v", "-map", "1:a", "-map", "2:a", "-map", "3:s",
-            "-metadata:s:a:0", "language=jpn", "-metadata:s:a:1", "language=fre",
-            "-shortest", str(mkv),
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            f"color=c=black:s=64x64:d={duration_s}",
+            "-i",
+            str(ref_wav),
+            "-i",
+            str(cand_wav),
+            "-i",
+            str(srt_path),
+            "-map",
+            "0:v",
+            "-map",
+            "1:a",
+            "-map",
+            "2:a",
+            "-map",
+            "3:s",
+            "-metadata:s:a:0",
+            "language=jpn",
+            "-metadata:s:a:1",
+            "language=fre",
+            "-shortest",
+            str(mkv),
         ],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     return mkv, offset_s, cue_start_s
 
@@ -646,7 +838,9 @@ def test_render_native_subs_pairing_does_not_duplicate_the_track(
     # accuracy (covered elsewhere) -- decoupling the two keeps it from being
     # a flaky proxy for "did this particular synthetic clip correlate well".
     cand_spec = _spec(mkv, 1)
-    correction = TrackCorrection(track=cand_spec, language="fre", offset_seconds=offset_s, confidence=1.0, ambiguous=False)
+    correction = TrackCorrection(
+        track=cand_spec, language="fre", offset_seconds=offset_s, confidence=1.0, ambiguous=False
+    )
     subs_spec = _spec(mkv, 0)  # the only subtitle stream in the file
 
     output_path = str(mkv.with_name("out.synced.mkv"))
@@ -735,20 +929,39 @@ def test_render_segmented_with_retimed_native_subs_keeps_attachments(
     with_font = tmp_path / "with_font.mkv"
     subprocess.run(
         [
-            resolve_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-i", str(mkv),
-            "-attach", str(font), "-metadata:s:t", "mimetype=application/x-truetype-font",
-            "-map", "0", "-c", "copy", str(with_font),
+            resolve_ffmpeg(),
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(mkv),
+            "-attach",
+            str(font),
+            "-metadata:s:t",
+            "mimetype=application/x-truetype-font",
+            "-map",
+            "0",
+            "-c",
+            "copy",
+            str(with_font),
         ],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     segments = [Segment(0.0, 30.0, offset_s, offset_s)]
     output_path = str(tmp_path / "out.synced.mkv")
     render(
-        str(with_font), reference_index=0, corrections=[], output_path=output_path,
+        str(with_font),
+        reference_index=0,
+        corrections=[],
+        output_path=output_path,
         segmented_corrections=[SegmentedTrackCorrection(track=_spec(with_font, 1), language="fre", segments=segments)],
         segmented_imported_subs=[(_spec(with_font, 0), segments)],
     )
-    report = subprocess.run([resolve_ffmpeg(), "-hide_banner", "-i", output_path], capture_output=True, text=True).stderr
+    report = subprocess.run(
+        [resolve_ffmpeg(), "-hide_banner", "-i", output_path], capture_output=True, text=True
+    ).stderr
     assert "Attachment" in report
     starts = _extract_srt_start_times(output_path)
     assert len(starts) == 1

@@ -54,9 +54,21 @@ def run(cmd: list[str]) -> None:
 def extract_audio_wav(ffmpeg: str, source: Path, track: int, start: float, duration: float | None, out: Path) -> None:
     run(
         [
-            ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-            "-ss", str(start), "-i", str(source), *(["-t", str(duration)] if duration else []),
-            "-map", f"0:a:{track}", "-c:a", "pcm_s16le", str(out),
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-ss",
+            str(start),
+            "-i",
+            str(source),
+            *(["-t", str(duration)] if duration else []),
+            "-map",
+            f"0:a:{track}",
+            "-c:a",
+            "pcm_s16le",
+            str(out),
         ]
     )
 
@@ -154,25 +166,47 @@ def time_stretch(cand: np.ndarray, factor: float) -> np.ndarray:
 
 
 def mux(
-    ffmpeg: str, source: Path, start: float, duration: float | None, ref_wav: Path, cand_wav: Path, out: Path,
+    ffmpeg: str,
+    source: Path,
+    start: float,
+    duration: float | None,
+    ref_wav: Path,
+    cand_wav: Path,
+    out: Path,
     with_video: bool = True,
 ) -> None:
     ref_flac = ref_wav.with_suffix(".flac")
     cand_flac = cand_wav.with_suffix(".flac")
     run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(ref_wav), str(ref_flac)])
     run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(cand_wav), str(cand_flac)])
-    video_in = ["-ss", str(start), *(["-t", str(duration)] if duration else []), "-i", str(source)] if with_video else []
+    video_in = (
+        ["-ss", str(start), *(["-t", str(duration)] if duration else []), "-i", str(source)] if with_video else []
+    )
     audio_input = 1 if with_video else 0
     run(
         [
-            ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
             *video_in,
-            "-i", str(ref_flac), "-i", str(cand_flac),
+            "-i",
+            str(ref_flac),
+            "-i",
+            str(cand_flac),
             *(["-map", "0:v:0"] if with_video else []),
-            "-map", f"{audio_input}:a:0", "-map", f"{audio_input + 1}:a:0",
-            *(["-c:v", "copy"] if with_video else []), "-c:a", "flac",
-            "-metadata:s:a:0", "language=jpn",
-            "-metadata:s:a:1", "language=fre",
+            "-map",
+            f"{audio_input}:a:0",
+            "-map",
+            f"{audio_input + 1}:a:0",
+            *(["-c:v", "copy"] if with_video else []),
+            "-c:a",
+            "flac",
+            "-metadata:s:a:0",
+            "language=jpn",
+            "-metadata:s:a:1",
+            "language=fre",
             str(out),
         ]
     )
@@ -264,7 +298,10 @@ def build_fixtures(seed: int) -> list[Fixture]:
             "exact_micro_jumps",
             "Verite exacte : micro-sauts de 50 a 250 ms, dans les deux sens.",
             breakpoints=[
-                Breakpoint(60.0, 0.08), Breakpoint(140.0, -0.12), Breakpoint(220.0, 0.25), Breakpoint(300.0, -0.05),
+                Breakpoint(60.0, 0.08),
+                Breakpoint(140.0, -0.12),
+                Breakpoint(220.0, 0.25),
+                Breakpoint(300.0, -0.05),
             ],
             candidate="reference",
         ),
@@ -368,7 +405,16 @@ def main() -> None:
             variant_wav = GENERATED_DIR / f"_{fx.name}_candidate.wav"
             write_wav(variant_wav, variant, sr)
             out_mkv = GENERATED_DIR / f"{fx.name}.mkv"
-            mux(ffmpeg, args.source, args.start, duration, ref_wav, variant_wav, out_mkv, with_video=fx.candidate == "dub")
+            mux(
+                ffmpeg,
+                args.source,
+                args.start,
+                duration,
+                ref_wav,
+                variant_wav,
+                out_mkv,
+                with_video=fx.candidate == "dub",
+            )
             variant_wav.unlink()
     finally:
         for wav in extracted.values():

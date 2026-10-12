@@ -260,8 +260,10 @@ def _clip_segments(segments: Sequence[Segment], start: float, end: float) -> tup
         a, b = max(seg.start_s, start), min(seg.end_s, end)
         clipped.append(
             Segment(
-                a - start, b - start,
-                seg.offset_start + slope * (a - seg.start_s), seg.offset_start + slope * (b - seg.start_s),
+                a - start,
+                b - start,
+                seg.offset_start + slope * (a - seg.start_s),
+                seg.offset_start + slope * (b - seg.start_s),
             )
         )
     return clipped, played_before
@@ -290,17 +292,31 @@ def corrected_clip(
         Segment(seg.start_s, seg.end_s, seg.offset_start + start - seek, seg.offset_end + start - seek)
         for seg in clipped
     ]
-    filt = segment_correction_filter(
-        shifted, f"0:a:{_stream_index(spec)}", "out", played_until=played_before - seek
-    )
+    filt = segment_correction_filter(shifted, f"0:a:{_stream_index(spec)}", "out", played_until=played_before - seek)
     cmd = [
-        resolve_ffmpeg(), "-hide_banner", "-loglevel", "error",
+        resolve_ffmpeg(),
+        "-hide_banner",
+        "-loglevel",
+        "error",
         # -t before -i: how much of the input to read. After it, it would cut
         # the output, whose silence before the track (a negative offset) made
         # the clip shorter than the reference's.
-        *_seek_args(spec, seek), "-t", f"{max(0.0, latest - seek) + 1.0:.6f}", "-i", spec.path,
-        "-filter_complex", filt, "-map", "[out]",
-        "-ar", str(sample_rate), "-f", "wav", "-acodec", "pcm_s16le", "-",
+        *_seek_args(spec, seek),
+        "-t",
+        f"{max(0.0, latest - seek) + 1.0:.6f}",
+        "-i",
+        spec.path,
+        "-filter_complex",
+        filt,
+        "-map",
+        "[out]",
+        "-ar",
+        str(sample_rate),
+        "-f",
+        "wav",
+        "-acodec",
+        "pcm_s16le",
+        "-",
     ]
     proc = _run_subprocess(cmd, capture_output=True)
     if proc.returncode != 0:
@@ -322,7 +338,9 @@ def default_output_path(input_path: str) -> str:
     return str(Path(input_path).with_suffix("")) + ".synced.mkv"
 
 
-def resolve_targets(input_path: str, reference_index: int, track_indices: Sequence[int] | None, only_imports: bool) -> list[int]:
+def resolve_targets(
+    input_path: str, reference_index: int, track_indices: Sequence[int] | None, only_imports: bool
+) -> list[int]:
     """The tracks of ``input_path`` a render corrects: ``track_indices``, or
     every one but the reference, or none with ``only_imports`` (only tracks
     imported from other files). Shared by the CLI and the server; raises
@@ -359,7 +377,12 @@ def check_import_track(spec: AudioTrackSpec) -> None:
     idx = _stream_index(spec)
     if idx not in available:
         raise ValueError(
-            tr("Index audio {index} absent de {path!r} (pistes : {tracks}).", index=idx, path=spec.path, tracks=available)
+            tr(
+                "Index audio {index} absent de {path!r} (pistes : {tracks}).",
+                index=idx,
+                path=spec.path,
+                tracks=available,
+            )
         )
 
 
@@ -449,11 +472,17 @@ def _run(cmd: list[str]) -> None:
     proc = _run_subprocess(cmd, capture_output=True)
     if proc.returncode != 0:
         raise FFmpegError(
-            tr("Échec ffmpeg :\n{command}\n{details}", command=" ".join(cmd), details=proc.stderr.decode(errors="replace"))
+            tr(
+                "Échec ffmpeg :\n{command}\n{details}",
+                command=" ".join(cmd),
+                details=proc.stderr.decode(errors="replace"),
+            )
         )
 
 
-def _prepare_shifted_subtitle_file(ffmpeg: str, spec: AudioTrackSpec, segments: Sequence[Segment], tmp_dir: Path) -> Path:
+def _prepare_shifted_subtitle_file(
+    ffmpeg: str, spec: AudioTrackSpec, segments: Sequence[Segment], tmp_dir: Path
+) -> Path:
     """Extract a subtitle track, rewrite every cue's timestamp per ``segments``, and return the new file.
 
     Unlike a flat offset (a single ``-itsoffset`` on the input), a segmented
@@ -466,8 +495,18 @@ def _prepare_shifted_subtitle_file(ffmpeg: str, spec: AudioTrackSpec, segments: 
     extracted = tmp_dir / f"extracted_{idx}.{fmt}"
     _run(
         [
-            ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-            "-i", spec.path, "-map", f"0:s:{idx}", "-c:s", "copy", str(extracted),
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            spec.path,
+            "-map",
+            f"0:s:{idx}",
+            "-c:s",
+            "copy",
+            str(extracted),
         ]
     )
     shifted_text = shift_subtitle_text(extracted.read_text(encoding="utf-8"), segments, fmt)
@@ -552,13 +591,22 @@ def render(
             track_out = out_base.with_name(f"{out_base.stem}.{donor}.track{idx}.{ext}")
             filt = segment_correction_filter(seg_corr.segments, f"0:a:{idx}", "out")
             cmd = [
-                ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-                "-i", seg_corr.track.path,
-                "-filter_complex", filt,
-                "-map", "[out]",
+                ffmpeg,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                seg_corr.track.path,
+                "-filter_complex",
+                filt,
+                "-map",
+                "[out]",
                 *encode_args,
                 *_title_args(seg_corr.track, "Audio", "a:0"),
-                "-t", str(ref_duration), str(track_out),
+                "-t",
+                str(ref_duration),
+                str(track_out),
             ]
             _run(cmd)
             written.append(str(track_out))

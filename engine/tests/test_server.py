@@ -68,14 +68,34 @@ def offset_mkv(tmp_path: Path) -> tuple[Path, float]:
     ffmpeg = resolve_ffmpeg()
     subprocess.run(
         [
-            ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "lavfi", "-i", f"color=c=black:s=64x64:d={duration_s}",
-            "-i", str(ref_wav), "-i", str(cand_wav),
-            "-map", "0:v", "-map", "1:a", "-map", "2:a",
-            "-metadata:s:a:0", "language=jpn", "-metadata:s:a:1", "language=fre",
-            "-shortest", str(mkv),
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            f"color=c=black:s=64x64:d={duration_s}",
+            "-i",
+            str(ref_wav),
+            "-i",
+            str(cand_wav),
+            "-map",
+            "0:v",
+            "-map",
+            "1:a",
+            "-map",
+            "2:a",
+            "-metadata:s:a:0",
+            "language=jpn",
+            "-metadata:s:a:1",
+            "language=fre",
+            "-shortest",
+            str(mkv),
         ],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     return mkv, offset_s
 
@@ -108,14 +128,32 @@ def test_probe_reports_container_level_track_delay(tmp_path: Path) -> None:
     mkv = tmp_path / "delayed.mkv"
     subprocess.run(
         [
-            ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "lavfi", "-i", "color=c=black:s=64x64:d=3",
-            "-i", str(wav_a),
-            "-itsoffset", "1.0", "-i", str(wav_b),
-            "-map", "0:v", "-map", "1:a", "-map", "2:a",
-            "-shortest", str(mkv),
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=black:s=64x64:d=3",
+            "-i",
+            str(wav_a),
+            "-itsoffset",
+            "1.0",
+            "-i",
+            str(wav_b),
+            "-map",
+            "0:v",
+            "-map",
+            "1:a",
+            "-map",
+            "2:a",
+            "-shortest",
+            str(mkv),
         ],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
 
     resp = client.get("/probe", params={"path": str(mkv)})
@@ -132,15 +170,47 @@ def test_probe_lists_subtitle_tracks(offset_mkv: tuple[Path, float], tmp_path: P
     with_subs = tmp_path / "with_subs.mkv"
     subprocess.run(
         [
-            resolve_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y",
-            "-i", str(mkv), "-i", str(srt), "-i", str(srt), "-i", str(srt),
-            "-map", "0", "-map", "1", "-map", "2", "-map", "3", "-c", "copy", "-c:s", "srt",
-            "-metadata:s:s:0", "language=fre", "-metadata:s:s:0", "title=Français",
-            "-metadata:s:s:1", "language=fre", "-disposition:s:1", "forced",
-            "-metadata:s:s:2", "language=eng", "-metadata:s:s:2", "title=English Forced",
+            resolve_ffmpeg(),
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(mkv),
+            "-i",
+            str(srt),
+            "-i",
+            str(srt),
+            "-i",
+            str(srt),
+            "-map",
+            "0",
+            "-map",
+            "1",
+            "-map",
+            "2",
+            "-map",
+            "3",
+            "-c",
+            "copy",
+            "-c:s",
+            "srt",
+            "-metadata:s:s:0",
+            "language=fre",
+            "-metadata:s:s:0",
+            "title=Français",
+            "-metadata:s:s:1",
+            "language=fre",
+            "-disposition:s:1",
+            "forced",
+            "-metadata:s:s:2",
+            "language=eng",
+            "-metadata:s:s:2",
+            "title=English Forced",
             str(with_subs),
         ],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     resp = client.get("/probe", params={"path": str(with_subs)})
     assert resp.status_code == 200
@@ -453,7 +523,9 @@ def test_paths_expand_lists_a_folders_media_files_in_episode_order(tmp_path: Pat
     }
 
 
-def test_a_cancelled_export_leaves_no_partial_file(offset_mkv: tuple[Path, float], monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_cancelled_export_leaves_no_partial_file(
+    offset_mkv: tuple[Path, float], monkeypatch: pytest.MonkeyPatch
+) -> None:
     import syncaudio.server as server
     from syncaudio.cancellation import Cancelled
 
@@ -507,7 +579,8 @@ def test_clip_lengths_match_between_reference_and_result(offset_mkv: tuple[Path,
     mkv, _ = offset_mkv
     ref = client.get("/clip", params={"path": str(mkv), "index": 0, "start": start, "duration": 12.0})
     res = client.post(
-        "/corrected-clip", json={"path": str(mkv), "index": 1, "segments": _ONE_SEGMENT, "start": start, "duration": 12.0}
+        "/corrected-clip",
+        json={"path": str(mkv), "index": 1, "segments": _ONE_SEGMENT, "start": start, "duration": 12.0},
     )
     assert ref.status_code == 200 and res.status_code == 200
     ref_s, res_s = _wav_seconds(ref.content), _wav_seconds(res.content)

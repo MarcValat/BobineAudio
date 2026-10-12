@@ -468,9 +468,7 @@ def classify_segments(
     for idx, group in enumerate(groups):
         seg_start = 0.0 if idx == 0 else (groups[idx - 1][-1].center_s + group[0].center_s) / 2.0
         seg_end = (
-            total_duration_s
-            if idx == len(groups) - 1
-            else (group[-1].center_s + groups[idx + 1][0].center_s) / 2.0
+            total_duration_s if idx == len(groups) - 1 else (group[-1].center_s + groups[idx + 1][0].center_s) / 2.0
         )
         if len(group) >= 2:
             g_times = np.array([g.center_s for g in group])
@@ -641,7 +639,9 @@ def refine_segments(
         prev_slope, cur_slope = slope(prev), slope(cur)
         approx = prev.end_s
         boundary = refine_boundary(
-            ref_env, cand_env, frame_rate,
+            ref_env,
+            cand_env,
+            frame_rate,
             approx_time_s=approx,
             offset_before=prev.offset_end,
             offset_after=cur.offset_start,
@@ -799,9 +799,7 @@ def destretched_windows(
     frames = np.arange(int(len(cand_env) / (1.0 + slope)), dtype=np.float64)
     destretched = np.interp(frames * (1.0 + slope), np.arange(len(cand_env)), cand_env)
     return [
-        dataclasses.replace(
-            w, offset_seconds=slope * w.center_s + (1.0 + slope) * w.offset_seconds, drift_rate=slope
-        )
+        dataclasses.replace(w, offset_seconds=slope * w.center_s + (1.0 + slope) * w.offset_seconds, drift_rate=slope)
         for w in windowed_offsets(ref_env, destretched, frame_rate, **window_args)
     ]
 

@@ -43,10 +43,7 @@ def test_remap_time_picks_the_right_segment_across_a_jump() -> None:
 
 
 def test_shift_subtitle_text_srt() -> None:
-    srt = (
-        "1\n00:00:10,000 --> 00:00:12,000\nHello\n\n"
-        "2\n00:00:20,000 --> 00:00:22,000\nWorld\n"
-    )
+    srt = "1\n00:00:10,000 --> 00:00:12,000\nHello\n\n2\n00:00:20,000 --> 00:00:22,000\nWorld\n"
     segs = [Segment(0.0, 100.0, 5.0, 5.0)]
     shifted = shift_subtitle_text(srt, segs, "srt")
     assert "00:00:05,000 --> 00:00:07,000" in shifted

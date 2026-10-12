@@ -96,12 +96,23 @@ def test_different_track_index_is_a_different_cache_entry(tmp_path: Path, monkey
     mkv = tmp_path / "multi.mkv"
     subprocess.run(
         [
-            ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-            "-i", str(wav_a), "-i", str(wav_b),
-            "-map", "0:a", "-map", "1:a",
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(wav_a),
+            "-i",
+            str(wav_b),
+            "-map",
+            "0:a",
+            "-map",
+            "1:a",
             str(mkv),
         ],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
 
     calls = []
@@ -200,12 +211,29 @@ def test_prefetch_decodes_a_file_once_for_all_its_tracks(tmp_path: Path, monkeyp
     mkv = tmp_path / "multi.mkv"
     subprocess.run(
         [
-            ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "lavfi", "-i", "sine=frequency=440:duration=3",
-            "-f", "lavfi", "-i", "anoisesrc=duration=3:seed=7",
-            "-map", "0:a", "-map", "1:a", "-c:a", "flac", str(mkv),
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=3",
+            "-f",
+            "lavfi",
+            "-i",
+            "anoisesrc=duration=3:seed=7",
+            "-map",
+            "0:a",
+            "-map",
+            "1:a",
+            "-c:a",
+            "flac",
+            str(mkv),
         ],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     specs = [AudioTrackSpec(raw=f"{mkv}@{i}", path=str(mkv), stream_index=i) for i in (0, 1)]
     expected = [get_envelope(s)[0] for s in specs]
@@ -234,7 +262,9 @@ def test_cache_dir_follows_the_bobine_audio_name(tmp_path: Path, monkeypatch: py
 
 
 @pytest.mark.parametrize("platform", ["win32", "linux"])
-def test_remove_legacy_cache_drops_the_syncaudio_one(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, platform: str) -> None:
+def test_remove_legacy_cache_drops_the_syncaudio_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, platform: str
+) -> None:
     _point_cache_roots_at(tmp_path, monkeypatch)
     monkeypatch.setattr(analysis_cache.sys, "platform", platform)
     legacy = tmp_path / "SyncAudio" / "cache" if platform == "win32" else tmp_path / "syncaudio"
@@ -250,7 +280,9 @@ def test_remove_legacy_cache_drops_the_syncaudio_one(tmp_path: Path, monkeypatch
     assert current.is_dir()
 
 
-def test_remove_legacy_cache_leaves_an_explicit_cache_dir_alone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_remove_legacy_cache_leaves_an_explicit_cache_dir_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     legacy = tmp_path / "SyncAudio" / "cache" if analysis_cache.sys.platform == "win32" else tmp_path / "syncaudio"

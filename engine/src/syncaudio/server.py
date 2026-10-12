@@ -56,6 +56,7 @@ from syncaudio.render import (
 from syncaudio.segments import DEFAULT_HOP_S, DEFAULT_MARGIN_S, DEFAULT_WINDOW_S, Segment, detect_segments
 from syncaudio.subtitles import is_shiftable
 
+
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # The computation libraries load in the background once the server is
@@ -312,7 +313,9 @@ class WaveformResponse(BaseModel):
 
 
 @app.get("/waveform", response_model=WaveformResponse)
-def waveform(path: str, index: int, start: float = 0.0, duration: float | None = None, buckets: int = 800) -> WaveformResponse:
+def waveform(
+    path: str, index: int, start: float = 0.0, duration: float | None = None, buckets: int = 800
+) -> WaveformResponse:
     """Downsampled (min, max) waveform envelope for a track window, for the GUI's
     always-visible, zoomable comparison view (see TrackPreview.tsx/Waveform.tsx).
 
@@ -344,7 +347,9 @@ class PrefetchResponse(BaseModel):
 
 
 def _do_prefetch(req: PrefetchRequest, log: Callable[[str], None] = lambda _msg: None) -> PrefetchResponse:
-    analysis_cache.prefetch([ref.to_spec() for ref in req.tracks], ANALYSIS_SAMPLE_RATE, req.start, req.duration, log=log)
+    analysis_cache.prefetch(
+        [ref.to_spec() for ref in req.tracks], ANALYSIS_SAMPLE_RATE, req.start, req.duration, log=log
+    )
     return PrefetchResponse(cached=len(req.tracks))
 
 
@@ -387,13 +392,20 @@ class SegmentOut(BaseModel):
     @staticmethod
     def from_segment(seg: Segment) -> SegmentOut:
         return SegmentOut(
-            start_s=seg.start_s, end_s=seg.end_s, offset_start=seg.offset_start, offset_end=seg.offset_end,
-            is_drift=seg.is_drift, confidence=seg.confidence,
+            start_s=seg.start_s,
+            end_s=seg.end_s,
+            offset_start=seg.offset_start,
+            offset_end=seg.offset_end,
+            is_drift=seg.is_drift,
+            confidence=seg.confidence,
         )
 
     def to_segment(self) -> Segment:
         return Segment(
-            start_s=self.start_s, end_s=self.end_s, offset_start=self.offset_start, offset_end=self.offset_end,
+            start_s=self.start_s,
+            end_s=self.end_s,
+            offset_start=self.offset_start,
+            offset_end=self.offset_end,
             confidence=self.confidence,
         )
 
@@ -515,8 +527,12 @@ def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> Rend
     for ref in req.import_audio:
         check_import_track(ref.to_spec())
 
-    reference_spec = AudioTrackSpec(raw=f"{req.input_path}@{req.reference_index}", path=req.input_path, stream_index=req.reference_index)
-    same_file_specs = [AudioTrackSpec(raw=f"{req.input_path}@{i}", path=req.input_path, stream_index=i) for i in targets]
+    reference_spec = AudioTrackSpec(
+        raw=f"{req.input_path}@{req.reference_index}", path=req.input_path, stream_index=req.reference_index
+    )
+    same_file_specs = [
+        AudioTrackSpec(raw=f"{req.input_path}@{i}", path=req.input_path, stream_index=i) for i in targets
+    ]
     import_audio_specs = [ref.to_spec() for ref in req.import_audio]
     candidates = same_file_specs + import_audio_specs
     candidate_keys = [track_key(c) for c in candidates]
@@ -549,7 +565,12 @@ def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> Rend
                         idx = spec.stream_index if spec.stream_index is not None else 0
                         streams = {s.index: s for s in probe_audio_streams(spec.path)}
                         language = streams[idx].language if idx in streams else None
-                    log(tr("[segments] {track} : utilisation des segments fournis (édités manuellement)", track=spec.raw))
+                    log(
+                        tr(
+                            "[segments] {track} : utilisation des segments fournis (édités manuellement)",
+                            track=spec.raw,
+                        )
+                    )
                     seg_corrections.append(
                         SegmentedTrackCorrection(
                             track=spec, language=language, segments=[s.to_segment() for s in override.segments]
@@ -558,8 +579,14 @@ def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> Rend
                 else:
                     seg_corrections.append(
                         plan_segmented_correction(
-                            reference_spec, spec, start=req.start, duration=req.duration,
-                            window_s=req.window_s, hop_s=req.hop_s, margin_s=req.margin_s, log=log,
+                            reference_spec,
+                            spec,
+                            start=req.start,
+                            duration=req.duration,
+                            window_s=req.window_s,
+                            hop_s=req.hop_s,
+                            margin_s=req.margin_s,
+                            log=log,
                         )
                     )
             segmented_imported_subs = [
@@ -567,26 +594,39 @@ def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> Rend
             ]
             log(tr("[rendu] écriture de {path} ...", path=output_path))
             written = render_tracks(
-                req.input_path, req.reference_index, corrections=[], output_path=output_path,
-                audio_only=req.audio_only, segmented_corrections=seg_corrections,
+                req.input_path,
+                req.reference_index,
+                corrections=[],
+                output_path=output_path,
+                audio_only=req.audio_only,
+                segmented_corrections=seg_corrections,
                 segmented_imported_subs=segmented_imported_subs,
             )
             corrections_out = [
-                RenderedTrack(track=sc.track.raw, language=sc.language, segments=[SegmentOut.from_segment(s) for s in sc.segments])
+                RenderedTrack(
+                    track=sc.track.raw, language=sc.language, segments=[SegmentOut.from_segment(s) for s in sc.segments]
+                )
                 for sc in seg_corrections
             ]
         else:
             corrections: list[TrackCorrection] = plan_corrections(
                 reference_spec, candidates, start=req.start, duration=req.duration, log=log
             )
-            imported_subs = [(pair.subs.to_spec(), corrections[pos].offset_seconds) for pair, pos in zip(req.subs, subs_positions)]
+            imported_subs = [
+                (pair.subs.to_spec(), corrections[pos].offset_seconds) for pair, pos in zip(req.subs, subs_positions)
+            ]
             log(tr("[rendu] écriture de {path} ...", path=output_path))
             written = render_tracks(
-                req.input_path, req.reference_index, corrections, output_path,
-                audio_only=req.audio_only, imported_subs=imported_subs,
+                req.input_path,
+                req.reference_index,
+                corrections,
+                output_path,
+                audio_only=req.audio_only,
+                imported_subs=imported_subs,
             )
             corrections_out = [
-                RenderedTrack(track=c.track.raw, language=c.language, offset_seconds=c.offset_seconds) for c in corrections
+                RenderedTrack(track=c.track.raw, language=c.language, offset_seconds=c.offset_seconds)
+                for c in corrections
             ]
     except Cancelled:
         # Stopped midway: what's on disk is a truncated, unplayable file.
