@@ -27,8 +27,9 @@
   --border: light-dark(rgba(20, 24, 60, 0.11), rgba(255, 255, 255, 0.08));
   --text: light-dark(#141729, #e8ebf5);
   --text-muted: light-dark(rgba(20, 23, 41, 0.62), #9aa1b8);
-  --danger: light-dark(#d23a4b, #f47a87);
-  --success: light-dark(#1f8f4a, #4ade80);
+  /* Light: deep enough for 4.5:1 on white and on their own tints. */
+  --danger: light-dark(#c42f41, #f47a87);
+  --success: light-dark(#1a7f41, #4ade80);
   /* The two kinds of segment, in the charts, their legends and the waveforms. */
   --constant: light-dark(#3d5fe0, #5b8cff);
   --drift: light-dark(#d97a0b, #f59e0b);
