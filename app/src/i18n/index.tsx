@@ -3,8 +3,6 @@ import { loadSetting, saveSetting } from "../util";
 import { en } from "./en";
 import { fr, type Messages } from "./fr";
 
-export type { Messages };
-
 export type Language = "fr" | "en";
 /** "system" follows Windows; the others force it. */
 export type LanguageChoice = "system" | Language;
@@ -12,7 +10,7 @@ export type LanguageChoice = "system" | Language;
 const CATALOGS: Record<Language, Messages> = { fr, en };
 const LANGUAGE_KEY = "syncaudio.language";
 
-export function loadLanguageChoice(): LanguageChoice {
+function loadLanguageChoice(): LanguageChoice {
   const saved = loadSetting(LANGUAGE_KEY);
   return saved === "fr" || saved === "en" ? saved : "system";
 }

@@ -7,10 +7,10 @@ import "./FileDrop.css";
 
 /** Which half of the window files are dragged over (pairs mode drops the
  * reference files on the left, the ones to correct on the right). */
-export type DropSide = "left" | "right";
+type DropSide = "left" | "right";
 
 /** Files being dragged over the window, and where. */
-export interface FileDrag {
+interface FileDrag {
   side: DropSide;
 }
 

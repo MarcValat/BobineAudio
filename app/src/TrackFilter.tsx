@@ -11,8 +11,8 @@ import { languageLabel } from "./languages";
 export type TrackKey = string;
 
 export const ALL_TRACKS: TrackKey = "all";
-export const indexKey = (index: number): TrackKey => `index:${index}`;
-export const languageKey = (code: string): TrackKey => `lang:${code}`;
+const indexKey = (index: number): TrackKey => `index:${index}`;
+const languageKey = (code: string): TrackKey => `lang:${code}`;
 
 function split(key: TrackKey): [string, string] {
   const at = key.indexOf(":");

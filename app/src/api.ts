@@ -28,7 +28,7 @@ export interface SubtitleInfo {
   shiftable: boolean;
 }
 
-export interface ProbeResponse {
+interface ProbeResponse {
   path: string;
   tracks: TrackInfo[];
   subtitles: SubtitleInfo[];
@@ -170,7 +170,7 @@ export async function fetchCorrectedClip(
   return resp.blob();
 }
 
-export interface WaveformResponse {
+interface WaveformResponse {
   duration: number;
   peaks_min: number[];
   peaks_max: number[];
@@ -239,7 +239,7 @@ export async function startSegmentsJob(
   return data.job_id as string;
 }
 
-export interface TrackSegments {
+interface TrackSegments {
   trackIndex: number;
   segments: SegmentOut[];
   /** Tag the corrected track with this language instead of its own. */
@@ -338,7 +338,7 @@ export async function startCrossFileSegmentedRenderJob(
   return data.job_id as string;
 }
 
-export type JobEvent<TResult> =
+type JobEvent<TResult> =
   { type: "log"; message: string } | { type: "done"; result: TResult } | { type: "error"; message: string } | { type: "cancelled" };
 
 /** Stop a running job (an export started too early...): the engine kills

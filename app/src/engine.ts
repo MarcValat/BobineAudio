@@ -25,7 +25,7 @@ const HEALTH_POLL_INTERVAL_MS = 100;
 const HEALTH_POLL_ATTEMPTS = 200; // 200 * 100ms = 20s before giving up
 
 /** "starting": not answering yet; "unreachable": gave up waiting (see retryEngine). */
-export type EngineStatus = "starting" | "ready" | "unreachable";
+type EngineStatus = "starting" | "ready" | "unreachable";
 
 let status: EngineStatus = "starting";
 let ready: Promise<void> | null = null;

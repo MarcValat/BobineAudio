@@ -12,7 +12,7 @@ const COMPACT_HEIGHT = 120;
 const SHORT_WINDOW = "(max-height: 850px)";
 
 /** Whether the window is short enough for charts to take less height. */
-export function useShortWindow(): boolean {
+function useShortWindow(): boolean {
   const [short, setShort] = useState(() => window.matchMedia(SHORT_WINDOW).matches);
   useEffect(() => {
     const query = window.matchMedia(SHORT_WINDOW);
@@ -35,7 +35,7 @@ const MARGIN = { top: 14, right: 16, bottom: 26, left: 70 };
 export const LOW_CONFIDENCE_THRESHOLD = 0.4;
 
 // Offset change at a boundary below which it isn't counted as a jump.
-export const JUMP_MIN_S = 0.001;
+const JUMP_MIN_S = 0.001;
 
 /** An offset in milliseconds, signed: "+1452 ms", "−36 ms", "+0.4 ms". */
 export function formatOffsetMs(seconds: number): string {

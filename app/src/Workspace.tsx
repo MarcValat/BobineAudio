@@ -127,7 +127,7 @@ export function Issues({ issues }: { issues: string[] }) {
 export type BadgeKind = "idle" | "queued" | "running" | "analyzed" | "exported" | "error" | "warning";
 
 /** A row's badge words for where its analyses and export are at. */
-export interface RunLabels {
+interface RunLabels {
   exporting: string;
   running: string;
   pending: string;

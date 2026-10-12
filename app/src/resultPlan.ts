@@ -5,7 +5,7 @@ import type { SegmentOut } from "./api";
  * from candidate span [candStart, candEnd), stretched to fit, except that
  * candidate audio before `readFrom` -- already played by an earlier segment,
  * or before the track's start -- is left silent instead of replayed. */
-export interface ResultSegment {
+interface ResultSegment {
   start: number;
   end: number;
   candStart: number;
@@ -13,7 +13,7 @@ export interface ResultSegment {
   readFrom: number;
 }
 
-export interface TimeRange {
+interface TimeRange {
   start: number;
   end: number;
 }

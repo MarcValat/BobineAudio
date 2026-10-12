@@ -20,7 +20,7 @@ const CHECK_UPDATES_KEY = "syncaudio.checkUpdates";
 
 /** Which subtitle tracks go with a corrected track unless picked otherwise:
  * the starting setting of both modes. */
-export function loadSubtitleDefault(): SubtitleMode {
+function loadSubtitleDefault(): SubtitleMode {
   const saved = loadSetting(SUBTITLE_DEFAULT_KEY);
   return saved === "all" || saved === "none" ? saved : "forced";
 }
@@ -44,7 +44,7 @@ export function useSubtitleMode(): [SubtitleMode, (mode: SubtitleMode) => void] 
 }
 
 /** Whether the app looks for an update on GitHub at startup (the default). */
-export function loadCheckUpdates(): boolean {
+function loadCheckUpdates(): boolean {
   return loadSetting(CHECK_UPDATES_KEY) !== "0";
 }
 
@@ -60,7 +60,7 @@ export function useCheckUpdates(): boolean {
 const LIST_COLLAPSED_KEY = "syncaudio.listCollapsed";
 
 /** Whether the file list is folded to a narrow column (both modes). */
-export function loadListCollapsed(): boolean {
+function loadListCollapsed(): boolean {
   return loadSetting(LIST_COLLAPSED_KEY) === "1";
 }
 

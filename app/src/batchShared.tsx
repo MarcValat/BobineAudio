@@ -21,7 +21,7 @@ export function moved<T>(arr: T[], from: number, to: number): T[] {
 /** What the gradient button does next (one in the window): analyze while
  * something isn't analyzed (or is being), then export what's analyzed and
  * not exported yet; nothing once all is done. */
-export type NextStep = "analyze" | "export" | null;
+type NextStep = "analyze" | "export" | null;
 
 export function nextStep({
   analyzing,
@@ -117,7 +117,7 @@ export const loadOutputDir = (): string | null => loadSetting(OUTPUT_DIR_KEY);
 export const saveOutputDir = (dir: string | null): void => saveSetting(OUTPUT_DIR_KEY, dir);
 
 /** "Sortie : à côté des originaux / <dossier>", with the buttons to change it. */
-export function OutputChooser({
+function OutputChooser({
   outputDir,
   onChange,
   disabled,
@@ -204,7 +204,7 @@ export function RevealButton({ file }: { file: string | undefined }) {
 /** One file to export: `input` names the output (see planOutputPaths),
  * `start` starts its render job at the given output path, `update` records
  * its progress in the mode's own state. */
-export interface ExportTask {
+interface ExportTask {
   input: string;
   start: (outputPath: string) => Promise<string>;
   update: (patch: (entry: ExportFields) => Partial<ExportFields>) => void;

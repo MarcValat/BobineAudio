@@ -5,7 +5,7 @@ import { CloseIcon } from "./icons";
 import { Tooltip } from "./InfoTip";
 
 /** Escape runs `onEscape` (the latest one, however often it changes). */
-export function useEscape(onEscape: () => void): void {
+function useEscape(onEscape: () => void): void {
   const latest = useRef(onEscape);
   latest.current = onEscape;
   useEffect(() => {

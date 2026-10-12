@@ -49,7 +49,7 @@ export function useEffectiveUiScale(): number {
  * area, taskbar excluded), the zoom goes down until it fits: the whole
  * interface stays on screen, if smaller. Again whenever the window moves
  * to another screen. Nothing outside Tauri (a plain browser). */
-export async function applyUiScale(): Promise<void> {
+async function applyUiScale(): Promise<void> {
   if (!isTauri()) return;
   let zoom = loadUiScale() / 100;
   let room = { width: Infinity, height: Infinity };
