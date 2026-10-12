@@ -181,10 +181,11 @@
   opacity: 0.35;
 }
 
+/* The part in view: --accent, lighter on the light theme's white, where
+   the dark theme's 30% read as a solid blue bar over the whole track. */
 .waveform-navigator-window {
-  fill: var(--accent);
-  opacity: 0.3;
-  stroke: var(--accent);
+  fill: light-dark(rgb(61 95 224 / 0.12), rgb(122 162 255 / 0.3));
+  stroke: light-dark(rgb(61 95 224 / 0.5), rgb(122 162 255 / 0.3));
   stroke-width: 1;
   cursor: grab;
   /* Belt-and-suspenders alongside preventDefault() on pointerdown (see
