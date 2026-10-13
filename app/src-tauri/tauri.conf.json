@@ -68,6 +68,10 @@
         "sidebarImage": "./windows/installer-sidebar.bmp",
         "headerImage": "./windows/installer-header.bmp",
         "languages": ["English", "French"],
+        "customLanguageFiles": {
+          "English": "./windows/English.nsh",
+          "French": "./windows/French.nsh"
+        },
         "displayLanguageSelector": false
       }
     }
