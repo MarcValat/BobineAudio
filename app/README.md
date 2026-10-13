@@ -101,7 +101,9 @@ TAURI_SIGNING_PRIVATE_KEY_PASSWORD=<mot de passe choisi à la génération, vide
 
 ## Publier une release
 
-Le dépôt canonique est sur GitLab, mais les releases se font sur GitHub (`https://github.com/MarcValat/BobineAudio`), via le mirroring GitLab -> GitHub existant. Pousser un tag `vX.Y.Z` (qui doit être mirroré vers GitHub — vérifier que le mirroring inclut bien les tags, pas juste les branches, dans les réglages GitLab) déclenche `.github/workflows/release.yml` : tests du moteur, build du sidecar, puis `tauri-apps/tauri-action` compile et publie les installateurs + `latest.json` en release GitHub (créée en brouillon — à valider/publier manuellement une fois vérifiée).
+Le dépôt est sur GitHub (`https://github.com/MarcValat/BobineAudio`). Pousser un tag `vX.Y.Z` déclenche `.github/workflows/release.yml` : tests du moteur, build du sidecar, puis `tauri-apps/tauri-action` compile et publie les installateurs Windows et Linux + `latest.json` dans une release GitHub créée en brouillon, à vérifier puis publier à la main. Un lancement manuel du workflow (Actions > Release > Run workflow, sur n'importe quelle branche) compile les deux installateurs sans rien publier : ils sont joints au run, pour essayer un changement avant de le merger.
+
+Avant le tag : la version dans `package.json` (et `package-lock.json`), `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` (et `Cargo.lock`), puis `npm run check -- --full` et `npm run test:e2e`.
 
 Secrets requis côté GitHub (Settings > Secrets and variables > Actions) : `TAURI_SIGNING_PRIVATE_KEY` et `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (mêmes valeurs que ci-dessus). `GITHUB_TOKEN` est fourni automatiquement.
 
