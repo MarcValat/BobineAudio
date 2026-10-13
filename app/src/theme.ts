@@ -51,18 +51,30 @@ function syncWindowBackground(choice: ThemeChoice = loadTheme()): void {
 }
 systemDark?.addEventListener("change", () => syncWindowBackground());
 
+/** Whether the page has been drawn yet: the theme applied at startup
+ * (main.tsx) has nothing to fade from. The module script runs once the
+ * document is parsed, so `document.body` exists by then already. */
+let painted = false;
+
+/** Linux's WebKitGTK crashes on a view transition with some GPU drivers
+ * (2.52, NVIDIA: a segfault in AcceleratedBackingStore::update as it enters
+ * accelerated compositing -- the 2.0.0 .deb closed seconds after opening). */
+const LINUX = navigator.userAgent.includes("Linux");
+
 /** Runs `change` as one cross-fade of the whole window (the View Transitions
  * API, App.css's ::view-transition rules): every text, panel, icon and
  * waveform fades at the same pace. Fading each element's own colors left
  * out the ones that inherit theirs (a drop zone's hint stayed sharp while
  * its button faded). Instant where there's nothing to fade from yet (the
- * first paint), where the engine lacks the API (older WebKitGTK), and with
- * reduced motion. The controls' own hover transitions are paused meanwhile,
- * or they'd fade a second time inside the new picture. */
+ * first paint), on Linux (see LINUX), where the engine lacks the API, and
+ * with reduced motion. The controls' own hover transitions are paused
+ * meanwhile, or they'd fade a second time inside the new picture. */
 function crossFade(change: () => void): void {
   const root = document.documentElement;
   const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  if (!document.body || reduced || typeof document.startViewTransition !== "function") {
+  const first = !painted;
+  painted = true;
+  if (first || LINUX || reduced || typeof document.startViewTransition !== "function") {
     change();
     return;
   }
