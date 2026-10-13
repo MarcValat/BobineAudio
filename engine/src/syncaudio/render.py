@@ -9,14 +9,16 @@ from syncaudio.align import estimate_offset
 from syncaudio.analysis_cache import ANALYSIS_SAMPLE_RATE, get_envelope
 from syncaudio.ffmpeg_backend import (
     FFmpegError,
-    _run as _run_subprocess,
     _seek_args,
     probe_audio_streams,
     probe_duration,
-    probe_subtitle_codec,
     probe_stream_tags,
+    probe_subtitle_codec,
     probe_subtitle_count,
     resolve_ffmpeg,
+)
+from syncaudio.ffmpeg_backend import (
+    _run as _run_subprocess,
 )
 from syncaudio.i18n import tr
 from syncaudio.models import AudioStreamInfo, AudioTrackSpec
@@ -89,13 +91,39 @@ def _stream_index(spec: AudioTrackSpec) -> int:
     return spec.stream_index if spec.stream_index is not None else 0
 
 
-def _audio_encode_args(stream: AudioStreamInfo | None, selector: str) -> list[str]:
+# The codecs a corrected track can be exported in on request (the GUI's
+# "Codec d'export"), in place of _ENCODER_FOR_CODEC's choice. AAC is
+# ffmpeg's own encoder: about 15x realtime, slow on a long track (see above).
+EXPORT_CODECS: dict[str, tuple[str, int | None]] = {
+    "opus": ("libopus", 192_000),
+    "aac": ("aac", 256_000),
+    "flac": ("flac", None),
+    "ac3": ("ac3", 640_000),
+    "eac3": ("eac3", 768_000),
+}
+
+
+def _audio_encode_args(stream: AudioStreamInfo | None, selector: str, codec: str | None = None) -> list[str]:
     """``-c:a:<selector> ... [-b:a:<selector> ...]`` matching a corrected
     track's own source codec (see ``_ENCODER_FOR_CODEC``) and, when known,
-    its own bitrate. ``stream`` is ``None`` when the source codec couldn't
-    be probed at all -- also falls back to flac then."""
-    name = (stream.codec if stream else None) or ""
-    name = name.split("(")[0].split()[0].strip().lower()
+    its own bitrate -- or in ``codec`` (one of ``EXPORT_CODECS``) when asked.
+    ``stream`` is ``None`` when the source codec couldn't be probed at all --
+    also falls back to flac then."""
+    words = ((stream.codec if stream else None) or "").split("(")[0].split()
+    # An unknown codec (none probed, or an empty name) falls back to flac below.
+    name = words[0].lower() if words else ""
+    if codec is not None:
+        encoder, default_bitrate = EXPORT_CODECS[codec]
+        # The source's own bitrate only means something in its own codec.
+        same = _ENCODER_FOR_CODEC.get(name, (None, None))[0] == encoder
+        args = [f"-c:a:{selector}", encoder]
+        if encoder not in _LOSSLESS_ENCODERS:
+            bitrate = (stream.bit_rate if same and stream and stream.bit_rate else None) or default_bitrate
+            args += [f"-b:a:{selector}", str(bitrate)]
+        # AC3 and E-AC3 carry 5.1 at most: a 7.1 source is mixed down to it.
+        if encoder in ("ac3", "eac3") and stream and (stream.channels or 0) > 6:
+            args += [f"-ac:a:{selector}", "6"]
+        return args
     if name == "vorbis":
         return [f"-c:a:{selector}", "libvorbis", f"-q:a:{selector}", _VORBIS_QUALITY]
     encoder, default_bitrate = _ENCODER_FOR_CODEC.get(name, ("flac", None))
@@ -105,6 +133,30 @@ def _audio_encode_args(stream: AudioStreamInfo | None, selector: str) -> list[st
         if bitrate:
             args += [f"-b:a:{selector}", str(bitrate)]
     return args
+
+
+# How each encoder's output is commonly named ("FR Opus 2.0").
+_CODEC_NAME_FOR_ENCODER = {
+    "libopus": "Opus",
+    "aac": "AAC",
+    "ac3": "AC3",
+    "eac3": "E-AC3",
+    "libmp3lame": "MP3",
+    "libvorbis": "Vorbis",
+    "flac": "FLAC",
+    "pcm_s16le": "PCM",
+    "pcm_s24le": "PCM",
+    "pcm_s32le": "PCM",
+}
+
+
+def export_codec_name(stream: AudioStreamInfo | None, codec: str | None = None) -> str:
+    """The codec a corrected track is exported in, by its common name: its
+    source's, or what replaces it (see ``_ENCODER_FOR_CODEC``: AAC -> Opus,
+    DTS/TrueHD -> FLAC), or ``codec`` when asked -- for the GUI's automatic
+    track names."""
+    encoder = _audio_encode_args(stream, "0", codec)[1]
+    return _CODEC_NAME_FOR_ENCODER.get(encoder, encoder)
 
 
 @dataclass(frozen=True)
@@ -133,6 +185,10 @@ class SegmentedTrackCorrection:
     track: AudioTrackSpec
     language: str | None
     segments: list[Segment]
+    # The exported track's name in place of its source's ("" for none).
+    title: str | None = None
+    # Its export codec (EXPORT_CODECS) in place of the source-matching one.
+    codec: str | None = None
 
 
 def correction_filter(offset_seconds: float) -> str | None:
@@ -260,8 +316,10 @@ def _clip_segments(segments: Sequence[Segment], start: float, end: float) -> tup
         a, b = max(seg.start_s, start), min(seg.end_s, end)
         clipped.append(
             Segment(
-                a - start, b - start,
-                seg.offset_start + slope * (a - seg.start_s), seg.offset_start + slope * (b - seg.start_s),
+                a - start,
+                b - start,
+                seg.offset_start + slope * (a - seg.start_s),
+                seg.offset_start + slope * (b - seg.start_s),
             )
         )
     return clipped, played_before
@@ -290,14 +348,31 @@ def corrected_clip(
         Segment(seg.start_s, seg.end_s, seg.offset_start + start - seek, seg.offset_end + start - seek)
         for seg in clipped
     ]
-    filt = segment_correction_filter(
-        shifted, f"0:a:{_stream_index(spec)}", "out", played_until=played_before - seek
-    )
+    filt = segment_correction_filter(shifted, f"0:a:{_stream_index(spec)}", "out", played_until=played_before - seek)
     cmd = [
-        resolve_ffmpeg(), "-hide_banner", "-loglevel", "error",
-        *_seek_args(spec, seek), "-i", spec.path, "-t", f"{max(0.0, latest - seek) + 1.0:.6f}",
-        "-filter_complex", filt, "-map", "[out]",
-        "-ar", str(sample_rate), "-f", "wav", "-acodec", "pcm_s16le", "-",
+        resolve_ffmpeg(),
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        # -t before -i: how much of the input to read. After it, it would cut
+        # the output, whose silence before the track (a negative offset) made
+        # the clip shorter than the reference's.
+        *_seek_args(spec, seek),
+        "-t",
+        f"{max(0.0, latest - seek) + 1.0:.6f}",
+        "-i",
+        spec.path,
+        "-filter_complex",
+        filt,
+        "-map",
+        "[out]",
+        "-ar",
+        str(sample_rate),
+        "-f",
+        "wav",
+        "-acodec",
+        "pcm_s16le",
+        "-",
     ]
     proc = _run_subprocess(cmd, capture_output=True)
     if proc.returncode != 0:
@@ -319,7 +394,9 @@ def default_output_path(input_path: str) -> str:
     return str(Path(input_path).with_suffix("")) + ".synced.mkv"
 
 
-def resolve_targets(input_path: str, reference_index: int, track_indices: Sequence[int] | None, only_imports: bool) -> list[int]:
+def resolve_targets(
+    input_path: str, reference_index: int, track_indices: Sequence[int] | None, only_imports: bool
+) -> list[int]:
     """The tracks of ``input_path`` a render corrects: ``track_indices``, or
     every one but the reference, or none with ``only_imports`` (only tracks
     imported from other files). Shared by the CLI and the server; raises
@@ -356,7 +433,12 @@ def check_import_track(spec: AudioTrackSpec) -> None:
     idx = _stream_index(spec)
     if idx not in available:
         raise ValueError(
-            tr("Index audio {index} absent de {path!r} (pistes : {tracks}).", index=idx, path=spec.path, tracks=available)
+            tr(
+                "Index audio {index} absent de {path!r} (pistes : {tracks}).",
+                index=idx,
+                path=spec.path,
+                tracks=available,
+            )
         )
 
 
@@ -433,12 +515,14 @@ def _source_title(spec: AudioTrackSpec, kind: str) -> str | None:
     return tags[idx].get("title") if idx < len(tags) else None
 
 
-def _title_args(spec: AudioTrackSpec, kind: str, out_selector: str) -> list[str]:
+def _title_args(spec: AudioTrackSpec, kind: str, out_selector: str, title: str | None = None) -> list[str]:
     """Carry a source track's title over explicitly: re-encoded (filtered) or
     re-imported streams don't inherit their source's tags the way plain
     stream copies do, and ``-map_metadata`` can't be used instead since any
-    stream-level use of it disables tag copying for every other stream."""
-    title = _source_title(spec, kind)
+    stream-level use of it disables tag copying for every other stream.
+    ``title``, when given, is written instead ("" writes none)."""
+    if title is None:
+        title = _source_title(spec, kind)
     return [f"-metadata:s:{out_selector}", f"title={title}"] if title else []
 
 
@@ -446,11 +530,17 @@ def _run(cmd: list[str]) -> None:
     proc = _run_subprocess(cmd, capture_output=True)
     if proc.returncode != 0:
         raise FFmpegError(
-            tr("Échec ffmpeg :\n{command}\n{details}", command=" ".join(cmd), details=proc.stderr.decode(errors="replace"))
+            tr(
+                "Échec ffmpeg :\n{command}\n{details}",
+                command=" ".join(cmd),
+                details=proc.stderr.decode(errors="replace"),
+            )
         )
 
 
-def _prepare_shifted_subtitle_file(ffmpeg: str, spec: AudioTrackSpec, segments: Sequence[Segment], tmp_dir: Path) -> Path:
+def _prepare_shifted_subtitle_file(
+    ffmpeg: str, spec: AudioTrackSpec, segments: Sequence[Segment], tmp_dir: Path
+) -> Path:
     """Extract a subtitle track, rewrite every cue's timestamp per ``segments``, and return the new file.
 
     Unlike a flat offset (a single ``-itsoffset`` on the input), a segmented
@@ -463,8 +553,18 @@ def _prepare_shifted_subtitle_file(ffmpeg: str, spec: AudioTrackSpec, segments: 
     extracted = tmp_dir / f"extracted_{idx}.{fmt}"
     _run(
         [
-            ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-            "-i", spec.path, "-map", f"0:s:{idx}", "-c:s", "copy", str(extracted),
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            spec.path,
+            "-map",
+            f"0:s:{idx}",
+            "-c:s",
+            "copy",
+            str(extracted),
         ]
     )
     shifted_text = shift_subtitle_text(extracted.read_text(encoding="utf-8"), segments, fmt)
@@ -543,19 +643,28 @@ def render(
             written.append(str(track_out))
         for seg_corr in segmented_corrections:
             idx = _stream_index(seg_corr.track)
-            encode_args = _audio_encode_args(stream_info(seg_corr.track), "0")
+            encode_args = _audio_encode_args(stream_info(seg_corr.track), "0", seg_corr.codec)
             ext = _EXTENSION_FOR_ENCODER[encode_args[1]]
             donor = Path(seg_corr.track.path).stem
             track_out = out_base.with_name(f"{out_base.stem}.{donor}.track{idx}.{ext}")
             filt = segment_correction_filter(seg_corr.segments, f"0:a:{idx}", "out")
             cmd = [
-                ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-                "-i", seg_corr.track.path,
-                "-filter_complex", filt,
-                "-map", "[out]",
+                ffmpeg,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                seg_corr.track.path,
+                "-filter_complex",
+                filt,
+                "-map",
+                "[out]",
                 *encode_args,
-                *_title_args(seg_corr.track, "Audio", "a:0"),
-                "-t", str(ref_duration), str(track_out),
+                *_title_args(seg_corr.track, "Audio", "a:0", seg_corr.title),
+                "-t",
+                str(ref_duration),
+                str(track_out),
             ]
             _run(cmd)
             written.append(str(track_out))
@@ -605,10 +714,10 @@ def render(
         label = f"a{pos}"
         filter_complex_parts.append(segment_correction_filter(seg_corr.segments, f"{in_idx}:a:{idx}", label))
         audio_map_args += ["-map", f"[{label}]"]
-        audio_codec_args += _audio_encode_args(stream_info(spec), str(pos))
+        audio_codec_args += _audio_encode_args(stream_info(spec), str(pos), seg_corr.codec)
         if seg_corr.language:
             metadata_args += [f"-metadata:s:a:{pos}", f"language={seg_corr.language}"]
-        metadata_args += _title_args(spec, "Audio", f"a:{pos}")
+        metadata_args += _title_args(spec, "Audio", f"a:{pos}", seg_corr.title)
         pos += 1
 
     # A --subs pairing may point at a subtitle track that's already inside

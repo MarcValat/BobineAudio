@@ -171,6 +171,12 @@ uv run syncaudio serve
 
 Démarre sur `http://127.0.0.1:8756` par défaut (`--host`/`--port` pour changer). Docs interactives (Swagger) sur `/docs` une fois lancé — pratique pour explorer les endpoints à la main. `POST /jobs/render` reprend les mêmes options que la commande `render` (dont `segmented`, `import_audio`, `subs`) en JSON plutôt qu'en flags.
 
+**Qui peut l'appeler.** Le serveur n'écoute que sur `127.0.0.1` (hors de portée des autres machines), mais les autres programmes de la machine et les sites ouverts dans son navigateur pourraient l'appeler. Donc :
+- avec la variable d'environnement `SYNCAUDIO_TOKEN`, chaque requête doit la renvoyer dans l'en-tête `X-Bobine-Token` (un WebSocket, qui ne prend pas d'en-tête, dans le paramètre `token` de son adresse), sinon 401 ; seul `/health` répond sans. L'app en génère un nouveau à chaque lancement (`app/src-tauri/src/lib.rs`), `bobine-dev` en dev (`tauri dev`, et ce que la page envoie hors de Tauri) ;
+- seules les pages de l'app peuvent lire ses réponses (CORS) : la fenêtre Tauri (`tauri://localhost`, `http(s)://tauri.localhost`) et le serveur de dev (`http://localhost:1420`).
+
+Lancé à la main sans `SYNCAUDIO_TOKEN`, il ne demande pas de jeton.
+
 La détection et le rendu tournent **en job** (`POST /jobs/segments`, `POST /jobs/render`) : l'appel retourne immédiatement un `job_id`, le traitement tourne en arrière-plan, et `WS /jobs/{job_id}/ws` diffuse en direct les mêmes messages de progression que ceux affichés par le CLI (`[analyse] ...`), puis un message final `done` (avec le résultat) ou `error` (le message d'erreur seul, lisible tel quel). Sur un vrai fichier (dizaines de secondes), le GUI affiche ainsi une progression en direct plutôt qu'un bouton figé.
 
 Endpoints synchrones, pour ce qui est rapide :
@@ -178,7 +184,7 @@ Endpoints synchrones, pour ce qui est rapide :
 - `GET /waveform?path=...&index=...&start=...&duration=...&buckets=...` : enveloppe d'amplitude (min/max) sous-échantillonnée d'une fenêtre de piste, pour dessiner une forme d'onde sans envoyer l'audio brut (`duration` omis = piste entière).
 - `GET /clip?path=...&index=...&start=...&duration=...` : court extrait audio jouable (WAV), pour une écoute avant/après correction — distinct de l'extraction d'analyse (mono 16 kHz), celui-ci garde le nombre de canaux et un sample rate normal.
 - `POST /corrected-clip` (`{path, index, segments, start, duration}`) : le même extrait, mais tel que le rendu le produira avec ces segments — construit avec le filtre du rendu lui-même, donc sauts, contenu sauté, blancs insérés, fondus et dérive sont identiques au fichier exporté (vérifié par un test : l'extrait est identique, à l'échantillon près, à la même tranche du rendu complet).
-- `POST /jobs/prefetch` : lance en arrière-plan, pour une liste de pistes, le calcul coûteux (extraction + spectrogramme/enveloppe) que `segments`/`render` referaient sinon à chaque appel — un résultat déjà en cache (même fichier, piste, fenêtre) est réutilisé tel quel. Les pistes entières d'un même fichier sont décodées en **une seule passe** ffmpeg (le fichier n'est lu qu'une fois, quel que soit le nombre de pistes). À appeler juste après `/probe` pour que le premier `segments`/`render` sur ces pistes soit quasi instantané.
+- `POST /jobs/prefetch` : lance en arrière-plan, pour une liste de pistes, le calcul coûteux (extraction + spectrogramme/enveloppe) que `segments`/`render` referaient sinon à chaque appel — un résultat déjà en cache (même fichier, piste, fenêtre) est réutilisé tel quel. Les pistes entières d'un même fichier sont décodées en **une seule passe** ffmpeg (le fichier n'est lu qu'une fois, quel que soit le nombre de pistes). À appeler juste après `/probe` pour que le premier `segments`/`render` sur ces pistes soit quasi instantané. Avec `waveform_buckets`, la même passe laisse aussi la forme d'onde de chaque piste entière (ce que renvoie `/waveform` à ce nombre de colonnes) : l'interface le fait pour chaque fichier ajouté, en arrière-plan.
 
 ## Développement
 
@@ -186,7 +192,9 @@ Endpoints synchrones, pour ce qui est rapide :
 uv run pytest
 ```
 
-`tests/test_align.py` valide l'algorithme sur des signaux synthétiques (sans ffmpeg). `tests/test_ffmpeg_backend.py` valide l'extraction/probe de bout en bout avec le ffmpeg embarqué. `tests/test_server.py` valide le sidecar HTTP avec `fastapi.testclient`.
+`uv run pytest --cov` ajoute la couverture : les lignes du moteur que les tests n'exécutent pas (~91 % couvertes ; reste surtout le chien de garde du processus parent, testé dans un sous-processus que la mesure ne voit pas).
+
+`tests/test_cli.py` valide la ligne de commande (ce que chaque commande trouve et écrit). `tests/test_align.py` valide l'algorithme sur des signaux synthétiques (sans ffmpeg). `tests/test_ffmpeg_backend.py` valide l'extraction/probe de bout en bout avec le ffmpeg embarqué. `tests/test_server.py` valide le sidecar HTTP avec `fastapi.testclient`.
 
 ## Empaquetage (binaire autonome pour l'app)
 

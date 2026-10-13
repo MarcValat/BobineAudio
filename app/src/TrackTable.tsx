@@ -1,9 +1,10 @@
 import type { TrackInfo } from "./api";
 import { useT } from "./i18n";
+import { trackName } from "./Workspace";
 
 /** A file's audio tracks, one row each: index, language, codec, then either
  * the reference / track-to-correct picks (with `onReference`) or, read-only,
- * the channel count (`showChannels`). The single-file view and the batch
+ * the channel count (`showChannels`). The detail's tables and the
  * dialogs all show tracks this way; each keeps its own look (`className`). */
 export function TrackTable({
   tracks,
@@ -14,6 +15,7 @@ export function TrackTable({
   onToggleTarget,
   showChannels = false,
   radioName = "reference",
+  disabled = false,
 }: {
   tracks: TrackInfo[];
   className?: string;
@@ -24,6 +26,8 @@ export function TrackTable({
   showChannels?: boolean;
   /** Radio group name: unique per table on screen. */
   radioName?: string;
+  /** The picks can't be changed (something's running). */
+  disabled?: boolean;
 }) {
   const t = useT();
   const picking = onReference !== undefined;
@@ -49,14 +53,22 @@ export function TrackTable({
             {showChannels && <td>{tr.channels ?? "?"}</td>}
             {picking && (
               <td className="track-pick">
-                <input type="radio" name={radioName} checked={reference === tr.index} onChange={() => onReference(tr.index)} />
+                <input
+                  type="radio"
+                  aria-label={t.tracks.asReference(trackName(tr.index, tr))}
+                  name={radioName}
+                  checked={reference === tr.index}
+                  disabled={disabled}
+                  onChange={() => onReference(tr.index)}
+                />
               </td>
             )}
             {picking && (
               <td className="track-pick">
                 <input
                   type="checkbox"
-                  disabled={reference === tr.index}
+                  aria-label={t.tracks.toCorrect(trackName(tr.index, tr))}
+                  disabled={disabled || reference === tr.index}
                   checked={targets.includes(tr.index)}
                   onChange={() => onToggleTarget?.(tr.index)}
                 />

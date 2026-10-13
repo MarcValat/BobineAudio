@@ -2,19 +2,20 @@
 
 # User guide
 
-This guide explains how to use Bobine Audio, from opening a file to exporting it, one file at a time or in batch mode. For installing it, see the [README](../README.md#install).
+This guide explains how to use Bobine Audio, from adding your files to exporting them, one episode or a whole season at once. For installing it, see the [README](../README.md#install).
 
 ## Contents
 
 1. [Words to know](#words-to-know)
-2. [One file at a time](#one-file-at-a-time)
-3. [Reading the result](#reading-the-result)
-4. [Correcting the segments by hand](#correcting-the-segments-by-hand)
-5. [Exporting](#exporting)
-6. [Subtitles](#subtitles)
-7. [A whole series: batch mode](#a-whole-series-batch-mode)
-8. [Options](#options)
-9. [FAQ](#faq)
+2. [The window](#the-window)
+3. [Multitrack files, step by step](#multitrack-files-step-by-step)
+4. [Reading the result](#reading-the-result)
+5. [Correcting the segments by hand](#correcting-the-segments-by-hand)
+6. [Exporting](#exporting)
+7. [Subtitles](#subtitles)
+8. [File pairs](#file-pairs)
+9. [Settings](#settings)
+10. [FAQ](#faq)
 
 ## Words to know
 
@@ -28,30 +29,55 @@ This guide explains how to use Bobine Audio, from opening a file to exporting it
   - *jump*: it changes all at once between two segments (a scene longer or shorter in one version, an ad break).
 - **Confidence**: how sure the detection of a segment is, from 0 to 100%. Below 40%, the segment is flagged **⚠ unreliable**.
 
-## One file at a time
+## The window
 
-This is **Single file** mode, for a file that already holds the reference and the track(s) to correct (for instance an MKV with the original audio and a dub).
+The bar at the top picks one of the two **modes**, depending on how your files are organized:
 
-1. **Open the file** with "Open a file", or drop it on the window.
-2. **Pick the tracks** in the table:
-   - **Ref.** column: the reference track (the first one by default);
-   - **To correct** column: the tracks to put back in sync (all the others by default).
+| Your files… | Mode |
+| --- | --- |
+| Each episode is one file that already holds the original audio and the dub (an MKV with both, for instance) | **Multitrack files** |
+| The original and the dub are in separate files (for instance `S01E01.mkv` and `S01E01.dub.ac3`) | **File pairs** |
 
-   Meanwhile, "Preparing the tracks..." means Bobine Audio is already reading the audio in the background, so the analysis starts sooner.
-3. **Click "Analyze"**. Each ticked track shows up under "Analyzed tracks" with a summary: "3 segments · 2 jumps". Click a track to show its result on the right.
-4. **Check the result** (see [Reading the result](#reading-the-result)), and correct it by hand if needed ("Edit segments").
-5. **Export** with "Export the synchronized file".
+One file works as well as a whole season: both modes take one file or many. Each mode keeps its own files when you switch to the other; the mode used last is picked again next time.
+
+On the right of the bar: the **engine's state** ("Engine ready" once the analysis engine has started), the **update** icon when a new version is out, and **⚙ Settings**.
+
+Below, the workspace:
+
+- at the top, the **settings bar**: the tracks to use, for every file at once;
+- on the left, the **list** of files. Click one to show it; **↑ / ↓** go to the previous or next one. Hovering a row shows ↑ ↓ to move it and ✕ to remove it; **Remove all** empties the list (after asking, if analyses or edits would be lost). The **«** button folds the list into a narrow column, for more room on a small screen;
+- on the right, the **detail** of the file picked;
+- at the bottom, the **output** folder, the progress, and the buttons for every file at once.
+
+There is always one highlighted button (in color): the next step, "Analyze all" then "Export all" (or, with one file, "Analyze" then "Export this file").
+
+## Multitrack files, step by step
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="screenshots/main-en-dark.png">
-  <img src="screenshots/main-en-light.png" alt="Single file mode: tracks on the left, offset chart and waveforms on the right">
+  <img src="screenshots/main-en-light.png" alt="Multitrack files mode: three analyzed episodes on the left; on the right, the tracks, the offset chart and the waveforms of the first one">
 </picture>
+
+1. **Add the files**: drop them on the window, or click the empty area. Dropping a **folder** adds its video and audio files in name order ("Episode 2" before "Episode 10").
+2. **Pick the tracks** in the settings bar, for every file at once:
+   - **Reference**: by **track number**, **language** or **track name**. Language is the most reliable across a season: a track number can change from one episode to the next;
+   - **To correct**: one or more tracks, picked the same way.
+
+   When the first file is added, Bobine Audio suggests its first track as the reference and the other languages to correct.
+3. **Check the list**: under each name, `@0 jpn → @1 fre + ST @1` sums up what will be done ("track 1 synced to track 0, with subtitle track 1"). A file where a track to correct is missing is flagged **⚠ To check**; a file where the reference doesn't name exactly one track shows "(auto)". In the detail, the **tracks table** sets a file's tracks by hand (**Ref.** and **To correct** columns); "By language" goes back to the bar's pick.
+4. **Analyze**: "Analyze all" analyzes every file, one after the other. Afterwards, the button only analyzes what's missing (new files, failures) without losing your corrections; "Reanalyze all" starts over. In a file's detail, **⟳** reanalyzes that file alone.
+5. **Check the result** of each file (see [Reading the result](#reading-the-result)), and correct it by hand if needed ("Edit segments").
+6. **Export**: "Export all", or "Export this file" in a detail (see [Exporting](#exporting)).
 
 ## Reading the result
 
+A file's detail shows, under its name, one button per **corrected track** (`@1 fre`): with several, it picks the one shown. "Log" shows the analysis's messages.
+
+On a large window, the chart and the waveforms are shown one under the other; on a smaller one, the **Segments** and **Listen** tabs switch between them.
+
 ### The offset chart
 
-At the top right, the chart shows the offset (vertically) along the whole file (horizontally). The dashed "0 ms" line is the reference.
+Next to the tracks table, the chart shows the offset (vertically) along the whole file (horizontally). The dashed "0 ms" line is the reference. Above it, a summary: "3 segments · 2 jumps".
 
 - Each segment is a line: **blue** when constant, **orange** when drifting.
 - A **dotted** line is unreliable: worth checking by ear.
@@ -59,21 +85,23 @@ At the top right, the chart shows the offset (vertically) along the whole file (
 
 ### The waveforms
 
-Below, three waveforms on the same time scale:
+Three waveforms on the same time scale:
 
 - **Reference**: the track that doesn't move.
 - **Track to correct (as is)**: before correction. **Red** areas will be **removed**: content this version has in excess (a longer scene, for instance).
-- **Final result**: what the export will hold. **Green** areas are **added silence**: content this version is missing.
+- **Final result**: what the export will hold. **Green** areas are **added silence**: content this version is missing. "Offset here" shows the correction applied at the position.
 
-The mouse wheel zooms under the pointer, "Whole track" goes back to the full view, and the bar at the bottom moves through the file. "Go to" jumps to a segment.
+To move around:
+
+- the **mouse wheel** zooms in or out under the pointer; **+** / **−** and "Whole track" do the same with buttons; "Go to" jumps to a segment;
+- a **click** moves the position (the red line) there; **dragging** moves it with the mouse;
+- a **middle-click drag**, or the bar under the waveforms, moves along the track.
 
 ### Listening
 
-"Play" plays a clip from the "Position". The **Hear** boxes pick what you hear: the reference, the track as is and the final result, in any combination.
+"Play" (or the **space bar**) plays from the "Position"; again, it stops. The **Hear** boxes pick what you hear: the reference, the track as is and the final result, in any combination.
 
 The most telling is to hear the **reference with the final result**: when the correction is right, they sound like a single track, with no echo. With the track as is, you hear the original offset instead.
-
-"Offset at this position" shows the correction applied where you're listening.
 
 ## Correcting the segments by hand
 
@@ -81,7 +109,7 @@ Detection relies on the sound both versions share (music, sound effects). Where 
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="screenshots/editor-en-dark.png">
-  <img src="screenshots/editor-en-light.png" alt="The segment editor">
+  <img src="screenshots/editor-en-light.png" alt="The segment editor: the offset chart with draggable boundaries, the waveforms, the segment table">
 </picture>
 
 In the chart:
@@ -89,92 +117,75 @@ In the chart:
 - **Drag a segment** up or down to change its offset.
 - **Drag a ● handle** to move the boundary between two segments.
 - **Double-click** to split a segment in two there.
-- **Click** to move playback there.
-- The **mouse wheel** zooms, along with the waveforms on the right.
+- **Click** to move the position there, or drag to move it; **middle-click and drag** to move along the track.
+- The **mouse wheel** zooms, along with the waveforms.
 
 In the table, every value can also be typed in: start and end in seconds, offset at the start and at the end in milliseconds. A start offset different from the end offset makes a drift.
 
 - **Remove** deletes a segment, typically a false detection: its neighbour extends over its duration, with its own offset. On hover, the result is previewed as green dots on the chart.
 - **Remove unreliable segments** does the same for every ⚠ segment at once.
 - **Undo / Redo** (Ctrl+Z / Ctrl+Y) and **Reset** (back to the state the editor opened with).
-- **Save** keeps the changes; **Cancel** (or Esc) discards them, after confirming if there are any.
+- **Save** keeps the changes; **Cancel** (or Esc) discards them, after asking if there are any.
 
-On the right, the same listening as outside the editor follows your changes live: it's the surest way to check a correction.
+The waveforms and the listening follow your changes live: it's the surest way to check a correction.
 
 ## Exporting
 
-"Export the synchronized file" asks where to save the file. By default, it's next to the original, with the ".synced" suffix: `Film.mkv` gives `Film.synced.mkv`. The original file is never changed, and can't be picked as the destination.
+**Export**, at the bottom left, sums up the export options; "Change…" opens them:
+
+- **Output folder**: **next to the originals** (the default), with the ".synced" suffix (`Film.mkv` gives `Film.synced.mkv`), or **another folder** ("Choose a folder…"), where each export keeps its original's name, unless that name is already taken there.
+- **Audio codec** of the corrected tracks: **Auto** (as the source, see below), or Opus, AAC (slow to encode), FLAC (lossless), AC3 or E-AC3 (5.1 at most: a 7.1 track is mixed down).
+- **Corrected tracks' names**: **Original** (the source track's name), **Automatic** (made of its language, export codec and channels: "FR Opus 2.0", "JP FLAC 2.0"), or **Custom** (one name per language). In a file's detail, "Name in the export" shows each corrected track's name, and changes it for that file only.
+
+The options are remembered. The original file is never changed.
+
+"Export all" writes one file per episode, one at a time; "Export this file" writes only the one shown. "Cancel export" stops the one running and doesn't start the next ones: no half-written file is left on disk. Once a file is written, the folder icon in its detail opens its folder.
 
 The exported file is an **MKV** holding:
 
 - the **video**, copied as is (not re-encoded, so no loss);
 - the **reference track**, copied as is;
-- each **corrected track**, re-encoded in its original format and bitrate. Two exceptions: AAC becomes Opus (the available AAC encoder is too slow), and formats with no encoder (TrueHD, DTS…) become lossless FLAC;
+- each **corrected track**, re-encoded in the codec picked; with **Auto**, in its original format and bitrate, with two exceptions: AAC becomes Opus (the available AAC encoder is slow), and formats with no encoder (TrueHD, DTS…) become lossless FLAC;
 - the **subtitles** (see [Subtitles](#subtitles)).
 
-The file's other audio tracks are left out. "Export content" (the "?" bubble) details what the file will hold.
-
-Only the analyzed tracks **ticked** under "Analyzed tracks" are exported. They must all have been analyzed against the same reference.
-
-An export in progress can be cancelled: no half-written file is left on disk.
+The file's other audio tracks are left out.
 
 ## Subtitles
 
 Subtitles timed on an audio track must get the same corrections as that track: otherwise, once the audio is back in sync, they would be off in turn. That's typically the case for a dub's **forced subtitles** (signs, lines in a foreign language), timed on the dub rather than on the video.
 
-- **By default**, the forced subtitles in the same language as a corrected track are retimed with it. This can be changed in [Options](#options).
-- In single-file mode, under each analyzed track, **"Also retime these subtitles"** ticks or unticks each subtitle track.
+- **Subtitles**, in the settings bar, picks which ones are retimed with each corrected track, for every file: **Forced** (same language as the track, the default), **All** (same language) or **None**. The default can be changed in [Settings](#settings).
+- In a file's detail, "Retimed subtitles" shows the ones picked; **Change** ticks or unticks each subtitle track of that file.
 - Unticked subtitles are **copied as they are**, timed on the video.
 - A subtitle track can be retimed with one audio track only.
 - Only **text** subtitles (SRT, ASS) can be retimed. **Image** subtitles (PGS, VobSub) are always copied as they are.
 
-## A whole series: batch mode
-
-**Batch** mode processes every episode of a series in one pass. It has two modes, depending on how the files are organized.
-
-| Your files… | Mode to pick |
-| --- | --- |
-| Each episode is a single file that already holds the original audio and the dub | **Multitrack files** |
-| The original and the dub are in separate files (for instance `S01E01.mkv` and `S01E01.dub.ac3`) | **File pairs** |
-
-In both modes:
-
-- files are added with "+ Add" or by **dropping** them on the window. Dropping a **folder** adds its video and audio files in name order ("Episode 2" before "Episode 10");
-- **Analyze all** starts the analysis. Afterwards, the button only analyzes what's missing (new files, failures) without losing your corrections; "Reanalyze all" starts over;
-- **Edit** opens an episode's segment editor;
-- **Output** picks where the exports go: next to the originals (with the ".synced" suffix), or into another folder (where each export keeps its original's name, unless that name is already taken there). The choice is remembered;
-- **Export all** writes one file per episode, one at a time. "Cancel export" stops the one running and doesn't start the next ones.
-
-### Multitrack files
+## File pairs
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/batch-en-dark.png">
-  <img src="screenshots/batch-en-light.png" alt="Multitrack files batch mode, with three analyzed episodes">
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/pairs-en-dark.png">
+  <img src="screenshots/pairs-en-light.png" alt="File pairs mode: three analyzed pairs on the left; on the right, both files' tracks, the offset chart and the waveforms of the first pair">
 </picture>
 
-Tracks are picked **by language**, for every file at once: the **reference** language at the top, then the languages **to correct**. That's more reliable than a track number, which can change from one episode to the next. When the first file is added, Bobine Audio suggests its first track as the reference and every other language to correct.
+Each row of the list is a **pair**: on top the **reference** file (Ref., the video with its original audio), under it the file **to correct** (Corr., another video, or a bare audio file: WAV, FLAC, AC3, AAC…). The corrected track is added to the reference video.
 
-- A file where a language is missing or appears more than once is flagged **⚠**: "Choose" sets its tracks (and subtitles) by hand, "By language" goes back to the automatic pick.
-- The "Tracks" column sums up what will be done: `@0 jpn → @1 fre + ST @1` means "track 1 synced to track 0, with subtitle track 1".
-- Each exported file holds all its corrected tracks.
+Everything else works as in [Multitrack files](#multitrack-files-step-by-step), with these differences:
 
-### File pairs
+- **Adding**: "+ References" and "+ To correct" under the list. When dropping files, the **left half** of the window adds them to the references and the **right half** to the files to correct.
+- Files are paired **in order**: the ↑ ↓ of a row put a column back in the right order. A file without its match is flagged **⚠ Unpaired**.
+- **Tracks**: picked in the settings bar from the first file of each column, then applied to every pair. "All tracks", above the list, shows each file's tracks, to make sure every episode is organized the same way. In a pair's detail, the tracks table holds both files' tracks (File column: Ref. or Corr.): changing a box sets that pair's tracks only, "By default" goes back to the bar's.
+- **Added language**: the language given to the corrected track in the export. "From the file" keeps its own; picking one helps for an audio file that has none.
+- **Subtitles**: the text subtitles of the file to correct, in its track's language, are imported and retimed with it.
+- The export starts from the reference file: its video, its reference track and its subtitles, plus the corrected track(s).
 
-Each row is a **pair**: on the left the **reference** file (the video with its original audio), on the right the file **to correct** (another video, or a bare audio file: WAV, FLAC, AC3, AAC…).
+## Settings
 
-- Files are paired **in row order**: the ↑ ↓ arrows put a column back in the right order. When dropping files, the left half of the window adds them to the reference column and the right half to the column to correct.
-- The tracks to use are picked at the top, from the first file of each column, and apply to every pair. "Check all tracks" shows each file's tracks, to make sure every episode is organized the same way.
-- **Language**: the language given to the corrected track in the export. "The file's" keeps its own; picking one helps for an audio file that has none.
-- **Subtitles**: the text subtitles of the file to correct, in its track's language, are imported and retimed with it (per the setting).
-- The export starts from the reference file: its video, its reference track and its subtitles, plus the corrected track.
-
-## Options
-
-The **⚙** button at the top right opens Options:
+The **⚙** button at the top right opens Settings:
 
 - **Theme**: System (follows the system's light or dark theme), Light or Dark.
 - **Language**: System (French if the system is in French, English otherwise), Français or English.
-- **Default subtitles**: which subtitles are retimed with a corrected track unless picked otherwise. They're the ones ticked by default in single-file mode, and batch mode's starting setting.
+- **Interface size**: 90, 100, 110 or 125%: text, buttons and waveforms all get bigger or smaller. On a screen without room for the size chosen (a small laptop with a large Windows scaling, for instance), the interface is reduced to fit, and Settings say so.
+- **Default subtitles**: which subtitles are retimed with a corrected track unless picked otherwise: the starting setting of both modes.
 - **Updates**: whether to check for a new version at startup.
 - **Analysis cache**: Bobine Audio keeps the analyses already made, so a reopened file shows up at once. "Clear" frees the space; files are just analyzed again.
 
@@ -185,8 +196,8 @@ When an update is available, an icon shows next to the ⚙: "Install and restart
 **Windows says "Windows protected your PC" when installing.**
 The installer isn't signed with a paid certificate. Click "More info", then "Run anyway".
 
-**"Starting the engine..." shows at the top right.**
-The analysis engine is starting in the background, usually in a second or two. Files can already be opened: their tracks show up as soon as it's ready.
+**"Starting the engine…" shows at the top right.**
+The analysis engine is starting in the background, usually in a second or two. Files can already be added: their tracks show up as soon as it's ready.
 
 **"The engine isn't responding".**
 Click "Retry". If that's not enough, close and restart the app. If it keeps happening, an antivirus may be blocking the engine (on Windows, `engine\syncaudio-engine.exe` in the install folder).
@@ -197,11 +208,14 @@ The measurements disagree with each other over that stretch, or there are too fe
 **The result sounds like an echo.**
 The offset is wrong there. Listen to the reference with the final result, find where the echo starts, and adjust the segments in the editor.
 
+**The window doesn't fit my screen, or everything is too small / too big.**
+Change **Interface size** in Settings. On a small screen, Bobine Audio already opens maximized and reduces the interface to fit.
+
 **Where are the analyses kept? How much space do they take?**
-On Windows in `%LOCALAPPDATA%\Bobine Audio\cache`, on Linux in `~/.cache/bobine-audio`: 512 MB at most, the oldest ones being deleted beyond that. Options show their size and can clear them. Uninstalling removes them on Windows; on Linux, clear them from Options first.
+On Windows in `%LOCALAPPDATA%\Bobine Audio\cache`, on Linux in `~/.cache/bobine-audio`: 512 MB at most, the oldest ones being deleted beyond that. Settings show their size and can clear them. Uninstalling removes them on Windows; on Linux, clear them from Settings first.
 
 **Is my original file changed?**
 No, never. Exporting always writes a new file.
 
 **My subtitles are off after exporting.**
-They were probably timed on the corrected audio track rather than on the video: tick them under "Also retime these subtitles" (single file) or through "Choose" (batch), then export again. Image subtitles (PGS, VobSub) can't be retimed.
+They were probably timed on the corrected audio track rather than on the video: tick them through "Change" in the file's detail, then export again. Image subtitles (PGS, VobSub) can't be retimed.

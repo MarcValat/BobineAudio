@@ -39,7 +39,9 @@ def _run(*args, **kwargs) -> subprocess.CompletedProcess:
 _CANCEL_POLL_S = 0.2
 
 
-def _run_cancellable(event, cmd, *, capture_output=False, check=False, input=None, **kwargs) -> subprocess.CompletedProcess:
+def _run_cancellable(
+    event, cmd, *, capture_output=False, check=False, input=None, **kwargs
+) -> subprocess.CompletedProcess:
     """``subprocess.run(cmd, ...)``, killing the process once ``event`` is set."""
     if event.is_set():
         raise Cancelled()
@@ -64,6 +66,7 @@ def _run_cancellable(event, cmd, *, capture_output=False, check=False, input=Non
     if check:
         result.check_returncode()
     return result
+
 
 _STREAM_RE = re.compile(
     r"^\s*Stream #\d+:(?P<index>\d+)(?:\((?P<lang>[^)]+)\))?:\s*Audio:\s*"
@@ -93,9 +96,7 @@ def resolve_ffmpeg() -> str:
 
         return imageio_ffmpeg.get_ffmpeg_exe()
     except Exception as exc:  # pragma: no cover - defensive
-        raise FFmpegError(
-            tr("ffmpeg introuvable : ni sur le PATH, ni via le paquet imageio-ffmpeg.")
-        ) from exc
+        raise FFmpegError(tr("ffmpeg introuvable : ni sur le PATH, ni via le paquet imageio-ffmpeg.")) from exc
 
 
 def _file_identity(path: str) -> tuple[str, int, int] | None:
@@ -226,8 +227,21 @@ def _probe_stream_start_time(path: str, stream_index: int, identity: tuple[str, 
         tmp_path = str(Path(tmp_dir) / "probe.mka")
         extract = _run(
             [
-                ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-                "-i", path, "-map", f"0:a:{stream_index}", "-c", "copy", "-copyts", "-t", "5", tmp_path,
+                ffmpeg,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                path,
+                "-map",
+                f"0:a:{stream_index}",
+                "-c",
+                "copy",
+                "-copyts",
+                "-t",
+                "5",
+                tmp_path,
             ],
             capture_output=True,
         )
@@ -401,7 +415,19 @@ def decode_tracks_to_files(path: str, stream_indices: list[int], sample_rate: in
     outputs = []
     for idx in stream_indices:
         out = out_dir / f"track{idx}.s16le"
-        cmd += ["-map", f"0:a:{idx}", "-ac", "1", "-ar", str(sample_rate), "-f", "s16le", "-acodec", "pcm_s16le", str(out)]
+        cmd += [
+            "-map",
+            f"0:a:{idx}",
+            "-ac",
+            "1",
+            "-ar",
+            str(sample_rate),
+            "-f",
+            "s16le",
+            "-acodec",
+            "pcm_s16le",
+            str(out),
+        ]
         outputs.append(out)
     proc = _run(cmd, capture_output=True)
     if proc.returncode != 0:
@@ -420,7 +446,11 @@ def load_pcm_file(path: Path) -> np.ndarray:
     return _pcm_from_s16le(np.fromfile(path, dtype="<i2"))
 
 
-_PEAKS_SAMPLE_RATE = 22050
+# The analysis's own rate (analysis_cache.ANALYSIS_SAMPLE_RATE): the
+# prefetch draws a track's waveform from the PCM it decodes for the
+# analysis (see peaks_from_pcm), no second pass over the file -- and at a
+# whole episode's 20000 buckets, 16 kHz shows every peak 22.05 kHz did.
+PEAKS_SAMPLE_RATE = 16000
 
 
 def extract_peaks(
@@ -437,8 +467,13 @@ def extract_peaks(
     multi-minute track would not be. A whole-track call (``duration=None``)
     is how the GUI learns a track's total duration in the first place.
     """
-    pcm = extract_pcm(spec, sample_rate=_PEAKS_SAMPLE_RATE, start=start or None, duration=duration)
-    actual_duration = len(pcm) / _PEAKS_SAMPLE_RATE
+    pcm = extract_pcm(spec, sample_rate=PEAKS_SAMPLE_RATE, start=start or None, duration=duration)
+    return peaks_from_pcm(pcm, buckets, PEAKS_SAMPLE_RATE)
+
+
+def peaks_from_pcm(pcm: np.ndarray, buckets: int, sample_rate: int) -> tuple[np.ndarray, np.ndarray, float]:
+    """``extract_peaks``' result from samples already decoded (at ``sample_rate``)."""
+    actual_duration = len(pcm) / sample_rate
     if len(pcm) == 0 or buckets <= 0:
         return np.zeros(0, dtype=np.float32), np.zeros(0, dtype=np.float32), actual_duration
 
@@ -464,11 +499,24 @@ def extract_wav_clip(spec: AudioTrackSpec, start: float, duration: float, sample
     ffmpeg = resolve_ffmpeg()
     stream_index = spec.stream_index if spec.stream_index is not None else 0
     cmd = [
-        ffmpeg, "-hide_banner", "-loglevel", "error",
-        *_seek_args(spec, start), "-i", spec.path, "-t", str(duration),
-        "-map", f"0:a:{stream_index}",
-        "-ar", str(sample_rate),
-        "-f", "wav", "-acodec", "pcm_s16le", "-",
+        ffmpeg,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        *_seek_args(spec, start),
+        "-i",
+        spec.path,
+        "-t",
+        str(duration),
+        "-map",
+        f"0:a:{stream_index}",
+        "-ar",
+        str(sample_rate),
+        "-f",
+        "wav",
+        "-acodec",
+        "pcm_s16le",
+        "-",
     ]
     proc = _run(cmd, capture_output=True)
     if proc.returncode != 0:

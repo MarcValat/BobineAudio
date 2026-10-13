@@ -2,11 +2,12 @@ import { useRef, useState, type ReactNode } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { cancelJob, type RenderResponse, type SegmentsResponse } from "./api";
 import { JobCancelled, runJob, type RunStatus } from "./jobs";
-import { LogPanel } from "./LogPanel";
-import { pickFolder, planOutputPaths } from "./mediaDialog";
-import { basename } from "./paths";
-import { describeSegments } from "./SegmentChart";
-import { FolderIcon, RedoIcon } from "./icons";
+import { planOutputPaths } from "./mediaDialog";
+import { ExportChooser, type ExportOptions } from "./exportOptions";
+import { FolderIcon } from "./icons";
+import { Select } from "./Dropdown";
+import { SUBTITLE_MODES, type SubtitleMode } from "./subtitles";
+import { Tooltip } from "./InfoTip";
 import { errorMessage, loadSetting, saveSetting } from "./util";
 import { t, useT } from "./i18n";
 
@@ -18,23 +19,52 @@ export function moved<T>(arr: T[], from: number, to: number): T[] {
   return copy;
 }
 
+/** What the gradient button does next (one in the window): analyze while
+ * something isn't analyzed (or is being), then export what's analyzed and
+ * not exported yet; nothing once all is done. */
+type NextStep = "analyze" | "export" | null;
+
+export function nextStep({
+  analyzing,
+  missing,
+  exportable,
+  exported,
+}: {
+  analyzing: boolean;
+  /** Not analyzed yet, or failed. */
+  missing: number;
+  /** Has something analyzed to export. */
+  exportable: number;
+  exported: number;
+}): NextStep {
+  if (analyzing || missing > 0) return "analyze";
+  return exportable > exported ? "export" : null;
+}
+
 /** A batch's analyze button: the items (tracks, pairs) not analyzed yet
  * when there are, keeping the others and their edits -- with a way to redo
  * everything -- or everything again once all are done. */
 export function AnalyzeButton({
   analyzing,
+  reading,
   missing,
   analyzed,
   unit,
+  primary,
   disabled,
   blocked,
   onAnalyze,
 }: {
   analyzing: boolean;
+  /** Files of the list still being read: analyzing all waits for them
+   * (it would leave them out). */
+  reading: boolean;
   missing: number;
   analyzed: number;
   /** What's counted. */
   unit: "track" | "pair";
+  /** It's the window's next step (see nextStep): the gradient. */
+  primary: boolean;
   disabled: boolean;
   blocked: boolean;
   onAnalyze: (all: boolean) => void;
@@ -42,16 +72,18 @@ export function AnalyzeButton({
   const t = useT();
   const blockedTitle = blocked ? t.batch.otherModeBusy : undefined;
   const redoTitle = t.batch.reanalyzeHint;
-  if (analyzing) {
+  if (analyzing || reading) {
     return (
-      <button className="primary-button" disabled>
-        {t.common.analysisRunning}
+      <button className={primary ? "primary-button" : ""} disabled>
+        {analyzing ? t.common.analysisRunning : t.batch.readingTracks}
       </button>
     );
   }
   if (missing === 0 && analyzed > 0) {
+    // Nothing left to analyze: redoing it all isn't the next step (exporting
+    // is), so it's a plain button.
     return (
-      <button className="primary-button" disabled={disabled} title={blockedTitle ?? redoTitle} onClick={() => onAnalyze(true)}>
+      <button disabled={disabled} title={blockedTitle ?? redoTitle} onClick={() => onAnalyze(true)}>
         {t.batch.reanalyzeAll}
       </button>
     );
@@ -59,12 +91,13 @@ export function AnalyzeButton({
   return (
     <>
       {analyzed > 0 && (
-        <button className="small-button" disabled={disabled} title={blockedTitle ?? redoTitle} onClick={() => onAnalyze(true)}>
+        // As tall as the buttons beside it.
+        <button disabled={disabled} title={blockedTitle ?? redoTitle} onClick={() => onAnalyze(true)}>
           {t.batch.reanalyzeAll}
         </button>
       )}
       <button
-        className="primary-button"
+        className={primary ? "primary-button" : ""}
         disabled={disabled}
         title={blockedTitle ?? (analyzed > 0 ? t.batch.analyzeRestHint(unit) : undefined)}
         onClick={() => onAnalyze(false)}
@@ -82,103 +115,11 @@ export function dropBlockedReason(busy: boolean, blocked: boolean): string | nul
   return blocked ? t().batch.otherModeBusy : null;
 }
 
-/** One file of a list, with the buttons that move it within its column (to
- * reorder, or pair it with another row) or drop it. A dash when its column
- * is shorter than the other one. The arrows carry U+FE0E, which asks for
- * the plain text glyph: Windows may otherwise draw them as colored emoji. */
-export function FileCell({
-  files,
-  index,
-  disabled,
-  onChange,
-}: {
-  files: string[];
-  index: number;
-  disabled: boolean;
-  onChange: (update: (files: string[]) => string[]) => void;
-}) {
-  const t = useT();
-  const file = files[index];
-  if (file === undefined) return <td className="batch-file batch-file-missing">—</td>;
-  return (
-    <td className="batch-file">
-      <div className="batch-file-inner">
-        <span className="batch-filename" title={file}>
-          {basename(file)}
-        </span>
-        <span className="batch-file-actions">
-          <button
-            className="small-button"
-            onClick={() => onChange((f) => moved(f, index, index - 1))}
-            disabled={disabled || index === 0}
-            title={t.batch.moveUp}
-          >
-            {"\u2191\uFE0E"}
-          </button>
-          <button
-            className="small-button"
-            onClick={() => onChange((f) => moved(f, index, index + 1))}
-            disabled={disabled || index === files.length - 1}
-            title={t.batch.moveDown}
-          >
-            {"\u2193\uFE0E"}
-          </button>
-          <button
-            className="small-button"
-            onClick={() => onChange((f) => f.filter((_, i) => i !== index))}
-            disabled={disabled}
-            title={t.common.remove}
-          >
-            ✕
-          </button>
-        </span>
-      </div>
-    </td>
-  );
-}
-
 const OUTPUT_DIR_KEY = "syncaudio.batchOutputDir";
 
 /** The folder batch exports go to (null: next to each original), kept for the next session. */
 export const loadOutputDir = (): string | null => loadSetting(OUTPUT_DIR_KEY);
 export const saveOutputDir = (dir: string | null): void => saveSetting(OUTPUT_DIR_KEY, dir);
-
-/** "Sortie : à côté des originaux / <dossier>", with the buttons to change it. */
-export function OutputChooser({
-  outputDir,
-  onChange,
-  disabled,
-}: {
-  outputDir: string | null;
-  onChange: (dir: string | null) => void;
-  disabled: boolean;
-}) {
-  const t = useT();
-  return (
-    <div className="batch-output">
-      <span className="batch-output-label">{t.batch.output}</span>
-      <span className={outputDir ? "batch-output-dir batch-output-path" : "batch-output-dir"} title={outputDir ?? undefined}>
-        {outputDir ?? t.batch.nextToOriginals}
-      </span>
-      <button
-        className="small-button"
-        disabled={disabled}
-        title={t.batch.chooseFolderHint}
-        onClick={async () => {
-          const dir = await pickFolder(outputDir);
-          if (dir) onChange(dir);
-        }}
-      >
-        {t.batch.chooseFolder}
-      </button>
-      {outputDir && (
-        <button className="small-button" disabled={disabled} onClick={() => onChange(null)} title={t.batch.backNextToOriginalsHint}>
-          {t.batch.backNextToOriginals}
-        </button>
-      )}
-    </div>
-  );
-}
 
 /** One analysis, as both batch modes keep it (a corrected track of a file, a pair). */
 export interface AnalysisRun {
@@ -188,72 +129,11 @@ export interface AnalysisRun {
   log: string[];
 }
 
-/** An analysis's status for its table cell, as in Bobine Subs: on the left
- * what it's at, its result or why it failed (the log while it runs or once
- * it failed); on the right "Modifier" and a "Réanalyser" icon (this one
- * alone again). `name` heads it when a row holds several (a file's tracks).
- * "Modifier" stays usable while the others are analyzed (those lose their
- * result as they're queued, so no edit can be overwritten); not during an
- * export, which writes what's edited. */
-export function AnalysisStatus({
-  run,
-  name,
-  busy,
-  exporting,
-  onEdit,
-  onReanalyze,
-}: {
-  run: AnalysisRun | undefined;
-  name?: string;
-  busy: boolean;
-  exporting: boolean;
-  onEdit: () => void;
-  onReanalyze: () => void;
-}) {
-  const t = useT();
-  const status = run?.status;
-  return (
-    <div className="batch-analysis-cell">
-      <div className="batch-analysis-text">
-        {name && <span className="batch-target-name">{name} </span>}
-        {!run && t.batch.toAnalyze}
-        {status === "pending" && t.batch.pending}
-        {status === "running" && t.common.analysisRunning}
-        {status === "done" && run?.result && describeSegments(run.result.segments)}
-        {status === "error" && (run?.error ?? t.common.error)}
-        {run && (status === "running" || status === "error") && <LogPanel lines={run.log} />}
-      </div>
-      <div className="batch-row-buttons">
-        {status === "done" && run?.result && (
-          <button className="small-button" disabled={exporting} onClick={onEdit}>
-            {t.common.edit}
-          </button>
-        )}
-        {(status === "done" || status === "error") && (
-          <button
-            className="small-button icon-small-button"
-            disabled={busy}
-            onClick={onReanalyze}
-            aria-label={t.batch.reanalyzeOne}
-            title={t.batch.reanalyzeOneHint}
-          >
-            <RedoIcon />
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** Where a row stands, for the colored bar at its left (as the single-file
- * view's analyzed tracks, and Bobine Subs' rows): something running, waiting,
+/** Where a row stands, for the colored bar at its left (as Bobine Subs'
+ * rows): something running, waiting,
  * failed or flagged, exported, every analysis done, or nothing done yet. A
  * row holds one analysis (a pair) or several (a file's corrected tracks). */
-export function rowState(
-  analyses: (AnalysisRun | undefined)[],
-  exportStatus: RunStatus | undefined,
-  problem: boolean,
-): string {
+export function rowState(analyses: (AnalysisRun | undefined)[], exportStatus: RunStatus | undefined, problem: boolean): string {
   const statuses = analyses.map((a) => a?.status);
   if (statuses.includes("running") || exportStatus === "running") return "running";
   if (statuses.includes("pending")) return "queued";
@@ -276,43 +156,23 @@ export const IDLE_EXPORT: ExportFields = { exportStatus: "idle", exportResult: n
 /** The file an export wrote, once done. */
 export const writtenFile = (entry: ExportFields | undefined | null): string | undefined => entry?.exportResult?.written[0];
 
-/** The "Export" cell: dash, progress, the written file, the error or "Annulé". */
-export function ExportCell({ entry }: { entry: ExportFields | undefined | null }) {
-  const t = useT();
-  const status = entry?.exportStatus ?? "idle";
-  const written = writtenFile(entry);
-  return (
-    <td className={`batch-status batch-status-${status === "idle" ? "pending" : status}`}>
-      {status === "idle" && "—"}
-      {status === "running" && t.common.exportRunning}
-      {status === "done" && written && <span title={written}>{basename(written)}</span>}
-      {status === "error" && (entry?.exportError ?? t.common.error)}
-      {status === "cancelled" && t.common.cancelled}
-      {entry && (status === "running" || status === "error") && <LogPanel lines={entry.exportLog} />}
-    </td>
-  );
-}
-
 /** The row's folder icon, once its export is written (as in Bobine Subs). */
 export function RevealButton({ file }: { file: string | undefined }) {
   const t = useT();
   if (!file) return null;
   return (
-    <button
-      className="small-button icon-small-button"
-      title={t.batch.folderHint}
-      aria-label={t.batch.folderHint}
-      onClick={() => revealItemInDir(file)}
-    >
-      <FolderIcon />
-    </button>
+    <Tooltip text={t.batch.folderHint}>
+      <button className="small-button icon-small-button" aria-label={t.batch.folderHint} onClick={() => revealItemInDir(file)}>
+        <FolderIcon />
+      </button>
+    </Tooltip>
   );
 }
 
 /** One file to export: `input` names the output (see planOutputPaths),
  * `start` starts its render job at the given output path, `update` records
  * its progress in the mode's own state. */
-export interface ExportTask {
+interface ExportTask {
   input: string;
   start: (outputPath: string) => Promise<string>;
   update: (patch: (entry: ExportFields) => Partial<ExportFields>) => void;
@@ -334,7 +194,10 @@ export function useExportQueue(outputDir: string | null) {
     try {
       let outputs: string[];
       try {
-        outputs = await planOutputPaths(tasks.map((t) => t.input), outputDir);
+        outputs = await planOutputPaths(
+          tasks.map((t) => t.input),
+          outputDir,
+        );
       } catch (err) {
         const message = errorMessage(err);
         for (const t of tasks) t.update(() => ({ exportStatus: "error", exportError: message }));
@@ -377,8 +240,9 @@ export function useExportQueue(outputDir: string | null) {
   return { exporting, cancelling, run, cancel };
 }
 
-/** A batch mode's footer: output folder, progress line, analyze and export
- * (or cancel) buttons. */
+/** A mode's footer: output folder, progress line, analyze and export (or
+ * cancel) buttons, the export the gradient when it's the next step
+ * (`exportNext`). */
 export function BatchFooter({
   outputDir,
   onOutputDirChange,
@@ -388,22 +252,39 @@ export function BatchFooter({
   analyzeButton,
   queue,
   canExport,
+  exportNext,
   onExport,
+  exportOptions,
+  languages,
+  example,
 }: {
   outputDir: string | null;
   onOutputDirChange: (dir: string | null) => void;
+  /** The export options, the languages of the tracks to correct (a custom
+   * name each) and one track's automatic name (see ExportChooser). */
+  exportOptions: ExportOptions;
+  languages: (string | null)[];
+  example: string | null;
   busy: boolean;
   blocked: boolean;
   progress: ReactNode;
   analyzeButton: ReactNode;
   queue: ReturnType<typeof useExportQueue>;
   canExport: boolean;
+  exportNext: boolean;
   onExport: () => void;
 }) {
   const t = useT();
   return (
     <div className="batch-footer panel">
-      <OutputChooser outputDir={outputDir} onChange={onOutputDirChange} disabled={busy} />
+      <ExportChooser
+        outputDir={outputDir}
+        onOutputDirChange={onOutputDirChange}
+        options={exportOptions}
+        languages={languages}
+        example={example}
+        disabled={busy}
+      />
       <span className="batch-progress">{progress}</span>
       {analyzeButton}
       {queue.exporting ? (
@@ -412,7 +293,7 @@ export function BatchFooter({
         </button>
       ) : (
         <button
-          className="primary-button"
+          className={exportNext ? "primary-button" : ""}
           onClick={onExport}
           disabled={!canExport || busy || blocked}
           title={blocked ? t.batch.otherModeBusy : undefined}
@@ -421,5 +302,31 @@ export function BatchFooter({
         </button>
       )}
     </div>
+  );
+}
+
+/** "Sous-titres :" in a mode's settings bar: which subtitles go with each
+ * corrected track, for every file (short names on the closed button). */
+export function SubtitleModeField({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: SubtitleMode;
+  onChange: (mode: SubtitleMode) => void;
+  disabled: boolean;
+}) {
+  const t = useT();
+  return (
+    <span className="config-field">
+      {t.common.labelled(t.batch.subtitles)}
+      <Select
+        label={t.batch.subtitles}
+        value={value}
+        options={SUBTITLE_MODES.map((mode) => ({ value: mode, label: t.subtitles.modes[mode], short: t.subtitles.shortModes[mode] }))}
+        onChange={onChange}
+        disabled={disabled}
+      />
+    </span>
   );
 }

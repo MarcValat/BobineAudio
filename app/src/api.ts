@@ -1,6 +1,6 @@
 // Client for the syncaudio FastAPI sidecar (engine/src/syncaudio/server.py),
 // spawned by src-tauri/src/lib.rs; its address and startup are in engine.ts.
-import { engineReady, getEngineUrl } from "./engine";
+import { engineHeaders, engineReady, getEngineToken, getEngineUrl } from "./engine";
 import { t } from "./i18n";
 
 export interface TrackInfo {
@@ -11,6 +11,9 @@ export interface TrackInfo {
   title?: string | null;
   channels: number | null;
   sample_rate: number | null;
+  // The codec it's exported in once corrected, when no other is asked
+  // ("Opus" for an AAC source): the automatic track names.
+  export_codec: string;
   // Container-level presentation delay (e.g. from mkvtoolnix's --sync), if
   // any -- display-only, see the engine's probe_stream_start_time docstring
   // for why detection/render intentionally ignore it.
@@ -28,7 +31,7 @@ export interface SubtitleInfo {
   shiftable: boolean;
 }
 
-export interface ProbeResponse {
+interface ProbeResponse {
   path: string;
   tracks: TrackInfo[];
   subtitles: SubtitleInfo[];
@@ -49,7 +52,7 @@ export interface SegmentsResponse {
   segments: SegmentOut[];
 }
 
-export interface RenderedTrack {
+interface RenderedTrack {
   track: string;
   language: string | null;
   offset_seconds: number | null; // null for a segmented (non-constant) correction
@@ -74,7 +77,9 @@ async function readErrorDetail(resp: Response): Promise<string> {
  * starts, it just goes through a moment later. */
 async function engineFetch(path: string, init?: RequestInit): Promise<Response> {
   await engineReady();
-  return fetch(`${await getEngineUrl()}${path}`, init);
+  const headers = new Headers(init?.headers);
+  for (const [name, value] of Object.entries(await engineHeaders())) headers.set(name, value);
+  return fetch(`${await getEngineUrl()}${path}`, { ...init, headers });
 }
 
 export async function probe(path: string): Promise<ProbeResponse> {
@@ -131,30 +136,6 @@ export async function expandPaths(paths: string[], extensions: string[]): Promis
   return (await resp.json()).files;
 }
 
-export interface PrefetchResponse {
-  cached: number;
-}
-
-/**
- * Warms the engine's analysis cache for every track in the background --
- * fire right after `probe` succeeds so that by the time the user picks a
- * reference and clicks a detection button, the ~7s-per-track
- * extraction+envelope cost (the actual bottleneck, not ffmpeg decoding) is
- * already paid. Fire-and-forget: a failure here just means the next
- * detection redoes the work itself, so callers aren't required to await
- * the job's completion or handle its errors specially.
- */
-export async function startPrefetchJob(path: string, trackIndices: number[]): Promise<string> {
-  const resp = await engineFetch(`/jobs/prefetch`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tracks: trackIndices.map((index) => ({ path, index })) }),
-  });
-  if (!resp.ok) throw new Error(await readErrorDetail(resp));
-  const data = await resp.json();
-  return data.job_id as string;
-}
-
 /**
  * A short playable WAV clip of one track, for the "listen before you
  * render" preview -- not the 16kHz analysis PCM, a normal-rate clip meant
@@ -194,7 +175,7 @@ export async function fetchCorrectedClip(
   return resp.blob();
 }
 
-export interface WaveformResponse {
+interface WaveformResponse {
   duration: number;
   peaks_min: number[];
   peaks_max: number[];
@@ -206,7 +187,7 @@ export interface WaveformResponse {
  * once (`duration` omitted), unlike `fetchClip`. Used to draw the
  * always-visible, zoomable comparison waveforms (see TrackPreview.tsx).
  */
-export async function fetchWaveform(
+export function fetchWaveform(
   path: string,
   index: number,
   start: number,
@@ -215,9 +196,44 @@ export async function fetchWaveform(
 ): Promise<WaveformResponse> {
   const params = new URLSearchParams({ path, index: String(index), start: String(start), buckets: String(buckets) });
   if (duration !== null) params.set("duration", String(duration));
-  const resp = await engineFetch(`/waveform?${params.toString()}`);
+  const query = params.toString();
+  // A whole track's is kept (and shared while it's on its way): the
+  // preview asks for it again each time a file or a pair is shown, and
+  // the batch modes load it ahead (preloadWaveforms).
+  if (duration !== null) return requestWaveform(query);
+  let pending = wholeTrackWaveforms.get(query);
+  if (!pending) {
+    pending = requestWaveform(query);
+    pending.catch(() => wholeTrackWaveforms.delete(query));
+    wholeTrackWaveforms.set(query, pending);
+    // The oldest ones go past a session's worth (each is a few hundred KB).
+    if (wholeTrackWaveforms.size > MAX_KEPT_WAVEFORMS) wholeTrackWaveforms.delete(wholeTrackWaveforms.keys().next().value!);
+  }
+  return pending;
+}
+
+const MAX_KEPT_WAVEFORMS = 96;
+const wholeTrackWaveforms = new Map<string, Promise<WaveformResponse>>();
+
+async function requestWaveform(query: string): Promise<WaveformResponse> {
+  const resp = await engineFetch(`/waveform?${query}`);
   if (!resp.ok) throw new Error(await readErrorDetail(resp));
   return resp.json();
+}
+
+/** Decodes and analyzes these tracks of `path` ahead, all in one pass over
+ * the file (POST /jobs/prefetch): an analysis using them then starts from
+ * the cache, and so does their whole-track waveform at `waveformBuckets`.
+ * One already there, or being done, isn't done again. */
+export async function startPrefetchJob(path: string, indices: number[], waveformBuckets: number): Promise<string> {
+  const resp = await engineFetch(`/jobs/prefetch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tracks: indices.map((index) => ({ path, index })), waveform_buckets: waveformBuckets }),
+  });
+  if (!resp.ok) throw new Error(await readErrorDetail(resp));
+  const data = await resp.json();
+  return data.job_id as string;
 }
 
 export async function startSegmentsJob(
@@ -243,7 +259,7 @@ export async function startSegmentsJob(
   return data.job_id as string;
 }
 
-export interface TrackSegments {
+interface TrackSegments {
   trackIndex: number;
   segments: SegmentOut[];
   /** Tag the corrected track with this language instead of its own. */
@@ -251,6 +267,10 @@ export interface TrackSegments {
   /** Subtitle tracks of the same file timed on this audio: retimed with it,
    * segment by segment. */
   subtitles?: number[];
+  /** The corrected track's name in the export instead of its source's. */
+  title?: string | null;
+  /** Its export codec instead of the one matching its source. */
+  codec?: "opus" | "aac" | "flac" | "ac3" | "eac3" | null;
 }
 
 /**
@@ -280,6 +300,8 @@ export async function startSegmentedRenderJob(
         track: { path: inputPath, index: t.trackIndex },
         segments: t.segments,
         language: t.language ?? null,
+        title: t.title ?? null,
+        codec: t.codec ?? null,
       })),
       subs: tracks.flatMap((t) =>
         (t.subtitles ?? []).map((index) => ({
@@ -296,20 +318,20 @@ export async function startSegmentedRenderJob(
 
 /**
  * Segmented render pulling the corrected track from a *different* file than
- * the reference (batch mode's case: reference and to-correct files are two
+ * the reference (the pairs' case: reference and to-correct files are two
  * separate imports, never the same file@index pair `startSegmentedRenderJob`
  * assumes) -- `input_path` supplies the video/reference/subtitles as-is,
  * `only_imports` keeps it from also (redundantly) "correcting" any of its
- * own native tracks, and the corrected track is imported from `candidatePath`
- * as a donor, same mechanism as the CLI's `--import-audio`.
+ * own native tracks, and the corrected tracks (one or several) are imported
+ * from `candidatePath` as donors, same mechanism as the CLI's
+ * `--import-audio`.
  */
 export async function startCrossFileSegmentedRenderJob(
   referencePath: string,
   referenceIndex: number,
   candidatePath: string,
-  candidateIndex: number,
-  segments: SegmentOut[],
-  options: { outputPath?: string; language?: string | null; subtitles?: number[] } = {},
+  tracks: TrackSegments[],
+  outputPath?: string,
 ): Promise<string> {
   const resp = await engineFetch(`/jobs/render`, {
     method: "POST",
@@ -318,18 +340,25 @@ export async function startCrossFileSegmentedRenderJob(
       input_path: referencePath,
       reference_index: referenceIndex,
       only_imports: true,
-      import_audio: [{ path: candidatePath, index: candidateIndex }],
-      output_path: options.outputPath ?? null,
+      // Every corrected track of the candidate file, imported side by side.
+      import_audio: tracks.map((t) => ({ path: candidatePath, index: t.trackIndex })),
+      output_path: outputPath ?? null,
       segmented: true,
-      segment_overrides: [
-        { track: { path: candidatePath, index: candidateIndex }, segments, language: options.language ?? null },
-      ],
-      // The candidate file's own subtitles timed on its audio, imported and
-      // retimed along with it.
-      subs: (options.subtitles ?? []).map((index) => ({
-        subs: { path: candidatePath, index },
-        audio: { path: candidatePath, index: candidateIndex },
+      segment_overrides: tracks.map((t) => ({
+        track: { path: candidatePath, index: t.trackIndex },
+        segments: t.segments,
+        language: t.language ?? null,
+        title: t.title ?? null,
+        codec: t.codec ?? null,
       })),
+      // The candidate file's own subtitles timed on each audio, imported and
+      // retimed along with it.
+      subs: tracks.flatMap((t) =>
+        (t.subtitles ?? []).map((index) => ({
+          subs: { path: candidatePath, index },
+          audio: { path: candidatePath, index: t.trackIndex },
+        })),
+      ),
     }),
   });
   if (!resp.ok) throw new Error(await readErrorDetail(resp));
@@ -337,11 +366,8 @@ export async function startCrossFileSegmentedRenderJob(
   return data.job_id as string;
 }
 
-export type JobEvent<TResult> =
-  | { type: "log"; message: string }
-  | { type: "done"; result: TResult }
-  | { type: "error"; message: string }
-  | { type: "cancelled" };
+type JobEvent<TResult> =
+  { type: "log"; message: string } | { type: "done"; result: TResult } | { type: "error"; message: string } | { type: "cancelled" };
 
 /** Stop a running job (an export started too early...): the engine kills
  * its ffmpeg run, removes a half-written file, and the job's WebSocket
@@ -359,11 +385,10 @@ export async function cancelJob(jobId: string): Promise<void> {
  * this, the caller's UI would stay stuck in "in progress" forever with no
  * way to know something went wrong.
  */
-export async function connectJobWS<TResult>(
-  jobId: string,
-  onEvent: (event: JobEvent<TResult>) => void,
-): Promise<() => void> {
-  const ws = new WebSocket(`${(await getEngineUrl()).replace("http", "ws")}/jobs/${jobId}/ws`);
+export async function connectJobWS<TResult>(jobId: string, onEvent: (event: JobEvent<TResult>) => void): Promise<() => void> {
+  // A WebSocket takes no header: the token goes in its address.
+  const token = encodeURIComponent(await getEngineToken());
+  const ws = new WebSocket(`${(await getEngineUrl()).replace("http", "ws")}/jobs/${jobId}/ws?token=${token}`);
   let settled = false;
 
   ws.onmessage = (ev) => {

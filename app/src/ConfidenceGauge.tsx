@@ -1,5 +1,6 @@
 import { LOW_CONFIDENCE_THRESHOLD } from "./SegmentChart";
 import { useT } from "./i18n";
+import { WarningIcon } from "./icons";
 
 /** A segment's confidence at a glance (as in Bobine Subs): a thin bar
  * filled to it, green when reliable, red when it's to check (⚠ under
@@ -15,7 +16,7 @@ export function ConfidenceGauge({ value }: { value: number }) {
       </span>
       <span className="confidence-value">{t.common.percent(percent)}</span>
       {/* Room kept on every row: the bars stay aligned. */}
-      <span className="confidence-flag">{weak ? "⚠" : ""}</span>
+      <span className="confidence-flag">{weak && <WarningIcon />}</span>
     </span>
   );
 }

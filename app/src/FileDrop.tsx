@@ -7,10 +7,10 @@ import "./FileDrop.css";
 
 /** Which half of the window files are dragged over (pairs mode drops the
  * reference files on the left, the ones to correct on the right). */
-export type DropSide = "left" | "right";
+type DropSide = "left" | "right";
 
 /** Files being dragged over the window, and where. */
-export interface FileDrag {
+interface FileDrag {
   side: DropSide;
 }
 
@@ -19,11 +19,7 @@ export interface FileDrag {
  * files, a folder standing for its media files in name order (see the
  * engine's /paths/expand). While `blocked`, the overlay says why and a drop
  * does nothing. Returns the drag in progress, for DropOverlay. */
-export function useFileDrop(
-  enabled: boolean,
-  blocked: string | null,
-  onDrop: (files: string[], side: DropSide) => void,
-): FileDrag | null {
+export function useFileDrop(enabled: boolean, blocked: string | null, onDrop: (files: string[], side: DropSide) => void): FileDrag | null {
   const [drag, setDrag] = useState<FileDrag | null>(null);
   // The latest of each, without resubscribing on every render.
   const latest = useRef({ blocked, onDrop });

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from concurrent.futures import ThreadPoolExecutor
-from functools import lru_cache
+from functools import cache
 
 import numpy as np
 
@@ -31,7 +31,7 @@ _WORKERS = min(4, os.cpu_count() or 1)
 _pool = ThreadPoolExecutor(max_workers=_WORKERS, thread_name_prefix="syncaudio-envelope")
 
 
-@lru_cache(maxsize=None)
+@cache
 def _median_network(size: int) -> tuple[tuple[str, int, int, bool, bool], ...]:
     """Min/max ops selecting the element of rank ``size // 2`` out of ``size`` lanes.
 
@@ -218,5 +218,5 @@ def extract_envelope(
     if len(starts) > 1 and n_frames - starts[-1] < 2:
         starts.pop()
     ends = starts[1:] + [n_frames]
-    parts = _pool.map(lambda ab: _envelope_block(pcm, n_fft, hop, n_frames, *ab), zip(starts, ends))
+    parts = _pool.map(lambda ab: _envelope_block(pcm, n_fft, hop, n_frames, *ab), zip(starts, ends, strict=True))
     return np.concatenate(list(parts)).astype(np.float64), frame_rate

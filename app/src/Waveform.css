@@ -4,6 +4,9 @@
 .waveforms {
   flex: 1 1 0;
   min-height: 0;
+  /* On a window too small even for their minimum, they're cut rather than
+     spilling over the playback controls below. */
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 0.3em;
@@ -12,7 +15,8 @@
 .waveform {
   position: relative;
   flex: 1 1 0;
-  min-height: 56px;
+  /* All three fit in the smallest window (tauri.conf.json's minimum). */
+  min-height: 60px;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
@@ -22,24 +26,37 @@
   overflow: hidden;
 }
 
-/* Over the waveform's top-left corner rather than on a line of its own:
-   height is what a small window lacks. */
+/* On a line of its own above the waveform: laid over its top-left corner,
+   it hid the loud parts under it. */
 .waveform-label {
-  position: absolute;
-  top: 0.2em;
-  left: 0.5em;
-  pointer-events: none;
-  z-index: 1;
-  padding: 0 0.3em;
-  border-radius: 3px;
-  /* Readable over the waveform it sits on. */
-  background: color-mix(in srgb, var(--surface) 80%, transparent);
-  font-size: 0.7em;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 1em;
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: nowrap;
+  color: var(--text-muted);
+  margin-bottom: 0.15em;
+}
+
+.waveform-label-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--text-muted);
-  margin-bottom: 0.1em;
+}
+
+/* On the right: what its colors mean, "Décalage ici". */
+.waveform-label-extra {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 1.2em;
 }
 
 /* Its height comes from the room the waveform has, not from its own
@@ -98,6 +115,25 @@
   stroke-width: 2;
 }
 
+/* A middle-button drag moving the view (timeView.ts's useTimelinePointer). */
+.timeline-panning,
+.timeline-panning * {
+  cursor: grabbing !important;
+}
+
+/* Gliding to a clicked position (Waveform.tsx's useMarkerGlide). */
+.waveform-cursor.glide,
+.editor-chart .playback-cursor.glide {
+  transition: transform 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .waveform-cursor.glide,
+  .editor-chart .playback-cursor.glide {
+    transition: none;
+  }
+}
+
 .waveform-ticks {
   flex: 0 0 auto;
   display: flex;
@@ -109,13 +145,6 @@
 
 /* At the end of the zoom row, not on a line of its own: height is what a
    small screen lacks. */
-.waveform-legend {
-  display: flex;
-  gap: 1.2em;
-  margin-left: auto;
-  color: var(--text-muted);
-}
-
 .waveform-legend-swatch {
   display: inline-block;
   width: 0.9em;
@@ -152,10 +181,11 @@
   opacity: 0.35;
 }
 
+/* The part in view: --accent, lighter on the light theme's white, where
+   the dark theme's 30% read as a solid blue bar over the whole track. */
 .waveform-navigator-window {
-  fill: var(--accent);
-  opacity: 0.3;
-  stroke: var(--accent);
+  fill: light-dark(rgb(61 95 224 / 0.12), rgb(122 162 255 / 0.3));
+  stroke: light-dark(rgb(61 95 224 / 0.5), rgb(122 162 255 / 0.3));
   stroke-width: 1;
   cursor: grab;
   /* Belt-and-suspenders alongside preventDefault() on pointerdown (see
@@ -173,4 +203,28 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4em;
+}
+
+/* While they load: the frames alone, a spinner over their middle. */
+.waveforms-loading {
+  position: relative;
+}
+
+.waveforms-spinner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6em;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* The navigator's room, the same height as the real one. */
+.waveform-navigator-placeholder {
+  height: 26px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
 }

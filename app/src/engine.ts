@@ -8,6 +8,7 @@ import { currentLanguage, t } from "./i18n";
 const DEFAULT_PORT = 8756;
 
 let engineUrl: string | null = null;
+let engineToken: string | null = null;
 
 /** The engine sidecar's local HTTP address, asked once to the app (see
  * src-tauri/src/lib.rs's free_port). */
@@ -19,13 +20,30 @@ export async function getEngineUrl(): Promise<string> {
   return engineUrl;
 }
 
+/** The dev builds' token (src-tauri/src/lib.rs's DEV_TOKEN): what a plain
+ * browser on the dev server sends to the engine that `tauri dev` (or the
+ * end-to-end tests) started. */
+const DEV_TOKEN = "bobine-dev";
+
+/** The secret the engine asks of every request (see lib.rs's new_token),
+ * asked once to the app. */
+export async function getEngineToken(): Promise<string> {
+  if (engineToken === null) engineToken = isTauri() ? await invoke<string>("engine_token") : DEV_TOKEN;
+  return engineToken;
+}
+
+/** What a request to the engine carries for it to answer. */
+export async function engineHeaders(): Promise<Record<string, string>> {
+  return { "X-Bobine-Token": await getEngineToken() };
+}
+
 // Asked often, so requests go through as soon as the engine answers (it's
 // up in about a second); a tiny local request, only while starting.
 const HEALTH_POLL_INTERVAL_MS = 100;
 const HEALTH_POLL_ATTEMPTS = 200; // 200 * 100ms = 20s before giving up
 
 /** "starting": not answering yet; "unreachable": gave up waiting (see retryEngine). */
-export type EngineStatus = "starting" | "ready" | "unreachable";
+type EngineStatus = "starting" | "ready" | "unreachable";
 
 let status: EngineStatus = "starting";
 let ready: Promise<void> | null = null;
@@ -55,7 +73,7 @@ function waitForEngine(): Promise<void> {
       if (await healthy()) {
         await fetch(`${await getEngineUrl()}/language`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...(await engineHeaders()) },
           body: JSON.stringify({ language: currentLanguage() }),
         }).catch(() => {});
         setStatus("ready");

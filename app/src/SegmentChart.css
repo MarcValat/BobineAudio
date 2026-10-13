@@ -13,6 +13,17 @@
   height: 100%;
 }
 
+/* The plot inside the axes' margins (SegmentChart.tsx sets them), its
+   labels past its edges. */
+.segment-chart-box {
+  position: relative;
+}
+
+.segment-chart svg.segment-chart-plot {
+  position: absolute;
+  overflow: visible;
+}
+
 /* On a tab of its own: the whole height, the box growing to fill it. */
 .segment-chart-fill {
   height: 100%;
@@ -105,4 +116,27 @@
 .legend-swatch.low-confidence {
   background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px);
   opacity: 0.7;
+}
+
+/* Nothing drawn yet (SegmentChartPlaceholder): a dashed frame, what's going
+   on in its middle. */
+.segment-chart-placeholder {
+  border-style: dashed;
+}
+
+.segment-chart-placeholder-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6em;
+  text-align: center;
+}
+
+.segment-chart-placeholder-body p {
+  margin: 0;
+}
+
+.segment-chart-placeholder-body .log-button {
+  align-self: center;
 }

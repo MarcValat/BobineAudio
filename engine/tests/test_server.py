@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import subprocess
-import wave
 from pathlib import Path
 
-import numpy as np
 import pytest
 from fastapi.testclient import TestClient
+from synthetic import make_bed, write_wav
 
 import syncaudio.analysis_cache as analysis_cache
 import syncaudio.waveform_cache as waveform_cache
@@ -23,61 +22,6 @@ def _clear_analysis_cache():
     yield
     analysis_cache.clear()
     waveform_cache.clear()
-
-
-def _make_bed(duration_s: float, sr: int, seed: int, hits_per_second: float = 3.0) -> np.ndarray:
-    rng = np.random.default_rng(seed)
-    n = int(duration_s * sr)
-    bed = np.zeros(n, dtype=np.float64)
-    burst_len = int(0.05 * sr)
-    envelope = np.hanning(burst_len)
-    hit_times = rng.uniform(0, duration_s - 0.2, int(duration_s * hits_per_second))
-    for t in hit_times:
-        start = int(t * sr)
-        if start + burst_len > n:
-            continue
-        bed[start : start + burst_len] += rng.standard_normal(burst_len) * envelope
-    return bed
-
-
-def _write_wav(path: Path, data: np.ndarray, sr: int) -> None:
-    samples = np.clip(data * 20000, -32768, 32767).astype("<i2")
-    with wave.open(str(path), "wb") as f:
-        f.setnchannels(1)
-        f.setsampwidth(2)
-        f.setframerate(sr)
-        f.writeframes(samples.tobytes())
-
-
-@pytest.fixture()
-def offset_mkv(tmp_path: Path) -> tuple[Path, float]:
-    """A 2-track mkv (dummy video + reference + candidate lagging by 3s)."""
-    sr = 44100
-    duration_s = 30.0
-    offset_s = 3.0
-
-    bed = _make_bed(duration_s, sr, seed=42)
-    shifted = np.concatenate([np.zeros(int(offset_s * sr)), bed])[: len(bed)]
-
-    ref_wav = tmp_path / "ref.wav"
-    cand_wav = tmp_path / "cand.wav"
-    _write_wav(ref_wav, bed, sr)
-    _write_wav(cand_wav, shifted, sr)
-
-    mkv = tmp_path / "multi.mkv"
-    ffmpeg = resolve_ffmpeg()
-    subprocess.run(
-        [
-            ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "lavfi", "-i", f"color=c=black:s=64x64:d={duration_s}",
-            "-i", str(ref_wav), "-i", str(cand_wav),
-            "-map", "0:v", "-map", "1:a", "-map", "2:a",
-            "-metadata:s:a:0", "language=jpn", "-metadata:s:a:1", "language=fre",
-            "-shortest", str(mkv),
-        ],
-        check=True, capture_output=True,
-    )
-    return mkv, offset_s
 
 
 def test_health() -> None:
@@ -102,20 +46,38 @@ def test_probe_reports_container_level_track_delay(tmp_path: Path) -> None:
     sr = 44100
     wav_a = tmp_path / "a.wav"
     wav_b = tmp_path / "b.wav"
-    _write_wav(wav_a, _make_bed(2.0, sr, seed=1), sr)
-    _write_wav(wav_b, _make_bed(2.0, sr, seed=2), sr)
+    write_wav(wav_a, make_bed(2.0, sr, seed=1), sr)
+    write_wav(wav_b, make_bed(2.0, sr, seed=2), sr)
 
     mkv = tmp_path / "delayed.mkv"
     subprocess.run(
         [
-            ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "lavfi", "-i", "color=c=black:s=64x64:d=3",
-            "-i", str(wav_a),
-            "-itsoffset", "1.0", "-i", str(wav_b),
-            "-map", "0:v", "-map", "1:a", "-map", "2:a",
-            "-shortest", str(mkv),
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=black:s=64x64:d=3",
+            "-i",
+            str(wav_a),
+            "-itsoffset",
+            "1.0",
+            "-i",
+            str(wav_b),
+            "-map",
+            "0:v",
+            "-map",
+            "1:a",
+            "-map",
+            "2:a",
+            "-shortest",
+            str(mkv),
         ],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
 
     resp = client.get("/probe", params={"path": str(mkv)})
@@ -132,15 +94,47 @@ def test_probe_lists_subtitle_tracks(offset_mkv: tuple[Path, float], tmp_path: P
     with_subs = tmp_path / "with_subs.mkv"
     subprocess.run(
         [
-            resolve_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y",
-            "-i", str(mkv), "-i", str(srt), "-i", str(srt), "-i", str(srt),
-            "-map", "0", "-map", "1", "-map", "2", "-map", "3", "-c", "copy", "-c:s", "srt",
-            "-metadata:s:s:0", "language=fre", "-metadata:s:s:0", "title=Français",
-            "-metadata:s:s:1", "language=fre", "-disposition:s:1", "forced",
-            "-metadata:s:s:2", "language=eng", "-metadata:s:s:2", "title=English Forced",
+            resolve_ffmpeg(),
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(mkv),
+            "-i",
+            str(srt),
+            "-i",
+            str(srt),
+            "-i",
+            str(srt),
+            "-map",
+            "0",
+            "-map",
+            "1",
+            "-map",
+            "2",
+            "-map",
+            "3",
+            "-c",
+            "copy",
+            "-c:s",
+            "srt",
+            "-metadata:s:s:0",
+            "language=fre",
+            "-metadata:s:s:0",
+            "title=Français",
+            "-metadata:s:s:1",
+            "language=fre",
+            "-disposition:s:1",
+            "forced",
+            "-metadata:s:s:2",
+            "language=eng",
+            "-metadata:s:s:2",
+            "title=English Forced",
             str(with_subs),
         ],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     resp = client.get("/probe", params={"path": str(with_subs)})
     assert resp.status_code == 200
@@ -453,7 +447,9 @@ def test_paths_expand_lists_a_folders_media_files_in_episode_order(tmp_path: Pat
     }
 
 
-def test_a_cancelled_export_leaves_no_partial_file(offset_mkv: tuple[Path, float], monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_cancelled_export_leaves_no_partial_file(
+    offset_mkv: tuple[Path, float], monkeypatch: pytest.MonkeyPatch
+) -> None:
     import syncaudio.server as server
     from syncaudio.cancellation import Cancelled
 
@@ -479,3 +475,168 @@ def test_a_cancelled_export_leaves_no_partial_file(offset_mkv: tuple[Path, float
     )
     assert events[-1]["type"] == "cancelled"
     assert not output_path.exists()
+
+
+# --- Playback edge cases (the GUI's Écouter: three clips from one position) ---
+
+
+def _wav_seconds(content: bytes) -> float:
+    """A WAV's length from the samples actually there: ffmpeg streams it with
+    an unknown size in its header (0xFFFFFFFF), which the wave module would
+    believe."""
+    import struct
+
+    channels, rate = struct.unpack("<HI", content[22:28])
+    block_align = struct.unpack("<H", content[32:34])[0]
+    data = content.index(b"data") + 8
+    return (len(content) - data) / block_align / rate
+
+
+_ONE_SEGMENT = [{"start_s": 0.0, "end_s": 30.0, "offset_start": 3.0, "offset_end": 3.0, "is_drift": False}]
+
+
+@pytest.mark.parametrize("start", [0.0, 15.0, 28.5])
+def test_clip_lengths_match_between_reference_and_result(offset_mkv: tuple[Path, float], start: float) -> None:
+    """The three clips play together: the result must last as long as the
+    reference's (up to the track's end), or they drift apart and stop at
+    different times."""
+    mkv, _ = offset_mkv
+    ref = client.get("/clip", params={"path": str(mkv), "index": 0, "start": start, "duration": 12.0})
+    res = client.post(
+        "/corrected-clip",
+        json={"path": str(mkv), "index": 1, "segments": _ONE_SEGMENT, "start": start, "duration": 12.0},
+    )
+    assert ref.status_code == 200 and res.status_code == 200
+    ref_s, res_s = _wav_seconds(ref.content), _wav_seconds(res.content)
+    assert abs(ref_s - min(12.0, 30.0 - start)) < 0.1
+    assert abs(res_s - ref_s) < 0.1, (ref_s, res_s)
+
+
+def test_clip_negative_start_is_read_from_zero(offset_mkv: tuple[Path, float]) -> None:
+    mkv, _ = offset_mkv
+    resp = client.get("/clip", params={"path": str(mkv), "index": 0, "start": -50, "duration": 2.0})
+    assert resp.status_code == 200
+    assert abs(_wav_seconds(resp.content) - 2.0) < 0.1
+
+
+def test_corrected_clip_with_a_drift_and_a_jump(offset_mkv: tuple[Path, float]) -> None:
+    mkv, _ = offset_mkv
+    segments = [
+        {"start_s": 0.0, "end_s": 10.0, "offset_start": 3.0, "offset_end": 3.2, "is_drift": True},
+        {"start_s": 10.0, "end_s": 30.0, "offset_start": 2.5, "offset_end": 2.5, "is_drift": False},
+    ]
+    resp = client.post(
+        "/corrected-clip", json={"path": str(mkv), "index": 1, "segments": segments, "start": 5.0, "duration": 12.0}
+    )
+    assert resp.status_code == 200
+    assert abs(_wav_seconds(resp.content) - 12.0) < 0.1
+
+
+def test_corrected_clip_with_an_offset_reaching_before_the_track(offset_mkv: tuple[Path, float]) -> None:
+    """A track early on the reference (negative offset) at the very start:
+    the part before the track's start is silence, not an error."""
+    mkv, _ = offset_mkv
+    segments = [{"start_s": 0.0, "end_s": 30.0, "offset_start": -2.0, "offset_end": -2.0, "is_drift": False}]
+    resp = client.post(
+        "/corrected-clip", json={"path": str(mkv), "index": 1, "segments": segments, "start": 0.0, "duration": 5.0}
+    )
+    assert resp.status_code == 200
+    assert abs(_wav_seconds(resp.content) - 5.0) < 0.1, _wav_seconds(resp.content)
+
+
+def test_corrected_clip_with_an_offset_reaching_past_the_track(offset_mkv: tuple[Path, float]) -> None:
+    """A track late on the reference near its end: what's past the track's
+    end is silence, the clip keeps its length."""
+    mkv, _ = offset_mkv
+    segments = [{"start_s": 0.0, "end_s": 30.0, "offset_start": 8.0, "offset_end": 8.0, "is_drift": False}]
+    resp = client.post(
+        "/corrected-clip", json={"path": str(mkv), "index": 1, "segments": segments, "start": 25.0, "duration": 5.0}
+    )
+    assert resp.status_code == 200
+    assert abs(_wav_seconds(resp.content) - 5.0) < 0.1, _wav_seconds(resp.content)
+
+
+def test_corrected_clip_past_the_last_segment_is_a_clear_400(offset_mkv: tuple[Path, float]) -> None:
+    """Asked past every segment (the GUI keeps the position within the track
+    now): a 400 that says so, not a crash."""
+    mkv, _ = offset_mkv
+    resp = client.post(
+        "/corrected-clip", json={"path": str(mkv), "index": 1, "segments": _ONE_SEGMENT, "start": 40.0, "duration": 5.0}
+    )
+    assert resp.status_code == 400
+    assert resp.json()["detail"]
+
+
+# Who may call the engine (server.TokenGuard, CORS): the app that started it.
+
+
+@pytest.fixture()
+def token(monkeypatch: pytest.MonkeyPatch) -> str:
+    monkeypatch.setenv("SYNCAUDIO_TOKEN", "s3cret")
+    return "s3cret"
+
+
+def test_a_request_without_the_token_is_refused(token: str) -> None:
+    assert client.get("/cache").status_code == 401
+    assert client.get("/cache", headers={"X-Bobine-Token": "wrong"}).status_code == 401
+    assert client.post("/paths/exist", json={"paths": ["x"]}).status_code == 401
+
+
+def test_a_request_with_the_token_goes_through(token: str) -> None:
+    assert client.get("/cache", headers={"X-Bobine-Token": token}).status_code == 200
+
+
+def test_health_answers_without_the_token(token: str) -> None:
+    assert client.get("/health").status_code == 200
+
+
+def test_a_websocket_without_the_token_is_refused(token: str) -> None:
+    from starlette.websockets import WebSocketDisconnect
+
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect("/jobs/does-not-exist/ws") as ws:
+            ws.receive_json()
+    with client.websocket_connect(f"/jobs/does-not-exist/ws?token={token}") as ws:
+        assert ws.receive_json()["type"] == "error"
+
+
+def test_no_token_asked_when_none_was_given(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SYNCAUDIO_TOKEN", raising=False)
+    assert client.get("/cache").status_code == 200
+
+
+@pytest.mark.parametrize("origin", ["tauri://localhost", "http://tauri.localhost", "http://localhost:1420"])
+def test_the_app_may_read_the_answers(origin: str) -> None:
+    resp = client.get("/health", headers={"Origin": origin})
+    assert resp.headers.get("access-control-allow-origin") == origin
+
+
+def test_a_website_may_not(token: str) -> None:
+    resp = client.get("/health", headers={"Origin": "https://example.com"})
+    assert "access-control-allow-origin" not in resp.headers
+    preflight = client.options(
+        "/cache",
+        headers={
+            "Origin": "https://example.com",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "x-bobine-token",
+        },
+    )
+    assert "access-control-allow-origin" not in preflight.headers
+
+
+def test_render_refuses_subtitles_paired_with_a_track_not_corrected(offset_mkv: tuple[Path, float]) -> None:
+    mkv, _ = offset_mkv
+    resp = client.post(
+        "/jobs/render",
+        json={
+            "input_path": str(mkv),
+            "reference_index": 0,
+            "track_indices": [1],
+            # Paired with the reference, which isn't corrected.
+            "subs": [{"subs": {"path": str(mkv), "index": 0}, "audio": {"path": str(mkv), "index": 0}}],
+        },
+    )
+    events = _drain_job_ws(resp.json()["job_id"])
+    assert events[-1]["type"] == "error"
+    assert "ne correspond à aucune piste corrigée" in events[-1]["message"]

@@ -123,14 +123,19 @@ def test_classify_segments_ignores_an_isolated_outlier_window() -> None:
     failure shape."""
     hop_s = 10.0
     n_windows = 20
-    windows = [WindowOffset(time_s=i * hop_s, offset_seconds=0.02 * ((i % 5) - 2), confidence=0.5, ambiguous=False) for i in range(n_windows)]
+    windows = [
+        WindowOffset(time_s=i * hop_s, offset_seconds=0.02 * ((i % 5) - 2), confidence=0.5, ambiguous=False)
+        for i in range(n_windows)
+    ]
     # Two consecutive outlier windows in the middle, clearly past the jump
     # threshold, surrounded on both sides by windows that agree with each
     # other -- matches the reported case (a ~20s spurious segment amid an
     # otherwise-flat multi-minute track).
     outlier_at = n_windows // 2
     windows[outlier_at] = WindowOffset(time_s=outlier_at * hop_s, offset_seconds=-1.71, confidence=0.5, ambiguous=False)
-    windows[outlier_at + 1] = WindowOffset(time_s=(outlier_at + 1) * hop_s, offset_seconds=-1.71, confidence=0.5, ambiguous=False)
+    windows[outlier_at + 1] = WindowOffset(
+        time_s=(outlier_at + 1) * hop_s, offset_seconds=-1.71, confidence=0.5, ambiguous=False
+    )
 
     segments = classify_segments(windows, total_duration_s=n_windows * hop_s)
 
@@ -360,7 +365,9 @@ def test_a_blank_inserted_in_a_dialogue_stretch_is_cut_exactly() -> None:
 
 
 def _windows(offsets: list[float], hop_s: float = 10.0) -> list[WindowOffset]:
-    return [WindowOffset(time_s=i * hop_s, offset_seconds=o, confidence=0.5, ambiguous=False) for i, o in enumerate(offsets)]
+    return [
+        WindowOffset(time_s=i * hop_s, offset_seconds=o, confidence=0.5, ambiguous=False) for i, o in enumerate(offsets)
+    ]
 
 
 def test_small_jumps_of_tens_of_ms_are_segments_of_their_own() -> None:
@@ -399,14 +406,17 @@ def test_drift_is_measured_precisely_once_compensated() -> None:
     duration_s, factor = 180.0, 1.01
     bed = _make_bed(duration_s * factor, SAMPLE_RATE, seed=30)
     reference = bed[: int(duration_s * SAMPLE_RATE)] + _make_dialogue(duration_s, SAMPLE_RATE, seed=31)
-    candidate = _time_stretch(bed[: int(duration_s * SAMPLE_RATE)], factor) + _make_dialogue(
-        duration_s * factor, SAMPLE_RATE, seed=32
-    )[: int(round(duration_s * SAMPLE_RATE * factor))]
+    candidate = (
+        _time_stretch(bed[: int(duration_s * SAMPLE_RATE)], factor)
+        + _make_dialogue(duration_s * factor, SAMPLE_RATE, seed=32)[: int(round(duration_s * SAMPLE_RATE * factor))]
+    )
 
     ref_env, frame_rate = extract_envelope(reference, SAMPLE_RATE)
     cand_env, _ = extract_envelope(candidate, SAMPLE_RATE)
     args = {"window_s": 30.0, "hop_s": 10.0, "margin_s": 8.0}
-    windows = compensate_drift(ref_env, cand_env, frame_rate, windowed_offsets(ref_env, cand_env, frame_rate, **args), **args)
+    windows = compensate_drift(
+        ref_env, cand_env, frame_rate, windowed_offsets(ref_env, cand_env, frame_rate, **args), **args
+    )
     usable = [w for w in windows if not w.ambiguous]
 
     errors = [abs(w.offset_seconds - (factor - 1.0) * w.center_s) for w in usable]

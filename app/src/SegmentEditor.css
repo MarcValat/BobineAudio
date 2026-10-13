@@ -25,8 +25,10 @@
   gap: 1.4em;
 }
 
+/* The chart about two thirds of the width, the waveforms the last third
+   (as the mockup); the table across both, below. */
 .editor-primary {
-  flex: 1 1 0;
+  flex: 2 1 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -117,6 +119,12 @@
   pointer-events: none;
 }
 
+.editor-chart .segment-label.low-confidence {
+  /* Unreliable: its value in red (its line dotted). */
+  fill: var(--danger);
+  font-weight: 600;
+}
+
 .editor-chart .segment-label.dragged {
   font-weight: 700;
   opacity: 1;
@@ -170,10 +178,14 @@
 
 /* Its natural height up to 40% of the column, then it scrolls in its own
    frame, headers kept in view: the chart above takes the rest. */
+/* Its rows' height, up to a third of the editor -- but always room for
+   its header and two rows (a short window: one segment scrolled). */
 .editor-table-wrap {
-  flex: 0 1 auto;
-  max-height: 40%;
-  min-height: 5.5em;
+  /* Never squeezed below its rows (a scrollbar for one row): the chart and
+     the waveforms above give way instead. */
+  flex: 0 0 auto;
+  max-height: max(33%, 112px);
+  margin-top: 0.8em;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
 }
@@ -184,17 +196,29 @@
   font-size: 0.85em;
 }
 
+/* Lines between the rows and the columns; the frame's own border
+   outside (hidden: no double edge). */
+.editor-table {
+  border-style: hidden;
+}
+
 .editor-table th,
 .editor-table td {
-  padding: 0.35em 0.5em;
-  text-align: center;
+  padding: 0.35em 0.6em;
+  text-align: left;
   border: 1px solid var(--border);
+}
+
+/* The segment's number, quieter than its values. */
+.editor-table td:first-child {
+  color: var(--text-muted);
 }
 
 /* Headers may wrap at a space ("DÉCAL. / DÉBUT (ms)"): kept on one line,
    with the confidence gauge they made the table wider than a 1280px
    editor and cut the number fields. */
 .editor-table th {
+  white-space: nowrap;
   position: sticky;
   top: 0;
   z-index: 1;
@@ -215,10 +239,11 @@
 .editor-table input {
   width: 100%;
   min-width: 4.8em;
-  max-width: 7em;
   box-sizing: border-box;
-  padding: 0.25em 0.4em;
-  font-size: 0.95em;
+  padding: 1px 7px;
+  font-size: 13px;
+  /* Digits of one width: values line up from row to row. */
+  font-variant-numeric: tabular-nums;
 }
 
 .editor-confidence-cell {
@@ -257,8 +282,43 @@
   flex: 0 0 auto;
   margin-top: 1em;
   display: flex;
-  justify-content: center;
-  gap: 0.8em;
+  align-items: center;
+  gap: 0.6em;
+}
+
+/* Side by side, one height (as everywhere). */
+.editor-actions button {
+  height: 36px;
+  padding-block: 0;
+}
+
+/* "file · track", beside the title. */
+.editor-subtitle {
+  margin-left: 0.6em;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.editor-panel .segment-chart-legend {
+  font-size: 12px;
+}
+
+/* A text button led by its icon (Défaire, Refaire). */
+.with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.with-icon svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* Undo/redo/reset, apart on the left: they act on the edits, not on the result. */
@@ -274,5 +334,3 @@
   border-left: none;
   padding-left: 0;
 }
-
-

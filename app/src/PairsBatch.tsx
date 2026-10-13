@@ -1,156 +1,170 @@
-import { useEffect, useState } from "react";
-import { probe, startSegmentsJob, startCrossFileSegmentedRenderJob, type SegmentsResponse, type TrackInfo } from "./api";
+import { useEffect, useMemo, useState } from "react";
+import { startSegmentsJob, startCrossFileSegmentedRenderJob, type SegmentsResponse, type TrackInfo } from "./api";
 import { runJob } from "./jobs";
+import { ExportNames, exportTitle, useExportOptions } from "./exportOptions";
 import { LanguageSelect } from "./languages";
 import {
-  AnalysisStatus,
   AnalyzeButton,
   BatchFooter,
-  ExportCell,
-  FileCell,
+  SubtitleModeField,
+  nextStep,
   IDLE_EXPORT,
-  RevealButton,
   rowState,
   useExportQueue,
   dropBlockedReason,
-  writtenFile,
   type AnalysisRun,
   type ExportFields,
 } from "./batchShared";
 import { InfoTip } from "./InfoTip";
+import { ALL_TRACKS, defaultPick, keyName, matchesAny, matchesKey, trackOptions, TrackFilterPicker, type TrackKey } from "./TrackFilter";
+import {
+  EmptyWorkspace,
+  PairKind,
+  trackName,
+  Issues,
+  FoldButton,
+  ModeCards,
+  RemoveAllButton,
+  useListKeys,
+  MoveButtons,
+  PairRow,
+  runBadge,
+  useProbes,
+  type BadgeKind,
+  type FileProbe,
+  type BatchMode,
+} from "./Workspace";
+import {
+  DetailChart,
+  DetailExport,
+  DetailHeader,
+  DetailTabs,
+  RetimedSubs,
+  SubtitleChoiceDialog,
+  TracksHeading,
+  useDetailView,
+} from "./Detail";
+import { LogPanel } from "./LogPanel";
+import { describeSegments } from "./SegmentChart";
+import { preloadWaveforms, TrackPreview } from "./TrackPreview";
 import { SegmentEditor } from "./SegmentEditor";
 import { DropZone } from "./DropZone";
 import { pickMediaFiles } from "./mediaDialog";
 import { DropOverlay, useFileDrop } from "./FileDrop";
 import { basename } from "./paths";
-import { SUBTITLE_MODES, subtitlesFor, type SubtitleMode } from "./subtitles";
-import { devParam, errorMessage } from "./util";
+import { assignSubtitles, subtitlesFor } from "./subtitles";
+import { devParam, errorMessage, toggled } from "./util";
 import { Dialog, DialogHeader } from "./Dialog";
 import { TrackTable } from "./TrackTable";
 import { useT } from "./i18n";
-import { useSubtitleDefault } from "./settings";
+import { useListCollapsed, useSubtitleMode } from "./settings";
 
+/** "S01E01 VO.mkv" -> "S01E01 VO": a pair named after its reference. */
+const stem = (name: string) => name.replace(/\.[^.]+$/, "");
 
-/** One pair's analysis and export. */
-type PairAnalysis = AnalysisRun & ExportFields;
-
-/** Probes one file's tracks, to fill the track-picker dropdown. Only ever
- * called on the *first* file of each list, not every file: one picked
- * index applies to every pair (see PairsBatch's docstring, "a series keeps
- * the same track layout episode to episode"), so probing every file in a
- * big batch just to fill a dropdown would be slow and redundant -- the
- * "Vérifier toutes les pistes" modal below is what covers checking every
- * file individually when that assumption needs auditing. */
-function useTracksOf(path: string | undefined): { tracks: TrackInfo[] | null; loading: boolean; error: string | null } {
-  const [tracks, setTracks] = useState<TrackInfo[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!path) {
-      setTracks(null);
-      setError(null);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    probe(path)
-      .then((res) => {
-        if (!cancelled) setTracks(res.tracks);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(errorMessage(err));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [path]);
-
-  return { tracks, loading, error };
+/** A pair's tracks: its reference, and the tracks of its other file to
+ * correct (each analyzed on its own, all added by its one export). */
+interface PairTracks {
+  reference: number;
+  candidates: number[];
+  /** The file to correct's subtitle tracks retimed with each corrected
+   * track, picked by hand ("Changer"); absent: per the subtitle setting. */
+  subtitles?: Record<number, number[]>;
 }
 
-interface TrackPickerProps {
-  label: string;
-  tracks: TrackInfo[] | null;
-  loading: boolean;
-  error: string | null;
-  value: number;
-  onChange: (index: number) => void;
-  disabled?: boolean;
-}
-
-/** A dropdown of the first file's actual tracks (index/language/codec),
- * not a blind number field -- falls back to a plain number input when
- * there's nothing to probe yet or probing failed, so picking is never
- * blocked on that. */
-function TrackPicker({ label, tracks, loading, error, value, onChange, disabled }: TrackPickerProps) {
+/** A pair's tracks, both files' in one table: which file each comes from,
+ * then the reference picked among the reference file's and the tracks to
+ * correct ticked among the other's (the same track can't be both: they're
+ * from two files, even when it's the same file twice). */
+function PairTrackTable({
+  referenceTracks,
+  candidateTracks,
+  reference,
+  candidates,
+  disabled,
+  onReference,
+  onToggleCandidate,
+}: {
+  referenceTracks: TrackInfo[] | undefined;
+  candidateTracks: TrackInfo[] | undefined;
+  reference: number;
+  candidates: number[];
+  disabled: boolean;
+  onReference: (index: number) => void;
+  onToggleCandidate: (index: number) => void;
+}) {
   const m = useT();
+  const rows = (side: "ref" | "cand", tracks: TrackInfo[] | undefined) =>
+    tracks?.map((tr) => (
+      <tr key={`${side}-${tr.index}`} title={tr.title ? m.tracks.titled(tr.title) : undefined}>
+        <td>
+          <PairKind kind={side} />
+        </td>
+        <td>@{tr.index}</td>
+        <td>{tr.language ?? "?"}</td>
+        <td>{tr.codec ?? "?"}</td>
+        <td className="track-pick">
+          {side === "ref" && (
+            <input
+              type="radio"
+              aria-label={m.tracks.asReference(trackName(tr.index, tr))}
+              name="pair-reference"
+              checked={reference === tr.index}
+              disabled={disabled}
+              onChange={() => onReference(tr.index)}
+            />
+          )}
+        </td>
+        <td className="track-pick">
+          {side === "cand" && (
+            <input
+              type="checkbox"
+              aria-label={m.tracks.toCorrect(trackName(tr.index, tr))}
+              checked={candidates.includes(tr.index)}
+              disabled={disabled}
+              onChange={() => onToggleCandidate(tr.index)}
+            />
+          )}
+        </td>
+      </tr>
+    ));
   return (
-    <label>
-      {m.common.labelled(label)}
-      {tracks && tracks.length > 0 ? (
-        <select value={value} onChange={(e) => onChange(Number(e.target.value))} disabled={disabled}>
-          {tracks.map((t) => (
-            <option key={t.index} value={t.index}>
-              @{t.index} — {t.language ?? "?"} ({t.codec ?? "?"})
-            </option>
-          ))}
-        </select>
-      ) : (
-        <input
-          type="number"
-          min={0}
-          value={value}
-          disabled={disabled}
-          onChange={(e) => onChange(Math.max(0, Number(e.target.value)))}
-        />
-      )}
-      {loading && <span className="batch-track-status">{m.pairs.probing}</span>}
-      {error && (
-        <span className="batch-track-status batch-track-status-error" title={error}>
-          {m.pairs.tracksUnavailable}
-        </span>
-      )}
-    </label>
+    <table className="batch-tracks-table">
+      <thead>
+        <tr>
+          <th>{m.pairs.fileColumn}</th>
+          <th>{m.tracks.track}</th>
+          <th>{m.tracks.language}</th>
+          <th>{m.tracks.codec}</th>
+          <th className="track-pick">{m.tracks.referenceShort}</th>
+          <th className="track-pick">{m.common.toCorrect}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows("ref", referenceTracks)}
+        {rows("cand", candidateTracks)}
+      </tbody>
+    </table>
   );
 }
 
-/** "Vérifier toutes les pistes" modal: probes *every* file in both lists
- * (unlike the track pickers above, which only ever look at the first file
- * of each) so the user can audit that every episode really does have the
- * expected tracks in the expected order before committing to one
- * reference/candidate index for the whole batch. Fetched fresh each time
- * the modal opens rather than kept live -- this is a manual spot-check,
- * not something that needs to track file-list edits in real time. */
-function AllTracksModal({ referenceFiles, candidateFiles, onClose }: { referenceFiles: string[]; candidateFiles: string[]; onClose: () => void }) {
+/** "Vérifier toutes les pistes": every file of both lists with its tracks
+ * (the track pickers only look at the first file of each), to make sure
+ * every episode has the expected tracks in the expected order before one
+ * pick applies to the whole series. From the files as already read
+ * (`probes`): it opens at once, and follows a file still being read. */
+function AllTracksModal({
+  referenceFiles,
+  candidateFiles,
+  probes,
+  onClose,
+}: {
+  referenceFiles: string[];
+  candidateFiles: string[];
+  probes: Record<string, FileProbe>;
+  onClose: () => void;
+}) {
   const m = useT();
-  const [entries, setEntries] = useState<Record<string, { tracks: TrackInfo[] | null; error: string | null }>>({});
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    const paths = [...new Set([...referenceFiles, ...candidateFiles])];
-    setLoading(true);
-    Promise.all(
-      paths.map((path) =>
-        probe(path)
-          .then((res) => [path, { tracks: res.tracks, error: null }] as const)
-          .catch((err) => [path, { tracks: null, error: errorMessage(err) }] as const),
-      ),
-    ).then((results) => {
-      if (cancelled) return;
-      setEntries(Object.fromEntries(results));
-      setLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally a one-shot snapshot on open, not live-tracking the lists
-  }, []);
 
   function renderSide(title: string, files: string[]) {
     return (
@@ -160,13 +174,13 @@ function AllTracksModal({ referenceFiles, candidateFiles, onClose }: { reference
           <p className="placeholder">{m.pairs.noFiles}</p>
         ) : (
           files.map((path, i) => {
-            const entry = entries[path];
+            const entry = probes[path];
             return (
               <div className="batch-tracks-file" key={`${i}-${path}`}>
                 <p className="batch-tracks-filename" title={path}>
                   {i + 1}. {basename(path)}
                 </p>
-                {loading && !entry && <p className="placeholder">{m.pairs.probing}</p>}
+                {!entry && <p className="placeholder">{m.pairs.probing}</p>}
                 {entry?.error && <p className="error">{entry.error}</p>}
                 {entry?.tracks && (
                   <div className="tracks-table-wrap">
@@ -192,11 +206,9 @@ function AllTracksModal({ referenceFiles, candidateFiles, onClose }: { reference
   );
 }
 
-/** Batch mode's "Paires de fichiers": process a whole series of episodes in
- * one pass, each episode's corrected track coming from another file than
+/** "Paires de fichiers": one episode or a whole series in one pass, each episode's corrected track coming from another file than
  * its reference (a video, or an audio-only file). Two independently-
- * imported file lists, paired
- * strictly by position (row 1 of each = pair 1, etc.) -- chosen over
+ * imported file lists, paired strictly by position (row 1 of each = pair 1, etc.) -- chosen over
  * auto-matching by filename for predictability: a wrong position is
  * visible and fixable with the up/down arrows, a wrong filename-based
  * guess could silently pair the wrong episodes. One reference/candidate
@@ -206,22 +218,25 @@ function AllTracksModal({ referenceFiles, candidateFiles, onClose }: { reference
  * only VF); "Vérifier toutes les pistes" lets that assumption actually be
  * checked instead of just hoped.
  *
- * Laid out as one table, one row per pair: both files, the analysis, the
- * export and the row's actions side by side, so nothing needs lining up
- * across separate lists. The table takes the height the window leaves and
- * scrolls in its own frame; nothing else in the view scrolls.
+ * Laid out as a list of pairs (both files, each movable within its own
+ * column) beside the selected pair's detail: its chart, waveforms and
+ * listening, its own Analyser / Exporter cette paire. With no file yet,
+ * two drop zones, one per column.
  *
- * Always kept mounted by the caller (App.tsx) even while on the other tab
- * -- `hidden` just toggles visibility -- so switching tabs never resets
+ * Always kept mounted (BatchView.tsx) even while the other mode is shown
+ * -- `hidden` just toggles visibility -- so switching modes never resets
  * the imported file lists or analysis results. */
 export function PairsBatch({
   hidden,
+  onModeChange,
   outputDir,
   onOutputDirChange,
   blocked,
   onBusyChange,
 }: {
   hidden: boolean;
+  /** Switches to multitrack mode, from the empty workspace's cards. */
+  onModeChange?: (mode: BatchMode) => void;
   outputDir: string | null;
   onOutputDirChange: (dir: string | null) => void;
   /** The other batch mode is working: nothing starts here meanwhile. */
@@ -231,39 +246,57 @@ export function PairsBatch({
   const m = useT();
   const [referenceFiles, setReferenceFiles] = useState<string[]>([]);
   const [candidateFiles, setCandidateFiles] = useState<string[]>([]);
-  const [referenceTrackIndex, setReferenceTrackIndex] = useState(0);
-  const [candidateTrackIndex, setCandidateTrackIndex] = useState(1);
+  // What the top bar picks for every pair (see TrackFilter): the reference
+  // in the reference file, the tracks to correct in the other one (any
+  // track one of these names).
+  const [referenceKey, setReferenceKey] = useState<TrackKey>("");
+  const [candidateKeys, setCandidateKeys] = useState<TrackKey[]>([]);
+  // Pairs whose tracks were picked in their detail (by both files), instead
+  // of the top bar's.
+  const [pairTracks, setPairTracks] = useState<Record<string, PairTracks>>({});
   // "" keeps the corrected track's own language; a code tags it with that one
   // instead (a bare .wav has none).
   const [candidateLanguage, setCandidateLanguage] = useState("");
   // Starts as the default setting (Options), and follows it when it changes.
-  const subtitleDefault = useSubtitleDefault();
-  const [subsMode, setSubsMode] = useState<SubtitleMode>(subtitleDefault);
-  useEffect(() => setSubsMode(subtitleDefault), [subtitleDefault]);
-  // Keyed by what each analysis was made of (see pairKey), not by row: moving
-  // files, adding more or picking other tracks never shows a pair another
-  // pair's analysis, and one that comes back finds its own again.
-  const [analyses, setAnalyses] = useState<Record<string, PairAnalysis>>({});
+  const [subsMode, setSubsMode] = useSubtitleMode();
+  // Keyed by what each was made of (trackKey: one corrected track; pairKey:
+  // a pair's export), not by row: moving files, adding more or picking other
+  // tracks never shows a pair another one's, and one that comes back finds
+  // its own again.
+  const [analyses, setAnalyses] = useState<Record<string, AnalysisRun>>({});
+  const [exports, setExports] = useState<Record<string, ExportFields>>({});
   const [analyzing, setAnalyzing] = useState(false);
   const queue = useExportQueue(outputDir);
   const [showTracksModal, setShowTracksModal] = useState(false);
-  const [editingPairIndex, setEditingPairIndex] = useState<number | null>(null);
+  // The corrected track open in the segment editor, and its pair's row.
+  const [editing, setEditing] = useState<{ row: number; track: number } | null>(null);
+  // Which corrected track each pair's tabs show (by its files; absent: its first).
+  const [shownTracks, setShownTracks] = useState<Record<string, number>>({});
+  // The row whose retimed subtitles are being changed ("Changer").
+  const [subsEditing, setSubsEditing] = useState<number | null>(null);
+  // The row shown in the detail.
+  const [selected, setSelected] = useState(0);
+  // Every listed file, read once as soon as it's listed: its tracks (the
+  // detail's table and title, the waveforms' container-delay note), or why
+  // it can't be read (its pair is flagged, as a multitrack file is).
+  const probes = useProbes(useMemo(() => [...referenceFiles, ...candidateFiles], [referenceFiles, candidateFiles]));
+  const view = useDetailView();
+  const collapsed = useListCollapsed();
+  // How corrected tracks are exported (codec, names), and the names typed
+  // in a pair's detail for its own tracks (by its files and track index).
+  const exportOptions = useExportOptions();
+  const [titleOverrides, setTitleOverrides] = useState<Record<string, string>>({});
 
-  const referenceProbe = useTracksOf(referenceFiles[0]);
-  const candidateProbe = useTracksOf(candidateFiles[0]);
-
-  // Re-pick a sensible default the moment a *new* first file's tracks come
-  // in (e.g. the reference list was just (re)populated) -- doesn't fight a
-  // manual pick afterwards, since this only fires when the tracks array
-  // itself changes, not on every render.
+  // The picks start out from the first pair's files (see defaultPick). Only
+  // while none is set, so a pick of the user's is never overridden.
+  const firstReference = probes[referenceFiles[0]]?.tracks;
+  const firstCandidate = probes[candidateFiles[0]]?.tracks;
   useEffect(() => {
-    if (referenceProbe.tracks && referenceProbe.tracks.length > 0) setReferenceTrackIndex(referenceProbe.tracks[0].index);
-  }, [referenceProbe.tracks]);
-  useEffect(() => {
-    if (candidateProbe.tracks && candidateProbe.tracks.length > 0) {
-      setCandidateTrackIndex(candidateProbe.tracks.length > 1 ? candidateProbe.tracks[1].index : candidateProbe.tracks[0].index);
-    }
-  }, [candidateProbe.tracks]);
+    if (referenceKey || !firstReference?.length || !firstCandidate?.length) return;
+    const pick = defaultPick(firstReference, firstCandidate);
+    setReferenceKey(pick.reference);
+    setCandidateKeys(pick.targets);
+  }, [firstReference, firstCandidate, referenceKey]);
 
   // Dev only (see devParam): `?batchRef=a|b&batchCand=c|d` fills the lists.
   useEffect(() => {
@@ -282,94 +315,237 @@ export function PairsBatch({
 
   const pairCount = Math.min(referenceFiles.length, candidateFiles.length);
   const rowCount = Math.max(referenceFiles.length, candidateFiles.length);
+  useListKeys(!hidden, rowCount, selected, setSelected);
 
-  /** Row `i`'s pair as it stands: both files and both tracks. */
-  function pairKey(i: number): string {
-    return JSON.stringify([referenceFiles[i], referenceTrackIndex, candidateFiles[i], candidateTrackIndex]);
+  /** Row `i`'s files, which its own tracks (pairTracks) are kept by. */
+  const filesKey = (i: number) => JSON.stringify([referenceFiles[i], candidateFiles[i]]);
+  /** Row `i`'s tracks as the top bar picks them in its two files: the
+   * reference (its file's first track when the pick names none or several
+   * of them: "(auto)"), the tracks to correct, and what a ticked entry
+   * should name but can't (⚠). Nothing until both files are read. */
+  function picked(i: number): PairTracks & { auto: boolean; issues: string[] } {
+    const referenceTracks = probes[referenceFiles[i]]?.tracks ?? [];
+    const candidateTracks = probes[candidateFiles[i]]?.tracks ?? [];
+    const matches = referenceKey ? referenceTracks.filter((t) => matchesKey(t, referenceKey)) : [];
+    return {
+      reference: (matches[0] ?? referenceTracks[0])?.index ?? 0,
+      candidates: candidateTracks.filter((t) => matchesAny(t, candidateKeys)).map((t) => t.index),
+      auto: referenceTracks.length > 0 && matches.length !== 1,
+      issues:
+        candidateTracks.length === 0
+          ? []
+          : candidateKeys
+              .filter((key) => key !== ALL_TRACKS && !candidateTracks.some((t) => matchesKey(t, key)))
+              .map((key) => m.multi.noTrack(keyName(key))),
+    };
   }
-  const analysisOf = (i: number): PairAnalysis | undefined => (i < pairCount ? analyses[pairKey(i)] : undefined);
-  const isDone = (a: PairAnalysis | undefined) => a?.status === "done" && !!a.result;
+  /** Row `i`'s tracks: its own if picked in its detail, else the top bar's. */
+  function tracksOf(i: number): PairTracks {
+    return pairTracks[filesKey(i)] ?? picked(i);
+  }
+  /** Both of row `i`'s files are read. */
+  const probed = (i: number) => !!probes[referenceFiles[i]] && !!probes[candidateFiles[i]];
 
-  function updatePair(key: string, patch: Partial<PairAnalysis> | ((entry: PairAnalysis) => Partial<PairAnalysis>)) {
+  /** One corrected track of row `i` as it stands: both files and both tracks. */
+  function trackKey(i: number, track: number): string {
+    return JSON.stringify([referenceFiles[i], tracksOf(i).reference, candidateFiles[i], track]);
+  }
+  /** The subtitle tracks of row `i`'s file to correct retimed with each of
+   * its corrected tracks: picked by hand, or per the subtitle setting (each
+   * track's language's; "Langue ajoutée" for a pair's only one without
+   * any). One subtitle track goes with one audio track at most. */
+  function subsOf(i: number): Record<number, number[]> {
+    const { candidates, subtitles: picked } = tracksOf(i);
+    const probed = probes[candidateFiles[i]];
+    const fallback = candidates.length === 1 ? candidateLanguage || null : null;
+    return assignSubtitles(
+      candidates.map((index) => ({ index })),
+      (t) =>
+        picked?.[t.index] ??
+        subtitlesFor(probed?.subtitles ?? [], probed?.tracks?.find((tr) => tr.index === t.index)?.language || fallback, subsMode),
+    );
+  }
+
+  /** A change to row `i`'s tracks or subtitles: from then on they're its own. */
+  function editPairTracks(i: number, update: (tracks: PairTracks) => PairTracks) {
+    const key = filesKey(i);
+    const { reference, candidates, subtitles } = tracksOf(i);
+    setPairTracks((c) => ({ ...c, [key]: update(c[key] ?? { reference, candidates, subtitles }) }));
+  }
+
+  /** Row `i`'s pair as it stands, for its export: every track it corrects. */
+  function pairKey(i: number): string {
+    const { reference, candidates } = tracksOf(i);
+    // The subtitles it carries too: another pick makes its last export stale.
+    return JSON.stringify([referenceFiles[i], reference, candidateFiles[i], [...candidates].sort((a, b) => a - b), subsOf(i)]);
+  }
+  const runOf = (i: number, track: number): AnalysisRun | undefined => (i < pairCount ? analyses[trackKey(i, track)] : undefined);
+  const runsOf = (i: number) => tracksOf(i).candidates.map((track) => runOf(i, track));
+  const exportOf = (i: number): ExportFields | undefined => (i < pairCount ? exports[pairKey(i)] : undefined);
+  const isDone = (a: AnalysisRun | undefined) => a?.status === "done" && !!a.result;
+  /** Row `i`'s corrected tracks whose analysis succeeded: what its export holds. */
+  const doneTracks = (i: number) => tracksOf(i).candidates.filter((track) => isDone(runOf(i, track)));
+  /** Every track row `i` corrects is analyzed. */
+  const pairDone = (i: number) => tracksOf(i).candidates.length > 0 && doneTracks(i).length === tracksOf(i).candidates.length;
+
+  function updateRun(key: string, patch: Partial<AnalysisRun> | ((entry: AnalysisRun) => Partial<AnalysisRun>)) {
     setAnalyses((current) =>
       current[key] ? { ...current, [key]: { ...current[key], ...(typeof patch === "function" ? patch(current[key]) : patch) } } : current,
     );
   }
 
-  /** Analyzes the pairs that aren't yet (new ones, failed ones), keeping the
-   * rest and any edit made to them; or all of them again (`all`). */
-  async function handleAnalyze(all: boolean) {
-    await runPlan(Array.from({ length: pairCount }, (_, i) => i).filter((i) => all || !isDone(analyses[pairKey(i)])));
+  function updateExport(key: string, patch: (entry: ExportFields) => Partial<ExportFields>) {
+    setExports((current) => {
+      const entry = current[key] ?? IDLE_EXPORT;
+      return { ...current, [key]: { ...entry, ...patch(entry) } };
+    });
   }
 
-  /** Analyzes these pairs (by row), each one's result and edits replaced. */
-  async function runPlan(rows: number[]) {
+  // The detail always shows a row while there are some.
+  useEffect(() => {
+    if (selected >= rowCount) setSelected(Math.max(0, rowCount - 1));
+  }, [selected, rowCount]);
+
+  const detailReference: string | undefined = referenceFiles[selected];
+  const detailCandidate: string | undefined = candidateFiles[selected];
+  /** Why row `i`'s files can't be read, if one can't. */
+  const unreadable = (i: number): string[] =>
+    [...new Set([referenceFiles[i], candidateFiles[i]])].flatMap((path) => (path && probes[path]?.error ? [probes[path].error] : []));
+
+  /** Analyzes the corrected tracks that aren't yet (new pairs, new tracks,
+   * failed ones), keeping the rest and any edit made to them; or all of
+   * them again (`all`); of every pair, or of row `only` (its "Analyser"). */
+  async function handleAnalyze(all: boolean, only?: number) {
+    await runPlan(
+      Array.from({ length: pairCount }, (_, i) => i).flatMap((i) =>
+        (only === undefined || i === only) && unreadable(i).length === 0
+          ? tracksOf(i)
+              .candidates.filter((track) => all || !isDone(runOf(i, track)))
+              .map((track) => ({ row: i, track }))
+          : [],
+      ),
+    );
+  }
+
+  /** Analyzes these corrected tracks, each one's result and edits replaced;
+   * their pairs' last exports no longer match. */
+  async function runPlan(items: { row: number; track: number }[]) {
     setAnalyzing(true);
-    const plan = rows.map((i) => ({ key: pairKey(i), reference: referenceFiles[i], candidate: candidateFiles[i] }));
-    const [referenceTrack, candidateTrack] = [referenceTrackIndex, candidateTrackIndex];
+    const plan = items.map(({ row, track }) => ({
+      key: trackKey(row, track),
+      exportKey: pairKey(row),
+      reference: referenceFiles[row],
+      referenceTrack: tracksOf(row).reference,
+      candidate: candidateFiles[row],
+      track,
+    }));
     setAnalyses((current) => {
       const next = { ...current };
-      for (const { key } of plan) next[key] = { status: "pending", result: null, error: null, log: [], ...IDLE_EXPORT };
+      for (const { key } of plan) next[key] = { status: "pending", result: null, error: null, log: [] };
       return next;
     });
-    for (const { key, reference, candidate } of plan) {
-      updatePair(key, { status: "running" });
+    setExports((current) => {
+      const next = { ...current };
+      for (const { exportKey } of plan) next[exportKey] = IDLE_EXPORT;
+      return next;
+    });
+    for (const { key, reference, referenceTrack, candidate, track } of plan) {
+      updateRun(key, { status: "running" });
       try {
-        const result = await runJob<SegmentsResponse>(
-          startSegmentsJob(reference, referenceTrack, candidate, candidateTrack),
-          (message) => updatePair(key, (a) => ({ log: [...a.log, message] })),
+        const result = await runJob<SegmentsResponse>(startSegmentsJob(reference, referenceTrack, candidate, track), (message) =>
+          updateRun(key, (a) => ({ log: [...a.log, message] })),
         );
-        updatePair(key, { status: "done", result });
+        updateRun(key, { status: "done", result });
+        preloadWaveforms(reference, referenceTrack, candidate, track);
       } catch (err) {
-        updatePair(key, { status: "error", error: errorMessage(err) });
+        updateRun(key, { status: "error", error: errorMessage(err) });
       }
     }
     setAnalyzing(false);
   }
 
-  const pairAnalyses = Array.from({ length: pairCount }, (_, i) => analysisOf(i));
-  const analyzedCount = pairAnalyses.filter(isDone).length;
-  const exportedCount = pairAnalyses.filter((a) => a?.exportStatus === "done").length;
+  /** Row `i`'s corrected track `index` as exported: its info, and its
+   * language ("Langue ajoutée" for a pair's only corrected track). */
+  function exportedTrack(i: number, index: number): { track: TrackInfo | undefined; language: string | null } {
+    const track = probes[candidateFiles[i]]?.tracks?.find((t) => t.index === index);
+    const added = tracksOf(i).candidates.length === 1 ? candidateLanguage || null : null;
+    return { track, language: added ?? track?.language ?? null };
+  }
+  /** Row `i`'s corrected track's name in its export (undefined: its source's). */
+  function titleOf(i: number, index: number, own = true): string | undefined {
+    const { track, language } = exportedTrack(i, index);
+    if (!track) return undefined;
+    return exportTitle({ track, language, options: exportOptions, override: own ? titleOverrides[`${filesKey(i)}|${index}`] : undefined });
+  }
+
+  const pairRows = Array.from({ length: pairCount }, (_, i) => i);
+  /** Row `i` can be analyzed: both its files read, and a track to correct
+   * known (until then, "Analyser" would have nothing to do). */
+  const analyzableRow = (i: number) => i < pairCount && probed(i) && unreadable(i).length === 0 && tracksOf(i).candidates.length > 0;
+  // The corrected tracks' languages (a custom name each), and the first
+  // one's automatic name (for the export options to show).
+  const exported = pairRows.flatMap((i) => tracksOf(i).candidates.map((index) => exportedTrack(i, index)));
+  const targetLanguages = [...new Set(exported.map((e) => e.language))];
+  const firstExported = exported.find((e) => e.track);
+  const nameExample = firstExported?.track
+    ? (exportTitle({ track: firstExported.track, language: firstExported.language, options: { ...exportOptions, naming: "auto" } }) ?? null)
+    : null;
+  const analyzedCount = pairRows.filter(pairDone).length;
+  const exportedCount = pairRows.filter((i) => exportOf(i)?.exportStatus === "done").length;
+  const canExport = pairRows.some((i) => doneTracks(i).length > 0);
+  // The window's next step: the footer's with several pairs, the detail's
+  // with one.
+  const listNext =
+    pairCount > 1
+      ? nextStep({
+          analyzing,
+          missing: pairCount - analyzedCount,
+          exportable: pairRows.filter((i) => doneTracks(i).length > 0).length,
+          exported: exportedCount,
+        })
+      : null;
 
   /** Exports every successfully-analyzed pair, in the order analyzed --
    * pairs that failed detection or never ran are left alone (exportStatus
    * stays "idle") rather than attempted, since there's no segment list to
    * render from. Uses each pair's current `result.segments`, which is
-   * exactly what "Modifier" lets the user hand-adjust first -- same
-   * principle as the single-file view: export must reflect a reviewed
-   * edit, not silently re-run detection and discard it. Both buttons are
+   * exactly what "Modifier" lets the user hand-adjust first -- export
+   * must reflect a reviewed edit, not silently re-run detection and
+   * discard it. Both buttons are
    * disabled while *either* operation runs, not just their own: export
    * reads `analyses` as it currently stands, so a concurrent re-analysis
    * could rewrite a pair's segments out from under an export already using
-   * them. */
-  function handleExportAll() {
+   * them. Every pair, or row `only` ("Exporter cette paire"). */
+  function handleExport(only?: number) {
     queue.run(
-      pairAnalyses.flatMap((a, i) => {
-        if (!isDone(a)) return [];
+      pairRows.flatMap((i) => {
+        const done = doneTracks(i);
+        if (done.length === 0 || (only !== undefined && i !== only)) return [];
         const key = pairKey(i);
+        const { reference } = tracksOf(i);
+        // "Langue ajoutée" names a pair's one corrected track; several keep their own.
+        const language = done.length === 1 ? candidateLanguage || null : null;
         return [
           {
             input: referenceFiles[i],
-            start: async (outputPath: string) => {
-              // The candidate file's subtitles in its audio's language come
-              // along, retimed with it (per the subtitle setting).
-              const candidate = subsMode === "none" ? null : await probe(candidateFiles[i]);
-              const audioLanguage =
-                candidate?.tracks.find((t) => t.index === candidateTrackIndex)?.language || candidateLanguage || null;
+            start: (outputPath: string) => {
+              const subtitles = subsOf(i);
               return startCrossFileSegmentedRenderJob(
                 referenceFiles[i],
-                referenceTrackIndex,
+                reference,
                 candidateFiles[i],
-                candidateTrackIndex,
-                analyses[key].result!.segments,
-                {
-                  outputPath,
-                  language: candidateLanguage || null,
-                  subtitles: candidate ? subtitlesFor(candidate.subtitles ?? [], audioLanguage, subsMode) : [],
-                },
+                done.map((track) => ({
+                  trackIndex: track,
+                  segments: analyses[trackKey(i, track)].result!.segments,
+                  language,
+                  subtitles: subtitles[track] ?? [],
+                  title: titleOf(i, track),
+                  codec: exportOptions.codec === "auto" ? null : exportOptions.codec,
+                })),
+                outputPath,
               );
             },
-            update: (patch: (e: ExportFields) => Partial<ExportFields>) => updatePair(key, patch),
+            update: (patch: (e: ExportFields) => Partial<ExportFields>) => updateExport(key, patch),
           },
         ];
       }),
@@ -380,251 +556,427 @@ export function PairsBatch({
 
   // Dropped on the left half: reference files; on the right: files to correct.
   const dropBlocked = dropBlockedReason(busy, blocked);
-  const fileDrag = useFileDrop(!hidden && !showTracksModal && editingPairIndex === null, dropBlocked, (files, side) =>
+  const fileDrag = useFileDrop(!hidden && !showTracksModal && subsEditing === null && editing === null, dropBlocked, (files, side) =>
     (side === "left" ? setReferenceFiles : setCandidateFiles)((current) => [...current, ...files]),
   );
   useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
 
-  // The files' own start times, for the editor's informational "delay
-  // already in the file" note: probed when a pair is opened for editing.
-  const [editStartTimes, setEditStartTimes] = useState<{ reference?: number; track?: number }>({});
-  useEffect(() => {
-    setEditStartTimes({});
-    if (editingPairIndex === null) return;
-    let cancelled = false;
-    Promise.all([probe(referenceFiles[editingPairIndex]), probe(candidateFiles[editingPairIndex])])
-      .then(([ref, cand]) => {
-        if (cancelled) return;
-        setEditStartTimes({
-          reference: ref.tracks.find((t) => t.index === referenceTrackIndex)?.start_time,
-          track: cand.tracks.find((t) => t.index === candidateTrackIndex)?.start_time,
-        });
-      })
-      .catch(() => {
-        // informational only: the editor just goes without it
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the lists and tracks can't change while the editor is open
-  }, [editingPairIndex]);
-  const editingAnalysis = editingPairIndex !== null ? analysisOf(editingPairIndex) : undefined;
+  // The tracks' own start times, for the editor's informational "delay
+  // already in the file" note.
+  const editStartTimes =
+    editing === null
+      ? {}
+      : {
+          reference: probes[referenceFiles[editing.row]]?.tracks?.find((t) => t.index === tracksOf(editing.row).reference)?.start_time,
+          track: probes[candidateFiles[editing.row]]?.tracks?.find((t) => t.index === editing.track)?.start_time,
+        };
+  const editingRun = editing !== null ? runOf(editing.row, editing.track) : undefined;
+
+  /** A row's badge: what's running first, then what's wrong, then how far it got. */
+  function pairBadge(i: number): [string, BadgeKind] {
+    const st = m.pairs.status;
+    if (i >= pairCount) return [st.unpaired, "error"];
+    if (unreadable(i).length > 0) return [m.multi.status.unreadable, "error"];
+    if (!probed(i)) return [m.multi.status.reading, "idle"];
+    const statuses = runsOf(i).map((a) => a?.status);
+    const flagged = statuses.length === 0 || (!pairTracks[filesKey(i)] && picked(i).issues.length > 0);
+    return runBadge(statuses, exportOf(i)?.exportStatus, st) ?? (flagged ? [m.multi.status.check, "warning"] : [st.toAnalyze, "idle"]);
+  }
+
+  // The detail: the selected row, and the corrected track its tabs show.
+  const detailPaired = selected < pairCount;
+  const detailTracks = tracksOf(selected);
+  const detailOwnTracks = detailPaired && !!pairTracks[filesKey(selected)];
+  const detailPicked = detailPaired && !detailOwnTracks ? picked(selected) : null;
+  const shownTrack: number | undefined =
+    detailTracks.candidates.find((t) => t === shownTracks[filesKey(selected)]) ?? detailTracks.candidates[0];
+  const detailRun = detailPaired && shownTrack !== undefined ? runOf(selected, shownTrack) : undefined;
+  const detailResult = isDone(detailRun) ? detailRun!.result : null;
+  const detailAnalyzing = detailPaired && runsOf(selected).some((a) => a?.status === "pending" || a?.status === "running");
+  const detailDone = detailPaired ? doneTracks(selected).length : 0;
+  const detailMissing = detailPaired ? detailTracks.candidates.length - detailDone : 0;
+  const detailExport = exportOf(selected);
+  const detailKey = shownTrack !== undefined ? trackKey(selected, shownTrack) : "";
+  const candidateInfo = (index: number) => (detailCandidate ? probes[detailCandidate]?.tracks?.find((t) => t.index === index) : undefined);
+  const detailReferenceTrack = detailReference
+    ? probes[detailReference]?.tracks?.find((t) => t.index === detailTracks.reference)
+    : undefined;
+  const shownTrackInfo = shownTrack !== undefined ? candidateInfo(shownTrack) : undefined;
+
+  // The top bar's choices: what the files of each column offer.
+  const referenceOptions = trackOptions(referenceFiles.flatMap((f) => (probes[f]?.tracks ? [probes[f].tracks!] : [])));
+  const candidateOptions = trackOptions(candidateFiles.flatMap((f) => (probes[f]?.tracks ? [probes[f].tracks!] : [])));
 
   return (
     <main className="batch-main" style={hidden ? { display: "none" } : undefined}>
-      <div className="batch-config panel">
-        <TrackPicker
-          label={m.common.reference}
-          tracks={referenceProbe.tracks}
-          loading={referenceProbe.loading}
-          error={referenceProbe.error}
-          value={referenceTrackIndex}
-          onChange={setReferenceTrackIndex}
-          disabled={busy}
-        />
-        <TrackPicker
-          label={m.common.toCorrect}
-          tracks={candidateProbe.tracks}
-          loading={candidateProbe.loading}
-          error={candidateProbe.error}
-          value={candidateTrackIndex}
-          onChange={setCandidateTrackIndex}
-          disabled={busy}
-        />
-        <label>
-          {m.pairs.language}
-          <LanguageSelect
-            value={candidateLanguage}
-            onChange={setCandidateLanguage}
-            extra={candidateProbe.tracks?.map((t) => t.language) ?? []}
-            emptyLabel={m.pairs.fileLanguage(
-              candidateProbe.tracks?.find((t) => t.index === candidateTrackIndex)?.language ?? null,
-            )}
-            disabled={busy}
-          />
-          <InfoTip>{m.pairs.languageHint}</InfoTip>
-        </label>
-        <label>
-          {m.common.labelled(m.batch.subtitles)}
-          <select value={subsMode} onChange={(e) => setSubsMode(e.target.value as SubtitleMode)} disabled={busy}>
-            {SUBTITLE_MODES.map((mode) => (
-              <option key={mode} value={mode}>
-                {m.subtitles.modes[mode]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <InfoTip>{m.pairs.hint}</InfoTip>
-      </div>
+      {rowCount === 0 ? (
+        <EmptyWorkspace title={m.pairs.emptyTitle} hint={m.pairs.emptyHint}>
+          <div className="pairs-empty-zones">
+            <DropZone
+              title={m.pairs.dropReferences}
+              disabled={dropBlocked !== null}
+              onClick={addFiles(setReferenceFiles, m.pairs.pickReferences)}
+            >
+              {m.pairs.dropReferencesHint}
+            </DropZone>
+            <DropZone
+              title={m.pairs.dropCandidates}
+              disabled={dropBlocked !== null}
+              onClick={addFiles(setCandidateFiles, m.pairs.pickCandidates)}
+            >
+              {m.pairs.dropCandidatesHint}
+            </DropZone>
+          </div>
+          <ModeCards mode="pairs" onChange={onModeChange} />
+        </EmptyWorkspace>
+      ) : (
+        <>
+          <div className="batch-config panel">
+            <span className="config-field">
+              {m.multi.reference}
+              <TrackFilterPicker
+                label={m.common.reference}
+                options={referenceOptions}
+                value={referenceKey ? [referenceKey] : []}
+                onChange={([key]) => setReferenceKey(key)}
+                single
+                disabled={busy}
+              />
+            </span>
+            <span className="config-field">
+              {m.multi.toCorrect}
+              <TrackFilterPicker
+                label={m.common.toCorrect}
+                options={candidateOptions}
+                value={candidateKeys}
+                onChange={setCandidateKeys}
+                disabled={busy}
+              />
+            </span>
+            <span className="config-field">
+              {m.pairs.language}
+              <LanguageSelect
+                label={m.pairs.language}
+                value={candidateLanguage}
+                onChange={setCandidateLanguage}
+                extra={firstCandidate?.map((t) => t.language) ?? []}
+                emptyLabel={m.pairs.fileLanguage(
+                  pairCount > 0 ? (firstCandidate?.find((t) => t.index === tracksOf(0).candidates[0])?.language ?? null) : null,
+                )}
+                disabled={busy}
+              />
+              <InfoTip>{m.pairs.languageHint}</InfoTip>
+            </span>
+            <SubtitleModeField value={subsMode} onChange={setSubsMode} disabled={busy} />
+            <InfoTip>{m.pairs.hint}</InfoTip>
+          </div>
 
-      <section className="panel batch-jobs">
-        <div className="batch-jobs-header">
-          <h2>{m.pairs.pairs}</h2>
-          <button
-            className="small-button"
-            onClick={() => {
-              setReferenceFiles([]);
-              setCandidateFiles([]);
-              setAnalyses({});
-            }}
-            disabled={busy || rowCount === 0}
-          >
-            {m.common.removeAll}
-          </button>
-          <button className="small-button" onClick={() => setShowTracksModal(true)} disabled={rowCount === 0}>
-            {m.pairs.checkAllTracks}
-          </button>
-          <InfoTip>{m.pairs.pairsHint}</InfoTip>
-        </div>
+          <div className={`workspace workspace-pairs${collapsed ? " list-collapsed" : ""}`}>
+            <section className="panel file-list">
+              <div className="file-list-header">
+                <h2>
+                  {m.pairs.pairsCount(pairCount)} <InfoTip>{m.pairs.pairsHint}</InfoTip>
+                </h2>
+                <button className="small-button" title={m.pairs.checkAllTracks} onClick={() => setShowTracksModal(true)}>
+                  {m.pairs.allTracks}
+                </button>
+                <RemoveAllButton
+                  results={Object.values(analyses).some((a) => a.status === "done")}
+                  disabled={busy}
+                  onRemove={() => {
+                    setReferenceFiles([]);
+                    setCandidateFiles([]);
+                    setAnalyses({});
+                    setExports({});
+                    setPairTracks({});
+                    // Picked again from the next files added.
+                    setReferenceKey("");
+                    setCandidateKeys([]);
+                    setShownTracks({});
+                    setTitleOverrides({});
+                  }}
+                />
+                <FoldButton collapsed={collapsed} />
+              </div>
 
-        {/* Always shown, even empty: its column headers hold the buttons that
-            add files to each column. */}
-        <div className="batch-table-wrap list-scroll">
-          <table>
-            <colgroup>
-              <col className="batch-col-index" />
-              <col />
-              <col />
-              <col className="batch-col-status" />
-              <col className="batch-col-status" />
-              <col className="batch-col-folder" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th className="batch-index">#</th>
-                <th>
-                  <div className="batch-th-add">
-                    <span>{m.common.reference}</span>
-                    <button
-                      className="small-button"
-                      onClick={addFiles(setReferenceFiles, m.pairs.pickReferences)}
-                      disabled={busy}
-                      title={m.pairs.addReferenceHint}
-                    >
-                      {m.common.add}
-                    </button>
-                  </div>
-                </th>
-                <th>
-                  <div className="batch-th-add">
-                    <span>{m.common.toCorrect}</span>
-                    <button
-                      className="small-button"
-                      onClick={addFiles(setCandidateFiles, m.pairs.pickCandidates)}
-                      disabled={busy}
-                      title={m.pairs.addCandidateHint}
-                    >
-                      {m.common.add}
-                    </button>
-                  </div>
-                </th>
-                <th>{m.common.analysis}</th>
-                <th>{m.common.export}</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rowCount === 0 && (
-                <tr>
-                  <td colSpan={6} className="batch-empty">
-                    <DropZone title={m.files.dropZoneMany} disabled={dropBlocked !== null} onClick={addFiles(setReferenceFiles, m.pairs.pickReferences)}>
-                      {m.pairs.empty}
-                    </DropZone>
-                  </td>
-                </tr>
-              )}
-              {Array.from({ length: rowCount }, (_, i) => {
-                const a = analysisOf(i);
-                return (
-                  <tr
-                    key={i}
-                    className={`batch-row-state-${rowState(i < pairCount ? [a] : [], a?.exportStatus, i >= pairCount)}${
-                      i >= pairCount ? " batch-row-unpaired" : ""
-                    }`}
-                  >
-                    <td className="batch-index">{i + 1}</td>
-                    <FileCell
-                      files={referenceFiles}
-                      index={i}
-                      disabled={busy}
-                      onChange={setReferenceFiles}
-                    />
-                    <FileCell
-                      files={candidateFiles}
-                      index={i}
-                      disabled={busy}
-                      onChange={setCandidateFiles}
-                    />
-                    <td className={`batch-status batch-status-${a?.status ?? "pending"}`}>
-                      {i < pairCount ? (
-                        <AnalysisStatus
-                          run={a}
-                          busy={busy}
-                          exporting={queue.exporting}
-                          onEdit={() => setEditingPairIndex(i)}
-                          onReanalyze={() => runPlan([i])}
+              <ul className="file-list-rows list-scroll">
+                {Array.from({ length: rowCount }, (_, i) => {
+                  const [badge, badgeKind] = pairBadge(i);
+                  return (
+                    <PairRow
+                      key={i}
+                      reference={{ name: basename(referenceFiles[i] ?? ""), path: referenceFiles[i], missing: m.pairs.noReference }}
+                      candidate={{ name: basename(candidateFiles[i] ?? ""), path: candidateFiles[i], missing: m.pairs.noCandidate }}
+                      referenceActions={
+                        <MoveButtons
+                          count={referenceFiles.length}
+                          index={i}
+                          disabled={busy}
+                          onChange={(update) => setReferenceFiles(update)}
                         />
-                      ) : (
-                        m.pairs.unpaired
+                      }
+                      candidateActions={
+                        <MoveButtons
+                          count={candidateFiles.length}
+                          index={i}
+                          disabled={busy}
+                          onChange={(update) => setCandidateFiles(update)}
+                        />
+                      }
+                      state={rowState(
+                        i < pairCount ? runsOf(i) : [],
+                        exportOf(i)?.exportStatus,
+                        i >= pairCount || unreadable(i).length > 0,
                       )}
-                    </td>
-                    <ExportCell entry={a} />
-                    <td className="batch-row-actions">
-                      <RevealButton file={writtenFile(a)} />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
+                      badge={badge}
+                      badgeKind={badgeKind}
+                      badgeAlert={i >= pairCount}
+                      selected={i === selected}
+                      onSelect={() => setSelected(i)}
+                    />
+                  );
+                })}
+              </ul>
+              <div className="pair-add">
+                <button disabled={busy} title={m.pairs.addReferenceHint} onClick={addFiles(setReferenceFiles, m.pairs.pickReferences)}>
+                  {/* The short label in the folded list. */}
+                  <span data-short={`+ ${m.pairs.refShort}`}>{m.pairs.addReferences}</span>
+                  <span>{m.pairs.dropLeft}</span>
+                </button>
+                <button disabled={busy} title={m.pairs.addCandidateHint} onClick={addFiles(setCandidateFiles, m.pairs.pickCandidates)}>
+                  <span data-short={`+ ${m.pairs.candShort}`}>{m.pairs.addCandidates}</span>
+                  <span>{m.pairs.dropRight}</span>
+                </button>
+              </div>
+            </section>
 
-      <BatchFooter
-        outputDir={outputDir}
-        onOutputDirChange={onOutputDirChange}
-        busy={busy}
-        blocked={blocked}
-        progress={
-          <>
-            {m.pairs.progressPairs(pairCount)}
-            {m.pairs.progressAnalyzed(analyzedCount, pairCount)}
-            {exportedCount > 0 && m.pairs.progressExported(exportedCount)}
-            {rowCount > pairCount && m.pairs.progressUnpaired(rowCount - pairCount)}
-          </>
-        }
-        analyzeButton={
-          <AnalyzeButton
-            analyzing={analyzing}
-            missing={pairCount - analyzedCount}
-            analyzed={analyzedCount}
-            unit="pair"
-            disabled={pairCount === 0 || busy || blocked}
+            <section className="panel file-detail">
+              <DetailHeader
+                title={m.pairs.pairTitle(selected + 1, stem(basename(detailReference ?? detailCandidate ?? "")))}
+                titleTooltip={detailReference ?? detailCandidate}
+                meta={
+                  detailPaired &&
+                  m.pairs.pairMeta(
+                    trackName(detailTracks.reference, detailReferenceTrack),
+                    basename(detailReference!),
+                    detailTracks.candidates.map((t) => trackName(t, candidateInfo(t))).join(", ") || "—",
+                    basename(detailCandidate!),
+                  )
+                }
+                onReanalyze={
+                  shownTrack !== undefined && (detailRun?.status === "done" || detailRun?.status === "error")
+                    ? () => runPlan([{ row: selected, track: shownTrack }])
+                    : undefined
+                }
+                onEdit={detailResult && shownTrack !== undefined ? () => setEditing({ row: selected, track: shownTrack }) : undefined}
+                editDisabled={queue.exporting}
+                missing={detailMissing}
+                analyzing={detailAnalyzing}
+                done={detailDone}
+                exported={detailExport?.exportStatus === "done"}
+                primary={pairCount === 1}
+                disabled={busy || blocked}
+                analyzeDisabled={!analyzableRow(selected)}
+                blockedTitle={blocked ? m.batch.otherModeBusy : undefined}
+                analyzeTitle={m.pairs.analyzePairHint}
+                exportLabel={m.pairs.exportPair}
+                onAnalyze={() => handleAnalyze(false, selected)}
+                onExport={() => handleExport(selected)}
+              />
+
+              {!detailPaired && <p className="placeholder">{m.pairs.unpairedDetail}</p>}
+              {unreadable(selected).map((error) => (
+                <p key={error} className="error">
+                  {error}
+                </p>
+              ))}
+              {detailPaired && unreadable(selected).length === 0 && (
+                <div className="detail-body" ref={view.ref}>
+                  {shownTrack !== undefined && (
+                    <DetailTabs
+                      tracks={detailTracks.candidates.map((t) => [String(t), trackName(t, candidateInfo(t))] as const)}
+                      value={String(shownTrack)}
+                      onChange={(t) => setShownTracks((c) => ({ ...c, [filesKey(selected)]: Number(t) }))}
+                      view={view.compact && detailResult ? { value: view.view, onChange: view.setView } : undefined}
+                    />
+                  )}
+                  <div className={view.topClass(!!detailResult)}>
+                    <div className="detail-tracks">
+                      <TracksHeading
+                        hint={m.pairs.tracksHint}
+                        auto={detailPicked?.auto ? m.multi.autoHint : undefined}
+                        reset={
+                          detailOwnTracks
+                            ? {
+                                label: m.pairs.byDefault,
+                                title: m.pairs.byDefaultHint,
+                                disabled: busy,
+                                onClick: () =>
+                                  setPairTracks((c) => {
+                                    const next = { ...c };
+                                    delete next[filesKey(selected)];
+                                    return next;
+                                  }),
+                              }
+                            : undefined
+                        }
+                      />
+                      <div className="tracks-table-wrap list-scroll detail-tracks-table">
+                        <PairTrackTable
+                          referenceTracks={probes[detailReference!]?.tracks ?? undefined}
+                          candidateTracks={probes[detailCandidate!]?.tracks ?? undefined}
+                          reference={detailTracks.reference}
+                          candidates={detailTracks.candidates}
+                          disabled={busy}
+                          onReference={(index) => editPairTracks(selected, (t) => ({ ...t, reference: index }))}
+                          onToggleCandidate={(index) =>
+                            editPairTracks(selected, (t) => ({ ...t, candidates: toggled(t.candidates, index) }))
+                          }
+                        />
+                      </div>
+                      {detailPicked && detailPicked.issues.length > 0 && <Issues issues={detailPicked.issues} />}
+                      {(probes[detailCandidate!]?.subtitles.length ?? 0) > 0 && detailTracks.candidates.length > 0 && (
+                        <RetimedSubs
+                          subtitles={probes[detailCandidate!]!.subtitles}
+                          assigned={subsOf(selected)}
+                          disabled={busy}
+                          onChange={() => setSubsEditing(selected)}
+                        />
+                      )}
+                      {detailTracks.candidates.length > 0 && (
+                        <ExportNames
+                          rows={detailTracks.candidates.map((index) => ({
+                            index,
+                            label: trackName(index, candidateInfo(index)),
+                            value: titleOverrides[`${filesKey(selected)}|${index}`] ?? "",
+                            shown: titleOf(selected, index, false) ?? candidateInfo(index)?.title ?? null,
+                          }))}
+                          disabled={busy}
+                          onChange={(index, value) => setTitleOverrides((c) => ({ ...c, [`${filesKey(selected)}|${index}`]: value }))}
+                        />
+                      )}
+                    </div>
+                    <DetailChart
+                      summary={detailResult && describeSegments(detailResult.segments)}
+                      result={detailResult}
+                      run={detailRun}
+                      fill={view.compact}
+                      noTrack={shownTrack === undefined ? m.pairs.noTarget : null}
+                    />
+                  </div>
+                  {/* Not while it's being edited: the editor has its own
+                      preview, and two playing at once would overlap. */}
+                  {detailResult && shownTrack !== undefined && !(editing?.row === selected && editing.track === shownTrack) && (
+                    <div className={view.listenClass()}>
+                      <TrackPreview
+                        active={!hidden}
+                        key={detailKey}
+                        referenceFilePath={detailReference!}
+                        candidateFilePath={detailCandidate!}
+                        referenceIndex={detailTracks.reference}
+                        trackIndex={shownTrack}
+                        segments={detailResult.segments}
+                        referenceStartTime={detailReferenceTrack?.start_time ?? 0}
+                        trackStartTime={shownTrackInfo?.start_time ?? 0}
+                        extraControls={<LogPanel lines={detailRun?.log ?? []} />}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <DetailExport entry={detailExport} />
+            </section>
+          </div>
+
+          <BatchFooter
+            exportOptions={exportOptions}
+            languages={targetLanguages}
+            example={nameExample}
+            outputDir={outputDir}
+            onOutputDirChange={onOutputDirChange}
+            busy={busy}
             blocked={blocked}
-            onAnalyze={handleAnalyze}
+            progress={
+              <>
+                {m.pairs.progressPairs(pairCount)}
+                {m.pairs.progressAnalyzed(analyzedCount, pairCount)}
+                {exportedCount > 0 && m.pairs.progressExported(exportedCount)}
+                {rowCount > pairCount && m.pairs.progressUnpaired(rowCount - pairCount)}
+              </>
+            }
+            analyzeButton={
+              <AnalyzeButton
+                analyzing={analyzing}
+                reading={pairRows.some((i) => !probed(i))}
+                missing={pairCount - analyzedCount}
+                analyzed={analyzedCount}
+                unit="pair"
+                primary={listNext === "analyze"}
+                disabled={!pairRows.some(analyzableRow) || busy || blocked}
+                blocked={blocked}
+                onAnalyze={(all) => handleAnalyze(all)}
+              />
+            }
+            queue={queue}
+            canExport={canExport}
+            exportNext={listNext === "export"}
+            onExport={() => handleExport()}
           />
-        }
-        queue={queue}
-        canExport={analyzedCount > 0}
-        onExport={handleExportAll}
-      />
-
-      {showTracksModal && (
-        <AllTracksModal referenceFiles={referenceFiles} candidateFiles={candidateFiles} onClose={() => setShowTracksModal(false)} />
+        </>
       )}
 
-      {editingPairIndex !== null && editingAnalysis?.result && (
+      {showTracksModal && (
+        <AllTracksModal
+          referenceFiles={referenceFiles}
+          candidateFiles={candidateFiles}
+          probes={probes}
+          onClose={() => setShowTracksModal(false)}
+        />
+      )}
+
+      {subsEditing !== null && subsEditing < pairCount && (
+        <SubtitleChoiceDialog
+          title={m.multi.subsOf(basename(candidateFiles[subsEditing]))}
+          titleTooltip={candidateFiles[subsEditing]}
+          tracks={tracksOf(subsEditing).candidates.map(
+            (t) =>
+              [
+                t,
+                trackName(
+                  t,
+                  probes[candidateFiles[subsEditing]]?.tracks?.find((tr) => tr.index === t),
+                ),
+              ] as const,
+          )}
+          subtitles={probes[candidateFiles[subsEditing]]?.subtitles ?? []}
+          assigned={subsOf(subsEditing)}
+          onToggle={(track, sub) =>
+            editPairTracks(subsEditing, (t) => ({
+              ...t,
+              subtitles: { ...t.subtitles, [track]: toggled(subsOf(subsEditing)[track] ?? [], sub) },
+            }))
+          }
+          onClose={() => setSubsEditing(null)}
+        />
+      )}
+
+      {editing !== null && editingRun?.result && (
         <SegmentEditor
-          segments={editingAnalysis.result.segments}
-          onClose={() => setEditingPairIndex(null)}
+          segments={editingRun.result.segments}
+          subtitle={`${basename(candidateFiles[editing.row])} · ${trackName(
+            editing.track,
+            probes[candidateFiles[editing.row]]?.tracks?.find((t) => t.index === editing.track),
+          )}`}
+          onClose={() => setEditing(null)}
           onSave={(edited) =>
-            updatePair(pairKey(editingPairIndex), (a) => ({ result: a.result ? { ...a.result, segments: edited } : a.result }))
+            updateRun(trackKey(editing.row, editing.track), (a) => ({ result: a.result ? { ...a.result, segments: edited } : a.result }))
           }
           preview={{
-            referenceFilePath: referenceFiles[editingPairIndex],
-            candidateFilePath: candidateFiles[editingPairIndex],
-            referenceIndex: referenceTrackIndex,
-            trackIndex: candidateTrackIndex,
+            referenceFilePath: referenceFiles[editing.row],
+            candidateFilePath: candidateFiles[editing.row],
+            referenceIndex: tracksOf(editing.row).reference,
+            trackIndex: editing.track,
             referenceStartTime: editStartTimes.reference,
             trackStartTime: editStartTimes.track,
           }}

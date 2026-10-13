@@ -1,23 +1,39 @@
 import { useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { fetchClip, fetchCorrectedClip, fetchWaveform, type SegmentOut } from "./api";
 import { candidateSpansIn, planResult, silentRegions, skippedRegions } from "./resultPlan";
-import { InfoTip } from "./InfoTip";
-import { MIN_VIEW_DURATION_S, type TimeView, zoomView } from "./timeView";
+import { InfoTip, Tooltip } from "./InfoTip";
+import { Select } from "./Dropdown";
+import { MIN_VIEW_DURATION_S, panView, type TimeView, zoomView } from "./timeView";
 import { formatOffsetMs, formatTime, segmentOffsetLabel } from "./SegmentChart";
 import { Waveform, type HighlightRegion } from "./Waveform";
 import { WaveformNavigator } from "./WaveformNavigator";
-import { errorMessage } from "./util";
+import { errorMessage, FIELD_PROPS, inFront, shortcutKey } from "./util";
+import { FULL_TRACK_BUCKETS, peakRange, resamplePeaks, type FullPeaks, type PeaksData } from "./peaks";
 import { MinusIcon, PlusIcon } from "./icons";
 import { useT } from "./i18n";
 
 const PREVIEW_DURATION_S = 12;
 const WAVEFORM_BUCKETS = 800;
-// Fetched once per track, whole-file, so every zoom/pan afterwards is a pure
-// client-side resample (see resamplePeaks) instead of a network round trip.
-// Kept at this: the navigator redraws all of them on every pan, and 120000
-// made navigation visibly lag. The waveform gets coarse near the
-// MIN_VIEW_DURATION_S zoom floor, an accepted trade-off.
-const FULL_TRACK_BUCKETS = 20000;
+
+// Waveforms loaded ahead, one at a time: they share the engine with the
+// analyses still running.
+let preloading: Promise<unknown> = Promise.resolve();
+
+/** Loads a corrected track's waveforms (its reference's and its own) in
+ * the background, as soon as it's analyzed: they're ready, kept by
+ * fetchWaveform, when its file or pair is shown. */
+export function preloadWaveforms(referencePath: string, referenceIndex: number, candidatePath: string, trackIndex: number): void {
+  preloading = preloading
+    .then(() =>
+      Promise.all([
+        fetchWaveform(referencePath, referenceIndex, 0, null, FULL_TRACK_BUCKETS),
+        fetchWaveform(candidatePath, trackIndex, 0, null, FULL_TRACK_BUCKETS),
+      ]),
+    )
+    .catch(() => {
+      // the preview asks again when shown, and shows the error then
+    });
+}
 
 /**
  * The reference-time offset applying at `t`, per the current segments
@@ -38,79 +54,6 @@ function offsetAt(segments: SegmentOut[], t: number): number {
     }
   }
   return 0;
-}
-
-interface PeaksData {
-  min: number[];
-  max: number[];
-  dataStart: number;
-  dataEnd: number;
-}
-
-interface FullPeaks {
-  min: number[];
-  max: number[];
-}
-
-/** Min/max of the whole-track peaks over time range [t0, t1). */
-function peakRange(full: FullPeaks, fullDuration: number, t0: number, t1: number): [number, number] | null {
-  const n = full.min.length;
-  if (n === 0 || fullDuration <= 0 || t1 <= t0) return null;
-  const bucket = fullDuration / n;
-  const lo = Math.max(0, Math.min(n - 1, Math.floor(t0 / bucket)));
-  const hi = Math.max(lo + 1, Math.min(n, Math.ceil(t1 / bucket)));
-  let mn = full.min[lo];
-  let mx = full.max[lo];
-  for (let j = lo; j < hi; j++) {
-    if (full.min[j] < mn) mn = full.min[j];
-    if (full.max[j] > mx) mx = full.max[j];
-  }
-  return [mn, mx];
-}
-
-/**
- * Derives a `outBuckets`-wide view [viewStart, viewEnd) from a pre-fetched
- * whole-track peaks array (spanning [0, full duration]) -- min-of-mins /
- * max-of-maxes over the source buckets each output bucket covers, which is
- * exact (no precision lost beyond what the original server-side bucketing
- * already introduced). This is what makes zoom/pan instant: no network call,
- * just re-slicing data already in memory. Below the source's own
- * resolution (zoomed in tighter than FULL_TRACK_BUCKETS can resolve), output
- * buckets start repeating the same one or two source buckets -- a known,
- * accepted trade-off (see FULL_TRACK_BUCKETS/MIN_VIEW_DURATION_S) rather
- * than falling back to a live fetch.
- */
-function resamplePeaks(full: FullPeaks, fullDuration: number, viewStart: number, viewEnd: number, outBuckets: number): PeaksData {
-  const n = full.min.length;
-  if (n === 0 || fullDuration <= 0) return { min: [], max: [], dataStart: viewStart, dataEnd: viewStart };
-
-  const srcBucketDur = fullDuration / n;
-  const clampedStart = Math.max(0, viewStart);
-  const clampedEnd = Math.min(fullDuration, viewEnd);
-  if (clampedEnd <= clampedStart) return { min: [], max: [], dataStart: viewStart, dataEnd: viewStart };
-
-  const startIdx = Math.max(0, Math.floor(clampedStart / srcBucketDur));
-  const endIdx = Math.min(n, Math.ceil(clampedEnd / srcBucketDur));
-  const sliceLen = endIdx - startIdx;
-  if (sliceLen <= 0) return { min: [], max: [], dataStart: viewStart, dataEnd: viewStart };
-
-  const outMin = new Array<number>(outBuckets);
-  const outMax = new Array<number>(outBuckets);
-  for (let i = 0; i < outBuckets; i++) {
-    const a = startIdx + Math.floor((i / outBuckets) * sliceLen);
-    const b = startIdx + Math.floor(((i + 1) / outBuckets) * sliceLen);
-    const lo = Math.min(a, n - 1);
-    const hi = Math.max(lo + 1, Math.min(b, n));
-    let mn = full.min[lo];
-    let mx = full.max[lo];
-    for (let j = lo; j < hi; j++) {
-      if (full.min[j] < mn) mn = full.min[j];
-      if (full.max[j] > mx) mx = full.max[j];
-    }
-    outMin[i] = mn;
-    outMax[i] = mx;
-  }
-  return { min: outMin, max: outMax, dataStart: startIdx * srcBucketDur, dataEnd: endIdx * srcBucketDur };
 }
 
 /** Fetches+decodes a clip into a ready-to-schedule AudioBuffer. Decoding
@@ -153,8 +96,8 @@ function playSource(ctx: AudioContext, buffer: AudioBuffer, gain: GainNode, when
 }
 
 interface TrackPreviewProps {
-  /** Usually the same file (single-file mode's reference and candidate
-   * tracks live side by side in one container) but not always: batch mode's
+  /** Usually the same file (multitrack mode's reference and candidate
+   * tracks live side by side in one container) but not always: the
    * cross-file pairs have the reference in one file and the track to
    * correct in another, and /clip and /waveform both take a `path` per
    * call, so there's no reason this component needs them to match. */
@@ -174,19 +117,35 @@ interface TrackPreviewProps {
   controller?: React.Ref<TrackPreviewHandle>;
   /** The playback marker's reference time, as it moves -- for a parent to
    * draw the same marker elsewhere. */
-  onCursorChange?: (t: number) => void;
+  onCursorChange?: (t: number, playing: boolean) => void;
   /** With both, the visible stretch is the parent's (null: not set yet),
    * shared with its own chart, instead of this component's own. */
   view?: TimeView | null;
   onViewChange?: (view: TimeView) => void;
+  /** More buttons at the right end of the zoom row (the detail's
+   * "Journal"): the playback row has no room left in a small window. */
+  extraControls?: React.ReactNode;
+  /** False while it's out of sight (its mode hidden): playback stops. */
+  active?: boolean;
 }
+
+// The listening position of each track pair, kept while its preview comes
+// and goes: the detail's and the editor's are one, closing the editor
+// keeps where it was.
+const positions = new Map<string, number>();
+
+// A clip starts at least this long before the track's end: one starting
+// at the very end would be empty (it can't even be decoded).
+const MIN_CLIP_S = 1;
 
 export interface TrackPreviewHandle {
   seekTo(t: number): void;
+  /** The marker dragged to `t` (a parent's chart), then let go there. */
+  scrubTo(t: number): void;
+  endScrub(t: number): void;
+  /** The view moved by a share of its length. */
+  pan(share: number): void;
 }
-
-// Above this many segments, "Aller à" is a dropdown instead of a row of buttons.
-const MAX_SEGMENT_BUTTONS = 4;
 
 function segmentPickLabel(seg: SegmentOut): string {
   return `${formatTime(seg.start_s)}–${formatTime(seg.end_s)} (${segmentOffsetLabel(seg)})`;
@@ -221,9 +180,16 @@ export function TrackPreview({
   onCursorChange,
   view: sharedView,
   onViewChange,
+  extraControls,
+  active = true,
 }: TrackPreviewProps) {
   const t = useT();
-  const [previewStart, setPreviewStart] = useState(() => (segments.length ? segments[0].start_s : 0));
+  const positionKey = `${referenceFilePath}|${referenceIndex}|${candidateFilePath}|${trackIndex}`;
+  const [previewStart, setPreviewStartState] = useState(() => positions.get(positionKey) ?? (segments.length ? segments[0].start_s : 0));
+  function setPreviewStart(t: number) {
+    setPreviewStartState(t);
+    positions.set(positionKey, t);
+  }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Where the currently-loaded clips actually start, in reference time --
@@ -282,11 +248,16 @@ export function TrackPreview({
   const cursorRef = useRef<number | null>(null);
 
   const appliedOffset = offsetAt(segments, previewStart);
-  const displayCursor = liveCursor ?? previewStart;
+  // While the marker is dragged: where it is (it follows the pointer;
+  // playback goes there once it's let go).
+  const [scrubTime, setScrubTime] = useState<number | null>(null);
+  const displayCursor = scrubTime ?? liveCursor ?? previewStart;
+  // It moves by itself (playing) or under the pointer: no glide then.
+  const markerMoving = liveCursor !== null || scrubTime !== null;
 
   useEffect(() => {
-    onCursorChange?.(displayCursor);
-  }, [displayCursor, onCursorChange]);
+    onCursorChange?.(displayCursor, markerMoving);
+  }, [displayCursor, markerMoving, onCursorChange]);
 
   // Compared by content: a parent editing segments may hand a new array with
   // the same values on every render.
@@ -307,14 +278,47 @@ export function TrackPreview({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segmentsKey]);
 
-  useImperativeHandle(controller, () => ({ seekTo: handleWaveformSeek }));
+  /** `t` brought within the track, a clip's length before its end. */
+  function clampStart(t: number): number {
+    const end = refDuration !== null ? Math.max(0, refDuration - MIN_CLIP_S) : Infinity;
+    return Math.round(Math.max(0, Math.min(Number.isFinite(t) ? t : 0, end)) * 10) / 10;
+  }
+
+  // Out of sight (its mode hidden): it goes quiet.
+  useEffect(() => {
+    if (!active && playbackStartRef.current !== null) stop();
+    if (!active) {
+      // A clip on its way is dropped, and the button freed.
+      loadGenerationRef.current++;
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+
+  /** A drag of the marker let go at `t`: the position goes there. */
+  function endScrub(t: number) {
+    setScrubTime(null);
+    handleWaveformSeek(t);
+  }
+
+  /** The view moved by `share` of its length (a middle-button drag). */
+  function pan(share: number) {
+    if (refDuration === null || viewDuration === null) return;
+    setView(panView({ start: viewStart, duration: viewDuration }, share * viewDuration, refDuration));
+  }
+
+  useImperativeHandle(controller, () => ({ seekTo: handleWaveformSeek, scrubTo: setScrubTime, endScrub, pan }));
   // Informational only (see TrackPreviewProps' comment): the offset above is
   // measured on each track's own timeline, container delay excluded, so a
   // normal player (which applies that delay) would see this residual instead.
   const hasContainerDelay = Math.abs(trackStartTime) > 0.001 || Math.abs(referenceStartTime) > 0.001;
   const presentationOffset = appliedOffset + trackStartTime - referenceStartTime;
 
+  // Gone: no audio context may be created any more.
+  const unmountedRef = useRef(false);
+
   function getAudioCtx(): AudioContext {
+    if (unmountedRef.current) throw new Error("preview closed");
     if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
     return audioCtxRef.current;
   }
@@ -329,12 +333,24 @@ export function TrackPreview({
   }
 
   useEffect(() => {
+    // (Mounted again: React's development mode unmounts and remounts once.)
+    unmountedRef.current = false;
     return () => {
+      // A clip still on its way is dropped (it would start playing after
+      // the preview is gone, with nothing left to stop it). A counter, not
+      // a node: its value now is the one to move past.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      loadGenerationRef.current++;
+      unmountedRef.current = true;
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       stopSource(refSourceRef);
       stopSource(candSourceRef);
       stopSource(candOriginalSourceRef);
       audioCtxRef.current?.close().catch(() => {});
+      audioCtxRef.current = null;
+      refGainRef.current = null;
+      candGainRef.current = null;
+      candOriginalGainRef.current = null;
     };
   }, []);
 
@@ -367,6 +383,9 @@ export function TrackPreview({
     return () => {
       cancelled = true;
     };
+    // Fetched again for other tracks only (setView is a new function each
+    // render).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [referenceFilePath, candidateFilePath, referenceIndex, trackIndex]);
 
   const plan = useMemo(() => planResult(segments), [segments]);
@@ -460,6 +479,8 @@ export function TrackPreview({
           return;
         }
       }
+      // Played to the end of the clip: nothing plays any more.
+      playbackStartRef.current = null;
       stopCursorLoop();
     }
     rafRef.current = requestAnimationFrame(tick);
@@ -471,8 +492,12 @@ export function TrackPreview({
    * `previewStart` so a click-to-seek during playback (see
    * handleWaveformSeek) can jump straight to the clicked time without
    * waiting for the state update to land first. */
-  async function loadAndPlay(startAt: number = previewStart) {
+  async function loadAndPlay(requested: number = previewStart) {
     const generation = ++loadGenerationRef.current;
+    // Within the track: a position typed past its end (or left from a
+    // longer one) would ask the engine for nothing -- an error 400.
+    const startAt = clampStart(requested);
+    if (startAt !== requested) setPreviewStart(startAt);
     setLoading(true);
     setError(null);
     try {
@@ -538,8 +563,7 @@ export function TrackPreview({
     const rounded = Math.round(t * 10) / 10;
     const ctx = audioCtxRef.current;
     const wasPlaying = playbackStartRef.current !== null && ctx !== null;
-    const withinLoadedClip =
-      loadedClipStart !== null && t >= loadedClipStart && t <= loadedClipStart + PREVIEW_DURATION_S;
+    const withinLoadedClip = loadedClipStart !== null && t >= loadedClipStart && t <= loadedClipStart + PREVIEW_DURATION_S;
 
     setPreviewStart(rounded);
 
@@ -592,120 +616,169 @@ export function TrackPreview({
     stopCursorLoop();
   }
 
+  // "Décalage ici", at the result's label (where the position plays).
+  const offsetHere = (
+    <span className="preview-offset">
+      {t.preview.offsetHere(formatOffsetMs(appliedOffset))}
+      {hasContainerDelay && (
+        <>
+          {" "}
+          <InfoTip>{t.preview.containerDelay(formatOffsetMs(trackStartTime), formatOffsetMs(presentationOffset))}</InfoTip>
+        </>
+      )}
+    </span>
+  );
+
   const removedHighlight: HighlightRegion[] = (viewData?.removed ?? []).map((r) => ({ ...r, kind: "removed" }));
   const addedHighlight: HighlightRegion[] = (viewData?.added ?? []).map((r) => ({ ...r, kind: "added" }));
 
+  // Space plays from the position, or stops: the shown preview only (not
+  // one hidden on the other mode or tab, nor behind a dialog).
+  const root = useRef<HTMLDivElement>(null);
+  const toggle = useRef(() => {});
+  // (Nothing while a clip loads: it would start once loaded anyway.)
+  toggle.current = () => {
+    if (playbackStartRef.current !== null) stop();
+    else if (!loading) loadAndPlay();
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== " " || !shortcutKey(e) || !root.current?.offsetParent || !inFront(root.current)) return;
+      e.preventDefault();
+      toggle.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
-    <div className="preview">
-      {/* One wrapping row (zoom, segment shortcuts, legend): height is what a
-          small screen lacks. */}
+    <div className="preview" ref={root}>
+      {/* One row (zoom, the segments to go to, the journal): height is what
+          a small window lacks. */}
       <div className="preview-toolbar">
         <div className="waveform-zoom-controls">
           <span>{t.preview.zoom}</span>
-          <button className="small-button zoom-button" title={t.preview.zoomIn} aria-label={t.preview.zoomIn} onClick={() => zoomAt(0.5, previewStart)}>
-            <PlusIcon />
-          </button>
-          <button className="small-button zoom-button" title={t.preview.zoomOut} aria-label={t.preview.zoomOut} onClick={() => zoomAt(2, previewStart)}>
-            <MinusIcon />
-          </button>
+          <Tooltip text={t.preview.zoomIn}>
+            <button className="small-button zoom-button" aria-label={t.preview.zoomIn} onClick={() => zoomAt(0.5, previewStart)}>
+              <PlusIcon />
+            </button>
+          </Tooltip>
+          <Tooltip text={t.preview.zoomOut}>
+            <button className="small-button zoom-button" aria-label={t.preview.zoomOut} onClick={() => zoomAt(2, previewStart)}>
+              <MinusIcon />
+            </button>
+          </Tooltip>
           <button className="small-button" onClick={resetZoom}>
             {t.preview.wholeTrack}
           </button>
           <InfoTip>{t.preview.zoomHint}</InfoTip>
         </div>
-        {/* A few segments: one button each. More: a list, so the row
-            doesn't wrap and eat the waveforms' height. */}
-        {segments.length > 1 && segments.length <= MAX_SEGMENT_BUTTONS && (
-          <div className="preview-segment-picks">
+        {/* A list, not a button per segment: the row stays one line, the
+            height is the waveforms'. */}
+        {segments.length > 1 && (
+          <span className="preview-segment-picks">
             {t.preview.goTo}
-            {segments.map((seg, i) => (
-              <button key={i} className="small-button" onClick={() => goToSegment(seg)}>
-                {segmentPickLabel(seg)}
-              </button>
-            ))}
-          </div>
-        )}
-        {segments.length > MAX_SEGMENT_BUTTONS && (
-          <label className="preview-segment-picks">
-            {t.preview.goTo}
-            <select
+            <Select
+              label={t.preview.goTo}
               value=""
-              onChange={(e) => {
-                const seg = segments[Number(e.target.value)];
+              placeholder={t.preview.aSegment(segments.length)}
+              options={segments.map((seg, i) => ({ value: String(i), label: `${i + 1}. ${segmentPickLabel(seg)}` }))}
+              onChange={(i) => {
+                const seg = segments[Number(i)];
                 if (seg) goToSegment(seg);
               }}
-            >
-              <option value="">{t.preview.aSegment(segments.length)}</option>
-              {segments.map((seg, i) => (
-                <option key={i} value={i}>
-                  {i + 1}. {segmentPickLabel(seg)}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        {(removedHighlight.length > 0 || addedHighlight.length > 0) && (
-          <span className="waveform-legend">
-            <span>
-              <span className="waveform-legend-swatch removed" /> {t.preview.willBeRemoved}
-            </span>
-            <span>
-              <span className="waveform-legend-swatch added" /> {t.preview.willBeAdded}
-            </span>
+            />
           </span>
         )}
+        {extraControls && <span className="preview-extra">{extraControls}</span>}
       </div>
 
       {waveformError && <p className="error">{waveformError}</p>}
 
-      {waveformLoading && !viewData && <p className="placeholder">{t.preview.loadingWaveforms}</p>}
-
-      {viewDuration !== null && viewData && (
-        <div className="waveforms">
-          <Waveform
-            viewStart={viewStart}
-            viewDuration={viewDuration}
-            peaksMin={viewData.refPeaks.min}
-            peaksMax={viewData.refPeaks.max}
-            dataStart={viewData.refPeaks.dataStart}
-            dataEnd={viewData.refPeaks.dataEnd}
-            cursor={displayCursor}
-            onSeek={handleWaveformSeek}
-            onZoom={zoomAt}
-            label={t.preview.reference}
-            className="waveform-reference"
-          />
-          <Waveform
-            viewStart={viewStart}
-            viewDuration={viewDuration}
-            peaksMin={viewData.candPeaks.min}
-            peaksMax={viewData.candPeaks.max}
-            dataStart={viewData.candPeaks.dataStart}
-            dataEnd={viewData.candPeaks.dataEnd}
-            cursor={displayCursor}
-            onSeek={handleWaveformSeek}
-            onZoom={zoomAt}
-            highlights={removedHighlight}
-            label={t.preview.candidate}
-            className="waveform-candidate"
-          />
-          <Waveform
-            viewStart={viewStart}
-            viewDuration={viewDuration}
-            peaksMin={viewData.finalPeaks.min}
-            peaksMax={viewData.finalPeaks.max}
-            dataStart={viewData.finalPeaks.dataStart}
-            dataEnd={viewData.finalPeaks.dataEnd}
-            cursor={displayCursor}
-            onSeek={handleWaveformSeek}
-            onZoom={zoomAt}
-            highlights={addedHighlight}
-            label={t.preview.result}
-            className="waveform-final"
-          />
+      {/* Until they're in, their room is kept (empty frames, a spinner):
+          the controls below don't jump when they arrive. */}
+      {!viewData && !waveformError && (
+        <div className="waveforms waveforms-loading" aria-busy="true">
+          {[
+            [t.preview.reference, "waveform-reference"],
+            [t.preview.candidate, "waveform-candidate"],
+            [t.preview.result, "waveform-final"],
+          ].map(([label, className]) => (
+            <div key={className} className={`waveform ${className}`}>
+              <div className="waveform-label">{label}</div>
+            </div>
+          ))}
+          {waveformLoading && (
+            <span className="waveforms-spinner">
+              <span className="spinner spinner-small" />
+              {t.preview.loadingWaveforms}
+            </span>
+          )}
         </div>
       )}
 
+      {viewDuration !== null && viewData && (
+        <div className="waveforms">
+          {/* The reference, the track as is (what's removed in red), the
+              result (what's added in green, the offset at the position):
+              one time scale, one position. */}
+          {(
+            [
+              [t.preview.reference, "waveform-reference", viewData.refPeaks, undefined, null],
+              [
+                t.preview.candidate,
+                "waveform-candidate",
+                viewData.candPeaks,
+                removedHighlight,
+                removedHighlight.length > 0 && (
+                  <span>
+                    <span className="waveform-legend-swatch removed" /> {t.preview.willBeRemoved}
+                  </span>
+                ),
+              ],
+              [
+                t.preview.result,
+                "waveform-final",
+                viewData.finalPeaks,
+                addedHighlight,
+                <>
+                  {addedHighlight.length > 0 && (
+                    <span>
+                      <span className="waveform-legend-swatch added" /> {t.preview.willBeAdded}
+                    </span>
+                  )}
+                  {offsetHere}
+                </>,
+              ],
+            ] as const
+          ).map(([label, className, peaks, highlights, labelExtra]) => (
+            <Waveform
+              key={className}
+              viewStart={viewStart}
+              viewDuration={viewDuration}
+              peaksMin={peaks.min}
+              peaksMax={peaks.max}
+              dataStart={peaks.dataStart}
+              dataEnd={peaks.dataEnd}
+              cursor={displayCursor}
+              cursorGlide={!markerMoving}
+              onSeek={handleWaveformSeek}
+              onScrub={setScrubTime}
+              onScrubEnd={endScrub}
+              onPan={pan}
+              onZoom={zoomAt}
+              highlights={highlights}
+              label={label}
+              labelExtra={labelExtra}
+              className={className}
+            />
+          ))}
+        </div>
+      )}
+
+      {!(refDuration !== null && refFullPeaks && viewDuration !== null) && !waveformError && (
+        <div className="waveform-navigator waveform-navigator-placeholder" />
+      )}
       {refDuration !== null && refFullPeaks && viewDuration !== null && (
         <WaveformNavigator
           duration={refDuration}
@@ -721,71 +794,43 @@ export function TrackPreview({
         <label>
           {t.preview.position}
           <input
+            {...FIELD_PROPS}
             type="number"
             step="0.5"
             min="0"
-            value={previewStart}
+            // While the marker is dragged, where it would land.
+            value={scrubTime !== null ? Math.round(scrubTime * 10) / 10 : previewStart}
             onChange={(e) => setPreviewStart(Number(e.target.value))}
           />
         </label>
-        <button className="small-button" onClick={() => loadAndPlay()} disabled={loading}>
-          {loading ? t.preview.loading : t.preview.play}
+        {/* One button, as Space: play, or stop what plays. */}
+        <button className="small-button preview-play" onClick={() => toggle.current()} disabled={loading} title={t.preview.spaceHint}>
+          {loading ? t.preview.loading : liveCursor !== null ? t.preview.stop : t.preview.play}
         </button>
-        <button className="small-button" onClick={stop} disabled={loadedClipStart === null && liveCursor === null}>
-          {t.preview.stop}
-        </button>
-        {/* What plays during "Écouter": any mix of the three. */}
-        <span className="preview-listen-label">{t.preview.hear}</span>
-        <label>
-          <input
-            type="checkbox"
-            checked={!refMuted}
-            onChange={() =>
-              setRefMuted((m) => {
-                const next = !m;
-                if (refGainRef.current) refGainRef.current.gain.value = next ? 0 : 1;
-                return next;
-              })
-            }
-          />
-          {t.preview.reference}
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={!candOriginalMuted}
-            onChange={() =>
-              setCandOriginalMuted((m) => {
-                const next = !m;
-                if (candOriginalGainRef.current) candOriginalGainRef.current.gain.value = next ? 0 : 1;
-                return next;
-              })
-            }
-          />
-          {t.preview.candidate}
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={!candMuted}
-            onChange={() =>
-              setCandMuted((m) => {
-                const next = !m;
-                if (candGainRef.current) candGainRef.current.gain.value = next ? 0 : 1;
-                return next;
-              })
-            }
-          />
-          {t.preview.result}
-        </label>
-        <span className="preview-offset">
-          {t.preview.offsetHere(formatOffsetMs(appliedOffset))}
-          {hasContainerDelay && (
-            <>
-              {" "}
-              <InfoTip>{t.preview.containerDelay(formatOffsetMs(trackStartTime), formatOffsetMs(presentationOffset))}</InfoTip>
-            </>
-          )}
+        {/* What plays during "Écouter": any mix of the three -- one block, on
+            a line of its own when the row is too narrow. */}
+        <span className="preview-hear">
+          <span className="preview-listen-label">{t.preview.hear}</span>
+          {(
+            [
+              [t.preview.reference, refMuted, setRefMuted, refGainRef],
+              [t.preview.hearCandidate, candOriginalMuted, setCandOriginalMuted, candOriginalGainRef],
+              [t.preview.hearResult, candMuted, setCandMuted, candGainRef],
+            ] as const
+          ).map(([label, muted, setMuted, gain]) => (
+            <label key={label}>
+              <input
+                type="checkbox"
+                checked={!muted}
+                onChange={() => {
+                  // At once on what plays, and for the next clip.
+                  if (gain.current) gain.current.gain.value = muted ? 1 : 0;
+                  setMuted(!muted);
+                }}
+              />
+              {label}
+            </label>
+          ))}
         </span>
       </div>
       {error && <p className="error">{error}</p>}

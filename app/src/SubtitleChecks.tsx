@@ -5,7 +5,7 @@ import { useT } from "./i18n";
 /** One checkbox per subtitle track of a file: the ones retimed along with
  * one corrected audio track (`chosen`). A track `taken` by another audio
  * track, or an image one (PGS, VobSub: can't be retimed), can't be ticked;
- * its tooltip says why. Single-file view and the batch "Choisir" dialog. */
+ * its tooltip says why. The "Changer" dialog (SubtitleChoiceDialog). */
 export function SubtitleChecks({
   subtitles,
   chosen,
@@ -25,10 +25,7 @@ export function SubtitleChecks({
       {subtitles.map((s) => {
         const elsewhere = taken.includes(s.index);
         return (
-          <label
-            key={s.index}
-            title={!s.shiftable ? t.subtitles.unshiftable : elsewhere ? t.subtitles.takenElsewhere : subtitleDetails(s)}
-          >
+          <label key={s.index} title={!s.shiftable ? t.subtitles.unshiftable : elsewhere ? t.subtitles.takenElsewhere : subtitleDetails(s)}>
             <input
               type="checkbox"
               checked={chosen.includes(s.index)}

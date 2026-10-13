@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { peaksToPath } from "./Waveform";
+import { resamplePeaks } from "./peaks";
 import "./Waveform.css";
 import { t } from "./i18n";
 
@@ -9,6 +10,10 @@ const HEIGHT = 30;
 // of a long track -- a window narrower than this would be near-impossible
 // to click/drag precisely.
 const MIN_WINDOW_PX = 6;
+// Columns drawn: as many as the zoomed waveforms', not one per peak of the
+// whole track (20,000 -- a path 25 times heavier, drawn again at every
+// frame of a resize, for a strip 26px high).
+const COLUMNS = 800;
 
 interface WaveformNavigatorProps {
   duration: number;
@@ -75,7 +80,13 @@ export function WaveformNavigator({ duration, viewStart, viewDuration, peaksMin,
     onNavigate(clampStart(frac * duration - viewDuration / 2));
   }
 
-  const path = peaksMin && peaksMax ? peaksToPath(peaksMin, peaksMax, 0, WIDTH, HEIGHT) : "";
+  // Once per track, not at every render (each pan of the view renders it).
+  const path = useMemo(() => {
+    if (!peaksMin || !peaksMax) return "";
+    // Every peak still shows: each column the min of its mins, the max of its maxes.
+    const columns = resamplePeaks({ min: peaksMin, max: peaksMax }, duration, 0, duration, COLUMNS);
+    return peaksToPath(columns.min, columns.max, 0, WIDTH, HEIGHT);
+  }, [peaksMin, peaksMax, duration]);
   const winX0 = Math.max(0, timeToX(viewStart));
   const winX1raw = Math.min(WIDTH, timeToX(viewStart + viewDuration));
   const winX1 = Math.max(winX1raw, winX0 + MIN_WINDOW_PX);

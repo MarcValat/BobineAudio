@@ -16,21 +16,26 @@ progress instead of a frozen spinner.
 from __future__ import annotations
 
 import asyncio
+import os
 import re
+import secrets
 import threading
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
+from starlette.datastructures import QueryParams
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from syncaudio import analysis_cache, dsp, waveform_cache
-from syncaudio.cancellation import Cancelled
 from syncaudio.analysis_cache import ANALYSIS_SAMPLE_RATE
+from syncaudio.cancellation import Cancelled
 from syncaudio.ffmpeg_backend import (
     FFmpegError,
     extract_wav_clip,
@@ -47,14 +52,18 @@ from syncaudio.render import (
     check_import_track,
     corrected_clip,
     default_output_path,
+    export_codec_name,
     plan_corrections,
     plan_segmented_correction,
-    render as render_tracks,
     resolve_targets,
     track_key,
 )
+from syncaudio.render import (
+    render as render_tracks,
+)
 from syncaudio.segments import DEFAULT_HOP_S, DEFAULT_MARGIN_S, DEFAULT_WINDOW_S, Segment, detect_segments
 from syncaudio.subtitles import is_shiftable
+
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -68,13 +77,57 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Bobine Audio", version="0.1.0", lifespan=_lifespan)
 
-# The sidecar only ever binds to 127.0.0.1 (see `syncaudio serve`), so it's
-# never reachable from outside the machine -- wide-open CORS here just lets
-# the Tauri webview (a different origin: tauri://... or localhost:1420 in
-# dev) call it, same as any other local desktop-app sidecar.
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+# Who may call the engine. It only listens on 127.0.0.1 (see `syncaudio
+# serve`), out of other machines' reach -- but not of this one's other
+# programs, nor of the websites open in its browser. So:
+# - the app that starts it passes it a secret (SYNCAUDIO_TOKEN, new at every
+#   launch), and every request must carry it back: the TOKEN_HEADER header,
+#   or a `token` query parameter for a WebSocket (a browser can't set its
+#   headers). /health alone answers without it (it tells nothing);
+# - only the app's own pages may read its answers (CORS): the Tauri window
+#   (tauri://localhost on Linux, http(s)://tauri.localhost on Windows) and
+#   the dev server.
+# Without SYNCAUDIO_TOKEN (`syncaudio serve` run by hand), no token is asked.
+TOKEN_HEADER = "X-Bobine-Token"
+APP_ORIGINS = ["tauri://localhost", "http://tauri.localhost", "https://tauri.localhost", "http://localhost:1420"]
 
-_NO_LOG: Callable[[str], None] = lambda _msg: None  # noqa: E731
+
+class TokenGuard:
+    """Refuses any request without the engine's token (see above): 401 for a
+    request, a closed handshake for a WebSocket."""
+
+    def __init__(self, inner: ASGIApp) -> None:
+        self.inner = inner
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        expected = os.environ.get("SYNCAUDIO_TOKEN")
+        if not expected or scope["type"] not in ("http", "websocket") or scope["path"] == "/health":
+            await self.inner(scope, receive, send)
+            return
+        # A CORS preflight carries no custom header: CORSMiddleware answers it.
+        if scope["type"] == "http" and scope["method"] == "OPTIONS":
+            await self.inner(scope, receive, send)
+            return
+        if scope["type"] == "http":
+            headers = dict(scope["headers"])
+            given = headers.get(TOKEN_HEADER.lower().encode(), b"").decode("latin-1")
+        else:
+            given = QueryParams(scope["query_string"]).get("token", "")
+        if secrets.compare_digest(given.encode(), expected.encode()):
+            await self.inner(scope, receive, send)
+        elif scope["type"] == "http":
+            await JSONResponse(status_code=401, content={"detail": "unauthorized"})(scope, receive, send)
+        else:
+            await send({"type": "websocket.close", "code": 1008})
+
+
+# The token checked inside CORS: a refusal still says where it came from.
+app.add_middleware(TokenGuard)
+app.add_middleware(CORSMiddleware, allow_origins=APP_ORIGINS, allow_methods=["*"], allow_headers=["*"])
+
+
+def _NO_LOG(_msg: str) -> None:
+    """A job step's log when nobody listens."""
 
 
 @app.get("/health")
@@ -232,6 +285,9 @@ class TrackInfo(BaseModel):
     title: str | None = None
     channels: int | None
     sample_rate: int | None
+    # The codec it's exported in once corrected ("Opus" for an AAC source):
+    # the GUI's automatic track names.
+    export_codec: str
     # Container-level presentation delay (e.g. from mkvtoolnix's --sync), if
     # any -- display-only: every extraction works on the track's own
     # timeline with this delay excluded (see ffmpeg_backend._seek_args), so
@@ -270,6 +326,7 @@ def probe(path: str) -> ProbeResponse:
                 title=s.title,
                 channels=s.channels,
                 sample_rate=s.sample_rate,
+                export_codec=export_codec_name(s),
                 start_time=probe_stream_start_time(path, s.index),
             )
             for s in streams
@@ -312,7 +369,9 @@ class WaveformResponse(BaseModel):
 
 
 @app.get("/waveform", response_model=WaveformResponse)
-def waveform(path: str, index: int, start: float = 0.0, duration: float | None = None, buckets: int = 800) -> WaveformResponse:
+def waveform(
+    path: str, index: int, start: float = 0.0, duration: float | None = None, buckets: int = 800
+) -> WaveformResponse:
     """Downsampled (min, max) waveform envelope for a track window, for the GUI's
     always-visible, zoomable comparison view (see TrackPreview.tsx/Waveform.tsx).
 
@@ -337,6 +396,9 @@ class PrefetchRequest(BaseModel):
     tracks: list[TrackRef]
     start: float = 0.0
     duration: float | None = None
+    # Also each track's whole-track waveform at this many buckets (/waveform),
+    # from the same pass over the file.
+    waveform_buckets: int | None = None
 
 
 class PrefetchResponse(BaseModel):
@@ -344,7 +406,14 @@ class PrefetchResponse(BaseModel):
 
 
 def _do_prefetch(req: PrefetchRequest, log: Callable[[str], None] = lambda _msg: None) -> PrefetchResponse:
-    analysis_cache.prefetch([ref.to_spec() for ref in req.tracks], ANALYSIS_SAMPLE_RATE, req.start, req.duration, log=log)
+    analysis_cache.prefetch(
+        [ref.to_spec() for ref in req.tracks],
+        ANALYSIS_SAMPLE_RATE,
+        req.start,
+        req.duration,
+        log=log,
+        waveform_buckets=req.waveform_buckets,
+    )
     return PrefetchResponse(cached=len(req.tracks))
 
 
@@ -387,13 +456,20 @@ class SegmentOut(BaseModel):
     @staticmethod
     def from_segment(seg: Segment) -> SegmentOut:
         return SegmentOut(
-            start_s=seg.start_s, end_s=seg.end_s, offset_start=seg.offset_start, offset_end=seg.offset_end,
-            is_drift=seg.is_drift, confidence=seg.confidence,
+            start_s=seg.start_s,
+            end_s=seg.end_s,
+            offset_start=seg.offset_start,
+            offset_end=seg.offset_end,
+            is_drift=seg.is_drift,
+            confidence=seg.confidence,
         )
 
     def to_segment(self) -> Segment:
         return Segment(
-            start_s=self.start_s, end_s=self.end_s, offset_start=self.offset_start, offset_end=self.offset_end,
+            start_s=self.start_s,
+            end_s=self.end_s,
+            offset_start=self.offset_start,
+            offset_end=self.offset_end,
             confidence=self.confidence,
         )
 
@@ -475,6 +551,11 @@ class SegmentOverride(BaseModel):
     # Language to tag the corrected track with instead of its own -- for a
     # track that has none (a bare .wav, .flac...) or a wrong one.
     language: str | None = None
+    # The corrected track's name in the export instead of its source's ("" for none).
+    title: str | None = None
+    # Its export codec, one of render.EXPORT_CODECS, instead of the one
+    # matching its source.
+    codec: Literal["opus", "aac", "flac", "ac3", "eac3"] | None = None
 
 
 class RenderRequest(BaseModel):
@@ -515,8 +596,12 @@ def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> Rend
     for ref in req.import_audio:
         check_import_track(ref.to_spec())
 
-    reference_spec = AudioTrackSpec(raw=f"{req.input_path}@{req.reference_index}", path=req.input_path, stream_index=req.reference_index)
-    same_file_specs = [AudioTrackSpec(raw=f"{req.input_path}@{i}", path=req.input_path, stream_index=i) for i in targets]
+    reference_spec = AudioTrackSpec(
+        raw=f"{req.input_path}@{req.reference_index}", path=req.input_path, stream_index=req.reference_index
+    )
+    same_file_specs = [
+        AudioTrackSpec(raw=f"{req.input_path}@{i}", path=req.input_path, stream_index=i) for i in targets
+    ]
     import_audio_specs = [ref.to_spec() for ref in req.import_audio]
     candidates = same_file_specs + import_audio_specs
     candidate_keys = [track_key(c) for c in candidates]
@@ -549,44 +634,74 @@ def _do_render(req: RenderRequest, log: Callable[[str], None] = _NO_LOG) -> Rend
                         idx = spec.stream_index if spec.stream_index is not None else 0
                         streams = {s.index: s for s in probe_audio_streams(spec.path)}
                         language = streams[idx].language if idx in streams else None
-                    log(tr("[segments] {track} : utilisation des segments fournis (édités manuellement)", track=spec.raw))
+                    log(
+                        tr(
+                            "[segments] {track} : utilisation des segments fournis (édités manuellement)",
+                            track=spec.raw,
+                        )
+                    )
                     seg_corrections.append(
                         SegmentedTrackCorrection(
-                            track=spec, language=language, segments=[s.to_segment() for s in override.segments]
+                            track=spec,
+                            language=language,
+                            segments=[s.to_segment() for s in override.segments],
+                            title=override.title,
+                            codec=override.codec,
                         )
                     )
                 else:
                     seg_corrections.append(
                         plan_segmented_correction(
-                            reference_spec, spec, start=req.start, duration=req.duration,
-                            window_s=req.window_s, hop_s=req.hop_s, margin_s=req.margin_s, log=log,
+                            reference_spec,
+                            spec,
+                            start=req.start,
+                            duration=req.duration,
+                            window_s=req.window_s,
+                            hop_s=req.hop_s,
+                            margin_s=req.margin_s,
+                            log=log,
                         )
                     )
             segmented_imported_subs = [
-                (pair.subs.to_spec(), seg_corrections[pos].segments) for pair, pos in zip(req.subs, subs_positions)
+                (pair.subs.to_spec(), seg_corrections[pos].segments)
+                for pair, pos in zip(req.subs, subs_positions, strict=True)
             ]
             log(tr("[rendu] écriture de {path} ...", path=output_path))
             written = render_tracks(
-                req.input_path, req.reference_index, corrections=[], output_path=output_path,
-                audio_only=req.audio_only, segmented_corrections=seg_corrections,
+                req.input_path,
+                req.reference_index,
+                corrections=[],
+                output_path=output_path,
+                audio_only=req.audio_only,
+                segmented_corrections=seg_corrections,
                 segmented_imported_subs=segmented_imported_subs,
             )
             corrections_out = [
-                RenderedTrack(track=sc.track.raw, language=sc.language, segments=[SegmentOut.from_segment(s) for s in sc.segments])
+                RenderedTrack(
+                    track=sc.track.raw, language=sc.language, segments=[SegmentOut.from_segment(s) for s in sc.segments]
+                )
                 for sc in seg_corrections
             ]
         else:
             corrections: list[TrackCorrection] = plan_corrections(
                 reference_spec, candidates, start=req.start, duration=req.duration, log=log
             )
-            imported_subs = [(pair.subs.to_spec(), corrections[pos].offset_seconds) for pair, pos in zip(req.subs, subs_positions)]
+            imported_subs = [
+                (pair.subs.to_spec(), corrections[pos].offset_seconds)
+                for pair, pos in zip(req.subs, subs_positions, strict=True)
+            ]
             log(tr("[rendu] écriture de {path} ...", path=output_path))
             written = render_tracks(
-                req.input_path, req.reference_index, corrections, output_path,
-                audio_only=req.audio_only, imported_subs=imported_subs,
+                req.input_path,
+                req.reference_index,
+                corrections,
+                output_path,
+                audio_only=req.audio_only,
+                imported_subs=imported_subs,
             )
             corrections_out = [
-                RenderedTrack(track=c.track.raw, language=c.language, offset_seconds=c.offset_seconds) for c in corrections
+                RenderedTrack(track=c.track.raw, language=c.language, offset_seconds=c.offset_seconds)
+                for c in corrections
             ]
     except Cancelled:
         # Stopped midway: what's on disk is a truncated, unplayable file.

@@ -17,9 +17,11 @@ from syncaudio.render import (
     default_output_path,
     plan_corrections,
     plan_segmented_correction,
-    render as render_tracks,
     resolve_targets,
     track_key,
+)
+from syncaudio.render import (
+    render as render_tracks,
 )
 from syncaudio.segments import (
     DEFAULT_HOP_S,
@@ -149,9 +151,7 @@ def align(
     click.echo(f"Référence : {reference}")
     for spec, est in results:
         flag = "  [!] ambigu (contenu répétitif ?)" if est.ambiguous else ""
-        click.echo(
-            f"  {spec.raw:<30} décalage={est.offset_seconds:+8.3f}s  confiance={est.confidence:5.2f}{flag}"
-        )
+        click.echo(f"  {spec.raw:<30} décalage={est.offset_seconds:+8.3f}s  confiance={est.confidence:5.2f}{flag}")
 
 
 @cli.command()
@@ -207,8 +207,16 @@ def align(
         "(voir `segments` pour visualiser d'abord ce qui sera fait)."
     ),
 )
-@click.option("--window", "window_s", default=DEFAULT_WINDOW_S, show_default=True, help="Avec --segmented : taille de fenêtre d'analyse (s).")
-@click.option("--hop", "hop_s", default=DEFAULT_HOP_S, show_default=True, help="Avec --segmented : pas entre fenêtres (s).")
+@click.option(
+    "--window",
+    "window_s",
+    default=DEFAULT_WINDOW_S,
+    show_default=True,
+    help="Avec --segmented : taille de fenêtre d'analyse (s).",
+)
+@click.option(
+    "--hop", "hop_s", default=DEFAULT_HOP_S, show_default=True, help="Avec --segmented : pas entre fenêtres (s)."
+)
 @click.option(
     "--margin",
     "margin_s",
@@ -284,12 +292,14 @@ def render(
         except ValueError as exc:
             raise click.ClickException(str(exc)) from exc
 
-    reference_spec = AudioTrackSpec(raw=f"{input_path}@{reference_index}", path=input_path, stream_index=reference_index)
+    reference_spec = AudioTrackSpec(
+        raw=f"{input_path}@{reference_index}", path=input_path, stream_index=reference_index
+    )
     same_file_specs = [AudioTrackSpec(raw=f"{input_path}@{i}", path=input_path, stream_index=i) for i in targets]
     candidates = same_file_specs + import_audio_specs
     candidate_keys = [track_key(c) for c in candidates]
 
-    for raw, key in zip(subs_pairs, subs_audio_keys):
+    for raw, key in zip(subs_pairs, subs_audio_keys, strict=True):
         if key not in candidate_keys:
             raise click.ClickException(
                 f"--subs {raw!r} : la piste audio indiquée ne correspond à aucune piste corrigée "
@@ -324,7 +334,7 @@ def render(
                 )
 
         segmented_imported_subs: list[tuple[AudioTrackSpec, list[Segment]]] = []
-        for subs_spec, key in zip(subs_specs, subs_audio_keys):
+        for subs_spec, key in zip(subs_specs, subs_audio_keys, strict=True):
             pos = candidate_keys.index(key)
             segmented_imported_subs.append((subs_spec, seg_corrections[pos].segments))
             click.echo(
@@ -369,14 +379,18 @@ def render(
         else:
             action = "déjà synchro, aucune correction"
         flag = "  [!] ambigu (contenu répétitif ?)" if corr.ambiguous else ""
-        click.echo(f"  {corr.track.raw:<30} (langue={corr.language or '?'})  {action}  confiance={corr.confidence:.2f}{flag}")
+        click.echo(
+            f"  {corr.track.raw:<30} (langue={corr.language or '?'})  {action}  confiance={corr.confidence:.2f}{flag}"
+        )
 
     imported_subs: list[tuple[AudioTrackSpec, float]] = []
-    for subs_spec, key in zip(subs_specs, subs_audio_keys):
+    for subs_spec, key in zip(subs_specs, subs_audio_keys, strict=True):
         pos = candidate_keys.index(key)
         offset = corrections[pos].offset_seconds
         imported_subs.append((subs_spec, offset))
-        click.echo(f"  {subs_spec.raw:<30} (sous-titres)  décalés de {-offset:+.3f}s (alignés sur {candidates[pos].raw})")
+        click.echo(
+            f"  {subs_spec.raw:<30} (sous-titres)  décalés de {-offset:+.3f}s (alignés sur {candidates[pos].raw})"
+        )
 
     if dry_run:
         click.echo("[dry-run] rien écrit.")
@@ -400,7 +414,9 @@ def render(
 @click.argument("input_path", metavar="INPUT")
 @click.option("--reference", "reference_index", required=True, type=int, help="Index de la piste de référence.")
 @click.option("--track", "track_index", required=True, type=int, help="Index de la piste à analyser.")
-@click.option("--window", "window_s", default=DEFAULT_WINDOW_S, show_default=True, help="Taille de fenêtre d'analyse (s).")
+@click.option(
+    "--window", "window_s", default=DEFAULT_WINDOW_S, show_default=True, help="Taille de fenêtre d'analyse (s)."
+)
 @click.option("--hop", "hop_s", default=DEFAULT_HOP_S, show_default=True, help="Pas entre fenêtres successives (s).")
 @click.option(
     "--margin",
@@ -436,8 +452,14 @@ def segments(
     track_spec = AudioTrackSpec(raw=f"{input_path}@{track_index}", path=input_path, stream_index=track_index)
     try:
         windows, segs, total_duration_s = analyze_segments(
-            ref_spec, track_spec, start=start, duration=duration,
-            window_s=window_s, hop_s=hop_s, margin_s=margin_s, log=lambda msg: _log(msg, quiet),
+            ref_spec,
+            track_spec,
+            start=start,
+            duration=duration,
+            window_s=window_s,
+            hop_s=hop_s,
+            margin_s=margin_s,
+            log=lambda msg: _log(msg, quiet),
         )
     except FFmpegError as exc:
         raise click.ClickException(str(exc)) from exc

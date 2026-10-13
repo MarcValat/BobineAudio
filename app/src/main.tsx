@@ -4,6 +4,8 @@ import App from "./App";
 import { LanguageProvider } from "./i18n";
 import { applyTheme, loadTheme } from "./theme";
 import { engineReady } from "./engine";
+import { startUiScale } from "./uiScale";
+import { blockBrowserFeatures } from "./browserKeys";
 // Inter, bundled: the same text on Windows and Linux, no network needed.
 import "@fontsource-variable/inter";
 import "@fontsource-variable/inter/wght-italic.css";
@@ -15,18 +17,20 @@ applyTheme(loadTheme());
 // requests go through once it answers (see engine.ts).
 engineReady().catch(() => {});
 
-// The WebView's default right-click menu (Reload/Inspect/Save as...) has
-// nothing useful for this app's users -- keep it in `npm run tauri dev`
-// (import.meta.env.DEV is Vite's own dev-vs-build flag) since Inspect is
-// genuinely handy while developing, but drop it from the compiled app.
-if (!import.meta.env.DEV) {
-  window.addEventListener("contextmenu", (e) => e.preventDefault());
-}
+// No browser right-click menu nor browser shortcuts in the compiled app
+// (import.meta.env.DEV is Vite's own dev-vs-build flag): see browserKeys.ts.
+if (!import.meta.env.DEV) blockBrowserFeatures();
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <LanguageProvider>
-      <App />
-    </LanguageProvider>
-  </React.StrictMode>,
-);
+// The interface at its size before the first render, so it never shows at
+// another one first.
+startUiScale()
+  .catch(() => {})
+  .finally(() =>
+    ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+      <React.StrictMode>
+        <LanguageProvider>
+          <App />
+        </LanguageProvider>
+      </React.StrictMode>,
+    ),
+  );

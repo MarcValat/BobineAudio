@@ -1,14 +1,34 @@
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { open } from "@tauri-apps/plugin-dialog";
 import { pathsExist } from "./api";
-import { devParam, loadSetting, saveSetting } from "./util";
+import { loadSetting, saveSetting } from "./util";
 import { t } from "./i18n";
 
 // Videos to take a reference from, and the audio-only files a corrected track
 // can come from (batch mode): anything ffmpeg reads is fine, these are the
 // usual ones -- and what a dropped folder's files are picked by.
 export const MEDIA_EXTENSIONS = [
-  "mkv", "mp4", "m4v", "mov", "avi", "webm", "ts", "m2ts",
-  "mka", "wav", "flac", "aac", "ac3", "eac3", "dts", "thd", "mlp", "mp3", "m4a", "opus", "ogg", "wma",
+  "mkv",
+  "mp4",
+  "m4v",
+  "mov",
+  "avi",
+  "webm",
+  "ts",
+  "m2ts",
+  "mka",
+  "wav",
+  "flac",
+  "aac",
+  "ac3",
+  "eac3",
+  "dts",
+  "thd",
+  "mlp",
+  "mp3",
+  "m4a",
+  "opus",
+  "ogg",
+  "wma",
 ];
 const mediaFilters = () => [
   { name: t().files.mediaFilter, extensions: MEDIA_EXTENSIONS },
@@ -27,7 +47,7 @@ function rememberFolder(path: string): void {
 }
 
 /** The system's open dialog for media files, starting in the folder the
- * last pick came from (single file and batch mode alike); `title` says
+ * last pick came from (both modes alike); `title` says
  * what's being picked when it isn't obvious (a pair's side). */
 export async function pickMediaFiles(multiple: false, title?: string): Promise<string | null>;
 export async function pickMediaFiles(multiple: true, title?: string): Promise<string[] | null>;
@@ -36,7 +56,7 @@ export async function pickMediaFiles(multiple: boolean, title?: string): Promise
   if (!selected) return null;
   const files = Array.isArray(selected) ? selected : [selected];
   if (files.length > 0) rememberFolder(files[0]);
-  return multiple ? files : files[0] ?? null;
+  return multiple ? files : (files[0] ?? null);
 }
 
 /** The system's folder picker, starting at `defaultPath` when given. */
@@ -62,9 +82,7 @@ function joinPath(dir: string, name: string): string {
 
 /** The same file or folder: on Windows, whatever the case and slash direction. */
 function samePath(a: string, b: string): boolean {
-  const norm = WINDOWS
-    ? (p: string) => p.replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase()
-    : (p: string) => p.replace(/\/+$/, "");
+  const norm = WINDOWS ? (p: string) => p.replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase() : (p: string) => p.replace(/\/+$/, "");
   return norm(a) === norm(b);
 }
 
@@ -97,19 +115,4 @@ export async function planOutputPaths(inputs: string[], outputDir: string | null
     planned.push(path);
   });
   return planned;
-}
-
-/** Where `inputPath`'s synchronized copy goes, by default right next to it:
- * "Film.mkv" -> "Film.synced.mkv". */
-export function syncedFileName(inputPath: string): string {
-  const { dir, stem } = splitPath(inputPath);
-  return dir + stem + ".synced.mkv";
-}
-
-/** The system's "save as" dialog for an exported MKV, starting at `suggestedPath`. */
-export async function pickOutputFile(suggestedPath: string): Promise<string | null> {
-  // Dev only (see devParam): `?saveAs=<path>` answers the dialog.
-  const devPath = devParam("saveAs");
-  if (devPath) return devPath;
-  return save({ defaultPath: suggestedPath, filters: [{ name: "Matroska", extensions: ["mkv"] }] });
 }

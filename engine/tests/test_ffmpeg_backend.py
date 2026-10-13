@@ -119,14 +119,32 @@ def test_probe_stream_start_time_reports_container_level_delay(tmp_path: Path) -
     mkv = tmp_path / "delayed.mkv"
     subprocess.run(
         [
-            ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "lavfi", "-i", "color=c=black:s=64x64:d=3",
-            "-i", str(wav_a),
-            "-itsoffset", "1.0", "-i", str(wav_b),
-            "-map", "0:v", "-map", "1:a", "-map", "2:a",
-            "-shortest", str(mkv),
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=black:s=64x64:d=3",
+            "-i",
+            str(wav_a),
+            "-itsoffset",
+            "1.0",
+            "-i",
+            str(wav_b),
+            "-map",
+            "0:v",
+            "-map",
+            "1:a",
+            "-map",
+            "2:a",
+            "-shortest",
+            str(mkv),
         ],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
 
     assert abs(probe_stream_start_time(str(mkv), 0) - 0.0) < 0.05
@@ -148,6 +166,7 @@ def test_windowed_extraction_timeline_is_absolute_despite_container_delay(tmp_pa
         f.setsampwidth(2)
         f.setframerate(sr)
         f.writeframes((samples * 32767).astype("<i2").tobytes())
+
     def burst_at(pcm: np.ndarray) -> float:
         energy = np.convolve(np.abs(pcm), np.ones(sr // 20) / (sr // 20), mode="same")
         return int(np.argmax(energy)) / sr
@@ -155,12 +174,27 @@ def test_windowed_extraction_timeline_is_absolute_despite_container_delay(tmp_pa
     # With an undelayed video stream (the real-world case: the file starts
     # at 0, only this track at 1.0) and alone (the file itself starts at 1.0).
     layouts = {
-        "with_video": ["-f", "lavfi", "-i", "color=c=black:s=64x64:d=7", "-itsoffset", "1.0", "-i", str(wav), "-map", "0:v", "-map", "1:a"],
+        "with_video": [
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=black:s=64x64:d=7",
+            "-itsoffset",
+            "1.0",
+            "-i",
+            str(wav),
+            "-map",
+            "0:v",
+            "-map",
+            "1:a",
+        ],
         "audio_only": ["-itsoffset", "1.0", "-i", str(wav)],
     }
     for name, args in layouts.items():
         mkv = tmp_path / f"{name}.mkv"
-        subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", *args, str(mkv)], check=True, capture_output=True)
+        subprocess.run(
+            [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", *args, str(mkv)], check=True, capture_output=True
+        )
         spec = AudioTrackSpec(raw=str(mkv), path=str(mkv), stream_index=0)
         for start in (0.5, 1.0, 2.0, 3.0):
             pcm = extract_pcm(spec, sample_rate=sr, start=start, duration=4.0)
