@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -25,10 +26,36 @@ from syncaudio.models import AudioStreamInfo, AudioTrackSpec, SubtitleStreamInfo
 _SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
 
+def _child_env(environ: dict[str, str], frozen: bool) -> dict[str, str] | None:
+    """The environment ffmpeg runs in: the system's own, not the one a
+    PyInstaller build gives itself on Linux, whose LD_LIBRARY_PATH points at
+    the libraries bundled with the engine. The system's ffmpeg (preferred
+    over the bundled one, see resolve_ffmpeg) then loaded the bundle's older
+    libstdc++ and failed at once ("GLIBCXX_3.4.32 not found", ffmpeg 8 on
+    Ubuntu 26.04): no stream in its report, so "no audio track" for every
+    file. PyInstaller keeps the original value in LD_LIBRARY_PATH_ORIG.
+    ``None`` (inherit as is) when not frozen, and on Windows."""
+    if not frozen or sys.platform == "win32":
+        return None
+    env = dict(environ)
+    original = env.pop("LD_LIBRARY_PATH_ORIG", None)
+    if original is None:
+        env.pop("LD_LIBRARY_PATH", None)
+    else:
+        env["LD_LIBRARY_PATH"] = original
+    return env
+
+
+_CHILD_ENV = _child_env(dict(os.environ), getattr(sys, "frozen", False))
+
+
 def _run(*args, **kwargs) -> subprocess.CompletedProcess:
-    """`subprocess.run`, but never flashes a console window on Windows, and
-    stops (raising ``Cancelled``) as soon as the job running it is cancelled."""
+    """`subprocess.run`, but never flashes a console window on Windows, runs
+    ffmpeg in the system's environment (see _child_env), and stops (raising
+    ``Cancelled``) as soon as the job running it is cancelled."""
     kwargs.setdefault("creationflags", _SUBPROCESS_FLAGS)
+    if _CHILD_ENV is not None:
+        kwargs.setdefault("env", _CHILD_ENV)
     event = current_cancel_event()
     if event is None:
         return subprocess.run(*args, **kwargs)
