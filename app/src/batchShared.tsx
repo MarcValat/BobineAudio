@@ -46,6 +46,7 @@ export function nextStep({
  * everything -- or everything again once all are done. */
 export function AnalyzeButton({
   analyzing,
+  reading,
   missing,
   analyzed,
   unit,
@@ -55,6 +56,9 @@ export function AnalyzeButton({
   onAnalyze,
 }: {
   analyzing: boolean;
+  /** Files of the list still being read: analyzing all waits for them
+   * (it would leave them out). */
+  reading: boolean;
   missing: number;
   analyzed: number;
   /** What's counted. */
@@ -68,10 +72,10 @@ export function AnalyzeButton({
   const t = useT();
   const blockedTitle = blocked ? t.batch.otherModeBusy : undefined;
   const redoTitle = t.batch.reanalyzeHint;
-  if (analyzing) {
+  if (analyzing || reading) {
     return (
       <button className={primary ? "primary-button" : ""} disabled>
-        {t.common.analysisRunning}
+        {analyzing ? t.common.analysisRunning : t.batch.readingTracks}
       </button>
     );
   }

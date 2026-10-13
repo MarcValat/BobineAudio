@@ -214,6 +214,7 @@ export const en: Messages = {
     reanalyzeOne: "Reanalyze",
     reanalyzeOneHint: "Reanalyze this one alone: its changes made with “Edit” are lost.",
     analyzeAll: "Analyze all",
+    readingTracks: "Reading tracks…",
     analyzeRestHint: (unit) =>
       `Analyzes only the ${unit === "track" ? "tracks" : "pairs"} that aren't yet; the others and their changes are kept.`,
     analyzeRest: (n, unit) => {
@@ -266,7 +267,6 @@ export const en: Messages = {
     empty: "Videos that each hold the reference and the track(s) to correct.",
     emptyTitle: "Sync your dubs to the original track",
     emptyHint: "One file or a whole season: drop them in, Bobine Audio finds the offset, the drift and the jumps.",
-    readingTracks: "Reading tracks…",
     nothing: "nothing",
     manual: " (manual)",
     byLanguage: "By language",

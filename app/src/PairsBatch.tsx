@@ -908,6 +908,7 @@ export function PairsBatch({
             analyzeButton={
               <AnalyzeButton
                 analyzing={analyzing}
+                reading={pairRows.some((i) => !probed(i))}
                 missing={pairCount - analyzedCount}
                 analyzed={analyzedCount}
                 unit="pair"

@@ -482,7 +482,7 @@ export function MultiTrackBatch({
                       badgeKind={badgeKind}
                       detail={
                         <>
-                          {!probed && m.multi.readingTracks}
+                          {!probed && m.batch.readingTracks}
                           {probed?.error && <span className="error">{probed.error}</span>}
                           {res && tracksSummary(path, res)}
                           {res?.manual && <span className="list-row-manual">{m.multi.manual}</span>}
@@ -518,7 +518,7 @@ export function MultiTrackBatch({
                   meta={
                     detailProbe?.tracks
                       ? m.multi.meta(detailProbe.tracks.length, detailProbe.subtitles.length)
-                      : !detailProbe?.error && m.multi.readingTracks
+                      : !detailProbe?.error && m.batch.readingTracks
                   }
                   onReanalyze={
                     shownTrack && (shownRun?.status === "done" || shownRun?.status === "error")
@@ -680,6 +680,7 @@ export function MultiTrackBatch({
             analyzeButton={
               <AnalyzeButton
                 analyzing={analyzing}
+                reading={files.some((f) => !probes[f])}
                 missing={missingCount}
                 analyzed={analyzedCount}
                 unit="track"

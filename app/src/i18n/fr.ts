@@ -219,6 +219,7 @@ export const fr = {
     reanalyzeOne: "Réanalyser",
     reanalyzeOneHint: "Réanalyser celle-ci seule : ses modifications faites avec « Modifier » sont perdues.",
     analyzeAll: "Analyser tout",
+    readingTracks: "Lecture des pistes…",
     analyzeRestHint: (unit: "track" | "pair") =>
       `Analyse seulement les ${unit === "track" ? "pistes" : "paires"} qui ne le sont pas encore ; les autres et leurs modifications sont gardées.`,
     analyzeRest: (n: number, unit: "track" | "pair") => {
@@ -271,7 +272,6 @@ export const fr = {
     empty: "Des vidéos qui contiennent chacune la référence et la ou les pistes à corriger.",
     emptyTitle: "Recale tes doublages sur la piste d'origine",
     emptyHint: "Un fichier ou toute une saison : dépose-les, Bobine Audio trouve le décalage, la dérive et les sauts.",
-    readingTracks: "Lecture des pistes…",
     nothing: "rien",
     manual: " (manuel)",
     byLanguage: "Par langue",

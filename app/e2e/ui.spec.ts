@@ -108,3 +108,22 @@ test("a file that can't be read says so, the others go on", async ({ app }) => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("Analyser tout waits for every file to be read, then takes them all", async ({ app }) => {
+  // E03's tracks come 3 s late.
+  await app.page.route(/\/probe\?path=.*E03/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    await route.continue();
+  });
+  await app.page.goto(multiUrl(E01, E03));
+  await expect(app.footerPrimary()).toHaveText("Lecture des pistes…");
+  await expect(app.footerPrimary()).toBeDisabled();
+  await expect(app.footerPrimary()).toHaveText("Analyser tout", { timeout: 15_000 });
+  await app.footerPrimary().click();
+  await expect(
+    app
+      .rows()
+      .locator(".list-badge")
+      .filter({ hasText: /^Analysé/ }),
+  ).toHaveCount(2, { timeout: 120_000 });
+});
