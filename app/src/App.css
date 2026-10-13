@@ -16,6 +16,9 @@
   --accent-strong: light-dark(#4f6ff0, #4f7cff);
   --accent-2: light-dark(#7c4dff, #8b5cf6);
   --gradient: linear-gradient(90deg, var(--accent-strong), var(--accent-2));
+  /* The same gradient under the main action's white text: its colors a
+     shade deeper, for 4.5:1 all along it. */
+  --gradient-action: linear-gradient(90deg, light-dark(#4365ef, #3367ff), light-dark(#7c4dff, #753ef4));
   --accent-fg: #ffffff;
   --bg: light-dark(#f3f4fa, #0b0d17);
   /* The soft light at the top of the window. */
@@ -984,16 +987,17 @@ input {
 }
 
 .primary-button {
-  background: var(--gradient);
+  background: var(--gradient-action);
   border-color: transparent;
   color: var(--accent-fg);
   box-shadow: 0 6px 18px color-mix(in srgb, var(--accent-2) 30%, transparent);
 }
 
+/* Deeper on hover, not lighter: the white text keeps its contrast. */
 .primary-button:hover:not(:disabled) {
-  background: var(--gradient);
+  background: var(--gradient-action);
   border-color: transparent;
-  filter: brightness(1.08);
+  filter: brightness(0.92);
 }
 
 .primary-button:disabled {

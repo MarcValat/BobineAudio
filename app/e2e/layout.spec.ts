@@ -4,10 +4,8 @@ import { inspect } from "./audit";
 import { expect, test, type App } from "./fixtures";
 import { E01, E01_VF, E02, E02_VF, E03, multiUrl, pairsUrl } from "./media";
 
-/** Found, and known: awaiting a decision, not to fail the run meanwhile.
- * - The main action's white text on the logo's gradient: 3.7:1 (dark),
- *   4.3:1 (light) at the gradient's lighter end -- under 4.5:1. */
-const KNOWN = [/low contrast -- button\.primary-button /];
+/** Found, and known: awaiting a decision, not to fail the run meanwhile. */
+const KNOWN: RegExp[] = [];
 
 const SIZES = [
   [1024, 640],
