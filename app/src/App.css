@@ -748,7 +748,9 @@ button:focus-visible {
   gap: 0.4em;
 }
 
-.preview-extra .log-button {
+/* In a row of controls: centered with them (the folder icon beside it). */
+.preview-extra .log-button,
+.detail-export .log-button {
   align-self: center;
 }
 
