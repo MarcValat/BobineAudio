@@ -7,7 +7,8 @@ import type { Page } from "@playwright/test";
  *   and drop zones, icon above text and stretched with the window;
  * - a rounded box in a rounded box, evenly inset, not concentric;
  * - text cut without an ellipsis, or reaching out of the window;
- * - buttons side by side of different heights;
+ * - buttons side by side of different heights, or controls side by side
+ *   off each other's center;
  * - text under 4.5:1 contrast on its background (3:1 when large), over a
  *   gradient against its worst color. */
 export function inspect(page: Page): Promise<[string, string][]> {
@@ -81,15 +82,29 @@ export function inspect(page: Page): Promise<[string, string][]> {
         ]);
     }
 
+    /** A control among its siblings: a button (a Tooltip's, unwrapped), a
+     * dropdown, a text field. */
+    const control = (e: Element): Element | null => {
+      if (e.classList.contains("tooltip-anchor")) e = e.firstElementChild ?? e;
+      if (e.tagName === "BUTTON" || e.classList.contains("dropdown")) return e;
+      if (e.tagName === "INPUT" && !["checkbox", "radio", "range"].includes((e as HTMLInputElement).type)) return e;
+      return null;
+    };
     for (const p of document.querySelectorAll("*")) {
-      const bs = [...p.children].filter((b) => (b.tagName === "BUTTON" || b.classList.contains("dropdown")) && visible(b));
-      for (let i = 1; i < bs.length; i++) {
-        const a = bs[i - 1].getBoundingClientRect();
-        const b = bs[i].getBoundingClientRect();
-        if (Math.abs(a.top + a.height / 2 - (b.top + b.height / 2)) < 4 && Math.abs(a.height - b.height) > 0.5)
+      const cs = [...p.children].map(control).filter((c): c is Element => !!c && visible(c));
+      for (let i = 1; i < cs.length; i++) {
+        const a = cs[i - 1].getBoundingClientRect();
+        const b = cs[i].getBoundingClientRect();
+        if (a.height > CONTROL_MAX || b.height > CONTROL_MAX) continue;
+        if (a.top >= b.bottom || b.top >= a.bottom) continue; // not on one line (wrapped)
+        const dy = b.top + b.height / 2 - (a.top + a.height / 2);
+        if (Math.abs(dy) > 0.51)
+          out.push(["neighbour controls off each other's center", `${name(cs[i - 1])} vs ${name(cs[i])} dy ${dy.toFixed(1)}`]);
+        const button = (e: Element) => e.tagName === "BUTTON" || e.classList.contains("dropdown");
+        if (button(cs[i - 1]) && button(cs[i]) && Math.abs(a.height - b.height) > 0.5)
           out.push([
             "neighbour buttons differ in height",
-            `${name(bs[i - 1])} ${a.height.toFixed(0)} vs ${name(bs[i])} ${b.height.toFixed(0)}`,
+            `${name(cs[i - 1])} ${a.height.toFixed(0)} vs ${name(cs[i])} ${b.height.toFixed(0)}`,
           ]);
       }
     }

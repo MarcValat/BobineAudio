@@ -1,5 +1,9 @@
 // Every screen audited (see audit.ts) at the smallest window and a usual
 // one, in both themes and both languages: what's found is listed by screen.
+// Exports go to a temporary folder, removed after.
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { inspect } from "./audit";
 import { expect, test, type App } from "./fixtures";
 import { E01, E01_VF, E02, E02_VF, E03, multiUrl, pairsUrl } from "./media";
@@ -20,12 +24,14 @@ for (const [width, height] of SIZES)
         const { page } = app;
         await page.setViewportSize({ width, height });
         await page.emulateMedia({ colorScheme: theme });
+        const outDir = mkdtempSync(join(tmpdir(), "bobine-e2e-out-"));
         await page.addInitScript(
-          ([language, theme]) => {
+          ([language, theme, outDir]) => {
             localStorage.setItem("syncaudio.language", language);
             localStorage.setItem("syncaudio.theme", theme);
+            localStorage.setItem("syncaudio.batchOutputDir", outDir);
           },
-          [language, theme],
+          [language, theme, outDir.replaceAll("\\", "/")],
         );
         const fr = language === "fr";
         const found: string[] = [];
@@ -91,6 +97,11 @@ for (const [width, height] of SIZES)
         await escape();
         await audit("settings", () => page.getByRole("button", { name: fr ? "Paramètres" : "Settings" }).click());
         await escape();
+        // The written file's row: its name, its folder, its log.
+        await audit("exported", async () => {
+          await page.getByRole("button", { name: fr ? "Exporter ce fichier" : "Export this file" }).click();
+          await expect(page.locator(".detail-export .render-success")).toBeVisible({ timeout: 120_000 });
+        });
 
         await audit("pairs", async () => {
           await page.goto(`${pairsUrl([E01, E02], [E01_VF, E02_VF])}&windowControls=1`);
@@ -101,6 +112,7 @@ for (const [width, height] of SIZES)
         await escape();
         await audit("pairs folded", () => page.locator(".fold-button:visible").click());
 
+        rmSync(outDir, { recursive: true, force: true });
         expect(found).toEqual([]);
       });
     }
