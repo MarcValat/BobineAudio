@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test, type App } from "./fixtures";
-import { E01, E02, E03, multiUrl } from "./media";
+import { E01, E02, E03, home, multiUrl } from "./media";
 
 const selected = (app: App) => app.page.locator(".list-row.selected");
 
@@ -75,7 +75,7 @@ test.describe("the list", () => {
 });
 
 test("the mode, the theme and the language are kept from one session to the next", async ({ app }) => {
-  await app.page.goto("/");
+  await app.page.goto(home());
   await app.page.getByRole("tab", { name: "Paires de fichiers" }).click();
   await app.page.getByRole("button", { name: "Paramètres" }).click();
   const settings = app.page.getByRole("dialog", { name: "Paramètres" });

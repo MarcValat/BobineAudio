@@ -1,8 +1,9 @@
 // The engine, asked directly by the tests (not through the page): what an
 // exported file holds, and whether its corrected tracks are in sync.
 import { execFileSync } from "node:child_process";
+import { ENGINE_PORT } from "./media";
 
-const ENGINE = "http://127.0.0.1:8756";
+const ENGINE = `http://127.0.0.1:${ENGINE_PORT}`;
 // The dev builds' token (see playwright.config.ts).
 const HEADERS = { "X-Bobine-Token": "bobine-dev" };
 

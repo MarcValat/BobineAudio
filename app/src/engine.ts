@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { currentLanguage, t } from "./i18n";
+import { devParam } from "./util";
 
 /** The engine's usual port, `syncaudio serve`'s default: where a plain
  * browser on the dev server finds it. The app starts it there when it's
@@ -11,10 +12,11 @@ let engineUrl: string | null = null;
 let engineToken: string | null = null;
 
 /** The engine sidecar's local HTTP address, asked once to the app (see
- * src-tauri/src/lib.rs's free_port). */
+ * src-tauri/src/lib.rs's free_port). In a plain browser, `?enginePort=`
+ * points the dev server at another engine (the end-to-end tests' own). */
 export async function getEngineUrl(): Promise<string> {
   if (engineUrl === null) {
-    const port = isTauri() ? await invoke<number>("engine_port") : DEFAULT_PORT;
+    const port = isTauri() ? await invoke<number>("engine_port") : Number(devParam("enginePort")) || DEFAULT_PORT;
     engineUrl = `http://127.0.0.1:${port}`;
   }
   return engineUrl;

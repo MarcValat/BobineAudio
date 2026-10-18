@@ -3,6 +3,16 @@ import { fileURLToPath } from "node:url";
 /** Where e2e/make_media.py writes the media (ignored by git). */
 export const MEDIA_DIR = fileURLToPath(new URL("media", import.meta.url));
 
+/** The tests' own engine and Vite (see playwright.config.ts): never the
+ * app's (`tauri dev`: 8756 and 1420), nor Bobine Subs' or Style's (theirs:
+ * 8757 / 8758, tests 8758 / 1430). */
+export const ENGINE_PORT = 8766;
+export const APP_PORT = 1431;
+
+/** The app's page, pointed at the tests' engine, with more dev `params`
+ * (see util.ts devParam), e.g. "&windowControls=1". */
+export const home = (params = "") => `/?enginePort=${ENGINE_PORT}${params}`;
+
 /** A media file's full path, with forward slashes (as the dev URLs take it). */
 const media = (name: string) => `${MEDIA_DIR}/${name}`.replaceAll("\\", "/");
 
@@ -15,8 +25,8 @@ export const E01_VF = media("Show - E01 (VF).mka"); // fre +0.7 s against E01's 
 export const E02_VF = media("Show - E02 (VF).mka"); // fre +1.5 s against E02's jpn
 
 /** The dev URL (see util.ts devParam) listing `files` in "Fichiers multipistes". */
-export const multiUrl = (...files: string[]) => `/?batchFiles=${files.map(encodeURIComponent).join("|")}`;
+export const multiUrl = (...files: string[]) => home(`&batchFiles=${files.map(encodeURIComponent).join("|")}`);
 
 /** The dev URL listing pairs (references and files to correct, in order). */
 export const pairsUrl = (references: string[], candidates: string[]) =>
-  `/?batchRef=${references.map(encodeURIComponent).join("|")}&batchCand=${candidates.map(encodeURIComponent).join("|")}`;
+  home(`&batchRef=${references.map(encodeURIComponent).join("|")}&batchCand=${candidates.map(encodeURIComponent).join("|")}`);
