@@ -86,10 +86,17 @@ app = FastAPI(title="Bobine Audio", version="0.1.0", lifespan=_lifespan)
 #   headers). /health alone answers without it (it tells nothing);
 # - only the app's own pages may read its answers (CORS): the Tauri window
 #   (tauri://localhost on Linux, http(s)://tauri.localhost on Windows) and
-#   the dev server.
+#   the dev server, and any SYNCAUDIO_ORIGINS adds (comma-separated: the
+#   end-to-end tests' own dev server, on a port of its own).
 # Without SYNCAUDIO_TOKEN (`syncaudio serve` run by hand), no token is asked.
 TOKEN_HEADER = "X-Bobine-Token"
-APP_ORIGINS = ["tauri://localhost", "http://tauri.localhost", "https://tauri.localhost", "http://localhost:1420"]
+APP_ORIGINS = [
+    "tauri://localhost",
+    "http://tauri.localhost",
+    "https://tauri.localhost",
+    "http://localhost:1420",
+    *(o.strip() for o in os.environ.get("SYNCAUDIO_ORIGINS", "").split(",") if o.strip()),
+]
 
 
 class TokenGuard:

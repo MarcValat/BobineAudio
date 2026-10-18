@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { inspect } from "./audit";
 import { expect, test, type App } from "./fixtures";
-import { E01, E01_VF, E02, E02_VF, E03, multiUrl, pairsUrl } from "./media";
+import { E01, E01_VF, E02, E02_VF, E03, home, multiUrl, pairsUrl } from "./media";
 
 /** Found, and known: awaiting a decision, not to fail the run meanwhile. */
 const KNOWN: RegExp[] = [];
@@ -47,7 +47,7 @@ for (const [width, height] of SIZES)
         };
         const escape = () => page.keyboard.press("Escape").then(() => page.waitForTimeout(400));
 
-        await audit("empty multitrack", () => page.goto("/?windowControls=1"));
+        await audit("empty multitrack", () => page.goto(home("&windowControls=1")));
         await audit("empty pairs", () => page.getByRole("tab", { name: fr ? "Paires de fichiers" : "File pairs" }).click());
 
         await audit("multitrack files", async () => {

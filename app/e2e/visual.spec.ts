@@ -4,7 +4,7 @@
 // `npm run test:e2e -- e2e/visual.spec.ts --update-snapshots` records them
 // again.
 import { expect, test } from "./fixtures";
-import { E01, E01_VF, E02, multiUrl, pairsUrl } from "./media";
+import { E01, E01_VF, E02, home, multiUrl, pairsUrl } from "./media";
 
 for (const theme of ["dark", "light"] as const) {
   test.describe(theme, () => {
@@ -13,7 +13,7 @@ for (const theme of ["dark", "light"] as const) {
     });
 
     test("empty workspace", async ({ app }) => {
-      await app.page.goto("/?windowControls=1");
+      await app.page.goto(home("&windowControls=1"));
       await expect(app.page).toHaveScreenshot(`empty-${theme}.png`);
     });
 
@@ -34,7 +34,7 @@ for (const theme of ["dark", "light"] as const) {
     });
 
     test("settings", async ({ app }) => {
-      await app.page.goto("/?windowControls=1");
+      await app.page.goto(home("&windowControls=1"));
       await app.page.getByRole("button", { name: "Paramètres" }).click();
       await app.page.waitForTimeout(500);
       // The version and the cache's size change from one run to the next.

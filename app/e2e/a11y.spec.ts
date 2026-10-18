@@ -4,7 +4,7 @@
 // translucent panels).
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type App } from "./fixtures";
-import { E01, E01_VF, E02, multiUrl, pairsUrl } from "./media";
+import { E01, E01_VF, E02, home, multiUrl, pairsUrl } from "./media";
 
 async function axe(app: App, screen: string, found: string[]) {
   await app.page.mouse.move(1, 1);
@@ -31,7 +31,7 @@ for (const theme of ["dark", "light"] as const) {
     const found: string[] = [];
     const escape = () => page.keyboard.press("Escape").then(() => page.waitForTimeout(400));
 
-    await page.goto("/?windowControls=1");
+    await page.goto(home("&windowControls=1"));
     await axe(app, "empty", found);
     await page.goto(`${multiUrl(E01, E02)}&windowControls=1`);
     await app.analyze();
