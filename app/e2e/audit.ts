@@ -62,6 +62,8 @@ export function inspect(page: Page): Promise<[string, string][]> {
     for (const e of document.querySelectorAll("body *")) {
       if (!visible(e) || e.closest("svg") || !e.textContent?.trim()) continue;
       const cs = getComputedStyle(e);
+      // Text for screen readers only (clipped to nothing on purpose).
+      if (cs.clipPath !== "none") continue;
       if (
         e.scrollWidth > e.clientWidth + 1 &&
         cs.overflowX !== "visible" &&
