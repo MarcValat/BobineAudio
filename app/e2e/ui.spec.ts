@@ -81,7 +81,8 @@ test("the mode, the theme and the language are kept from one session to the next
   const settings = app.page.getByRole("dialog", { name: "Paramètres" });
   await settings.getByRole("tab", { name: "Clair" }).click();
   await expect(app.page.locator("html")).toHaveAttribute("data-theme", "light");
-  await settings.getByRole("button", { name: "Langue" }).click();
+  // Its name: "Langue", then what it shows (another one shows "... langue ...").
+  await settings.getByRole("button", { name: /^Langue / }).click();
   await app.page.getByRole("option", { name: "English" }).click();
   await expect(app.page.getByRole("dialog", { name: "Settings" })).toBeVisible();
   await app.page.keyboard.press("Escape");
